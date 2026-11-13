@@ -23,6 +23,8 @@ Databasen ligger i Docker-volymen `kommunkollen_db-data` och finns kvar mellan d
 
 ## Inloggning på servern
 
+**Nuvarande läge:** servern kör med `TESTENV=true`. Inloggningssidan visar därför testknappar för läsare, redaktör och utgivare, och alla i hemnätverket kan logga in utan lösenord. Det duger så länge servern bara nås från hemnätverket. Stäng av det (`TESTENV=false`) innan servern görs nåbar utifrån.
+
 Google godkänner bara redirect-adresser på `localhost` eller https, så `http://192.168.1.11` kan inte användas för Google-inloggning. Tills servern har https och ett eget namn nås den med Google-inloggning via en SSH-tunnel:
 
 ```bash
