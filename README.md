@@ -8,6 +8,7 @@ Projektet samlar in protokoll, handlingar och annan offentlig data från Härnö
 - Begrepp: [GLOSSARY.md](GLOSSARY.md)
 - Arkitekturbeslut: [docs/adr/](docs/adr/)
 - Grafisk profil: [docs/design.md](docs/design.md)
+- Drift: [docs/drift.md](docs/drift.md)
 
 ## Struktur
 

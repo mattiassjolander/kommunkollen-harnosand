@@ -1,0 +1,5 @@
+.venv
+.dev-db
+.e2e-db
+tests
+__pycache__
