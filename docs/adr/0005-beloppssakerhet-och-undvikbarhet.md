@@ -1,0 +1,3 @@
+# Beloppssäkerhet och undvikbarhet är två separata dimensioner
+
+Kravspecens tabell i 5.5 klassificerar varje kostnad på en enda skala: dokumenterad, uppskattad, potentiellt undvikbar, styrkt undvikbar eller ej fastställd. Den skalan blandar två frågor. Därför delas den upp. Varje **kostnadspost** har en *beloppssäkerhet* (dokumenterad eller uppskattad), och varje **kostnadshändelse** har en *undvikbarhet* (ej undvikbar, ej fastställd, potentiellt eller styrkt undvikbar). En och samma händelse kan ha både ett fakturerat ombudsarvode och uppskattad intern tid, och samtidigt vara styrkt undvikbar. Det går inte att uttrycka med en enda skala. Med två dimensioner kan dashboarden visa den siffra som håller för granskning: dokumenterade belopp i styrkt undvikbara händelser.

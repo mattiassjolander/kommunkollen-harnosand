@@ -1,0 +1,3 @@
+# Partitillhörighet hämtas från protokollet
+
+En ledamots parti i en votering eller en närvarolista är det som protokollet anger för personen vid just det sammanträdet ("Monica Fahlén (S)"). Det slås inte upp i ett personregister. Troman (förtroendemannaregistret) visar bara innevarande mandatperiod, så historiska partitillhörigheter går inte att hämta därifrån. Varje partiuppgift blir på så sätt belagd i samma dokument som rösten, vilket kravspecen kräver (7.3), och partibyten hanteras automatiskt. Troman används bara som komplement, till exempel för att stämma av namnstavning under nuvarande period.
