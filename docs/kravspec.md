@@ -725,7 +725,7 @@ Partierna som lägger egna budgetförslag till kommunfullmäktige ska kunna läg
 
 Beslut fattade 2026-11-13, efter att specen skrevs:
 
-- **Publicering:** plattformen ska bli publik på sikt men är sluten under uppbyggnaden. Allt designas så att det tål publicering: källhänvisning, klassificering och granskningsstatus på varje analys.
+- **Publicering:** läsning är öppen för alla utan inloggning (beslutat 2026-11-13, ersätter "sluten under uppbyggnaden"). Inloggning krävs bara för redaktörer och utgivare. Allt designas så att det tål publicering: källhänvisning, klassificering och granskningsstatus på varje analys.
 - **Avsändare:** plattformen är partipolitiskt obunden. Samma metod gäller för alla partier, och inga värderande formuleringar görs utöver det som är belagt.
 - **Roller:** *redaktör* registrerar och redigerar, *utgivare* godkänner för publicering. ("Granskning" används bara om revisionens arbete.) Ingen godkänner sin egen registrering. Inloggning sker med Google. Statusflöde: utkast → granskad → publicerad.
 - **Stack:** Python (FastAPI) + Postgres i backend, Vue 3 + TypeScript i frontend. Se ADR-0001.

@@ -3,7 +3,7 @@
 - Google-inloggning (OpenID Connect, authorization code flow). Avstängd utan GOOGLE_CLIENT_ID.
 - En tillåtelselista (AUTH_ANVANDARE) anger vilka Google-konton som släpps in och deras roller.
 - Testinloggning (TESTENV=true) för utveckling och e2e. Finns inte alls annars.
-- ANONYM_LASNING=true öppnar läsning för alla utan att något annat ändras.
+- Läsning är öppen för alla som standard. ANONYM_LASNING=false stänger den bakom inloggning.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ class Inloggning:
             google_client_secret=os.environ.get("GOOGLE_CLIENT_SECRET", ""),
             anvandare=las_anvandare(os.environ.get("AUTH_ANVANDARE", "")),
             testenv=os.environ.get("TESTENV", "false").lower() == "true",
-            anonym_lasning=os.environ.get("ANONYM_LASNING", "false").lower() == "true",
+            anonym_lasning=os.environ.get("ANONYM_LASNING", "true").lower() == "true",
             publik_url=os.environ.get("PUBLIK_URL", "").rstrip("/"),
         )
 

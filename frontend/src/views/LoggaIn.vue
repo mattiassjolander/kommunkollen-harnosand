@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { hamtaInloggningsmetod, testinloggning, type Inloggningsmetod } from '../api'
+import { computed } from 'vue'
+import { testinloggning, type Inloggningsmetod } from '../api'
 
-const emit = defineEmits<{ inloggad: [] }>()
+const props = defineProps<{ metod: Inloggningsmetod; kanAvbryta: boolean }>()
+const emit = defineEmits<{ inloggad: []; avbryt: [] }>()
 
-const metod = ref<Inloggningsmetod | null>(null)
+const testroller = computed(() =>
+  // Med öppen läsning finns inget skäl att logga in som läsare.
+  [
+    { roll: 'lasare', namn: 'läsare' },
+    { roll: 'redaktor', namn: 'redaktör' },
+    { roll: 'utgivare', namn: 'utgivare' },
+  ].filter((r) => !(props.metod.anonym_lasning && r.roll === 'lasare')),
+)
 const felkod = new URLSearchParams(window.location.search).get('fel')
 
 const felmeddelande = computed(() => {
@@ -12,10 +20,6 @@ const felmeddelande = computed(() => {
     return 'Det Google-kontot har inte åtkomst till Kommunkollen. Kontakta den som administrerar plattformen om du behöver åtkomst.'
   if (felkod === 'inloggning-misslyckades') return 'Inloggningen misslyckades. Försök igen.'
   return null
-})
-
-onMounted(async () => {
-  metod.value = await hamtaInloggningsmetod()
 })
 
 async function loggaInSom(roll: string) {
@@ -32,19 +36,26 @@ async function loggaInSom(roll: string) {
         <span class="namn">Kommunkollen</span>
         <span class="ort">Härnösand</span>
       </div>
-      <p class="text">Plattformen är under uppbyggnad och kräver inloggning.</p>
+      <p v-if="metod.anonym_lasning" class="text">
+        Allt innehåll går att läsa utan inloggning. Inloggning behövs bara för redaktörer och utgivare.
+      </p>
+      <p v-else class="text">Plattformen är under uppbyggnad och kräver inloggning.</p>
 
       <p v-if="felmeddelande" class="fel" role="alert" data-testid="inloggningsfel">{{ felmeddelande }}</p>
 
-      <a v-if="metod?.google" class="knapp primar" href="/api/auth/google/start">Logga in med Google</a>
-      <p v-else-if="metod && !metod.test" class="text">Ingen inloggningsmetod är konfigurerad.</p>
+      <a v-if="metod.google" class="knapp primar" href="/api/auth/google/start">Logga in med Google</a>
+      <p v-else-if="!metod.test" class="text">Ingen inloggningsmetod är konfigurerad.</p>
 
-      <div v-if="metod?.test" class="test">
+      <div v-if="metod.test" class="test">
         <p class="testetikett">Testmiljö</p>
-        <button class="knapp" type="button" @click="loggaInSom('lasare')">Logga in som läsare (test)</button>
-        <button class="knapp" type="button" @click="loggaInSom('redaktor')">Logga in som redaktör (test)</button>
-        <button class="knapp" type="button" @click="loggaInSom('utgivare')">Logga in som utgivare (test)</button>
+        <button v-for="r in testroller" :key="r.roll" class="knapp" type="button" @click="loggaInSom(r.roll)">
+          Logga in som {{ r.namn }} (test)
+        </button>
       </div>
+
+      <button v-if="kanAvbryta" class="knapp" type="button" @click="emit('avbryt')">
+        Fortsätt utan att logga in
+      </button>
     </section>
   </div>
 </template>

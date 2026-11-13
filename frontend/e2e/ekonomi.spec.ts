@@ -8,21 +8,11 @@ test.beforeAll(async ({ request }) => {
   expect((await request.post(`${api}/api/insamlingar`)).ok()).toBeTruthy()
 })
 
-test('oinloggad ser inloggningssidan i stället för innehållet', async ({ page }) => {
+test('ekonomivyn är öppen och visar årets resultat som tidsserie med källrad', async ({ page }) => {
   await page.goto('/ekonomi')
-  await expect(page.getByRole('button', { name: 'Logga in som läsare (test)' })).toBeVisible()
-  await expect(page.getByTestId('nyckeltal')).toHaveCount(0)
-})
 
-test('ej behörigt Google-konto får ett tydligt meddelande', async ({ page }) => {
-  await page.goto('/?fel=ej-behorig')
-  await expect(page.getByTestId('inloggningsfel')).toContainText('har inte åtkomst')
-})
-
-test('ekonomivyn visar årets resultat som tidsserie med källrad', async ({ page }) => {
-  await page.goto('/ekonomi')
-  await page.getByRole('button', { name: 'Logga in som läsare (test)' }).click()
-  await expect(page.getByTestId('anvandare')).toContainText('Test (lasare)')
+  // Ingen inloggning krävs för att läsa.
+  await expect(page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' })).toBeVisible()
 
   const kort = page.getByTestId('nyckeltal')
   await expect(kort.getByRole('heading', { name: 'Årets resultat kommun, kr/inv' })).toBeVisible()
@@ -43,8 +33,31 @@ test('ekonomivyn visar årets resultat som tidsserie med källrad', async ({ pag
   await expect(tips).toContainText('2025')
   await expect(tips).toContainText('972 kr/inv')
   await expect(tips).toContainText('Kolada')
+})
 
-  // Utloggning visar inloggningssidan igen.
+test('redaktör kan logga in och ut och stannar på sidan', async ({ page }) => {
+  await page.goto('/ekonomi')
+  await page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' }).click()
+
+  // Läsare finns inte som val när läsning är öppen.
+  await expect(page.getByRole('button', { name: 'Logga in som läsare (test)' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Logga in som redaktör (test)' }).click()
+  await expect(page.getByTestId('anvandare')).toContainText('Test (redaktor)')
+  await expect(page.getByTestId('nyckeltal')).toBeVisible()
+
   await page.getByRole('button', { name: 'Logga ut' }).click()
-  await expect(page.getByRole('button', { name: 'Logga in som läsare (test)' })).toBeVisible()
+  await expect(page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' })).toBeVisible()
+  await expect(page.getByTestId('nyckeltal')).toBeVisible()
+})
+
+test('man kan avbryta inloggningen och fortsätta läsa', async ({ page }) => {
+  await page.goto('/ekonomi')
+  await page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' }).click()
+  await page.getByRole('button', { name: 'Fortsätt utan att logga in' }).click()
+  await expect(page.getByTestId('nyckeltal')).toBeVisible()
+})
+
+test('ej behörigt Google-konto får ett tydligt meddelande', async ({ page }) => {
+  await page.goto('/?fel=ej-behorig')
+  await expect(page.getByTestId('inloggningsfel')).toContainText('har inte åtkomst')
 })

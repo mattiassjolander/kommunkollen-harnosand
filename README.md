@@ -62,16 +62,16 @@ npm test
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-inloggning. Utan klient-id är den avstängd. |
 | `AUTH_ANVANDARE` | Tillåtelselistan: `epost=roll+roll; epost=roll`. Roller: `lasare`, `redaktor`, `utgivare`. |
 | `PUBLIK_URL` | Adressen användarna når appen på, om den skiljer sig från förfrågans (styr Googles redirect-adress). |
-| `ANONYM_LASNING` | `true` öppnar läsning utan inloggning. Skrivning kräver fortfarande inloggning. |
+| `ANONYM_LASNING` | Standard `true`: läsning är öppen utan inloggning. `false` stänger läsning bakom inloggning. Skrivning kräver alltid inloggning. |
 | `TESTENV` | `true` ger testinloggning utan lösenord. På som standard i `npm run dev`, aldrig på en publik server. |
 
 ## Inloggning
 
-All läsning kräver inloggning så länge plattformen är sluten. Bara Google-konton i `AUTH_ANVANDARE` släpps in, och listan läses vid varje förfrågan efter omstart, så en borttagen person loggas ut direkt.
+Läsning är öppen för alla. Inloggning krävs för att skriva, till exempel starta insamling, och bara Google-konton i `AUTH_ANVANDARE` släpps in. Listan läses vid varje förfrågan efter omstart, så en borttagen person loggas ut direkt.
 
 | Roll | Får |
 | --- | --- |
-| `lasare` | läsa alla vyer |
+| `lasare` | läsa alla vyer (behövs bara om läsning stängs med `ANONYM_LASNING=false`) |
 | `redaktor` | läsa, starta insamling och (senare) registrera uppgifter |
 | `utgivare` | läsa och (senare) godkänna registreringar för publicering |
 
