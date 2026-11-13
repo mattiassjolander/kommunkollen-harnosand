@@ -732,6 +732,7 @@ Beslut fattade 2026-11-13, efter att specen skrevs:
 - **Drift:** egen LXC på Proxmox-servern, deploy via self-hosted GitHub-runner.
 - **AI-analys:** körs på alla nya dokument vid varje insamling, och på historiken endast för utvalda dokumenttyper. Budgettak i normaldrift är cirka 200–500 kr per månad, plus en separat engångsbudget för historiken. AI föreslår, och en människa bekräftar. Se ADR-0002.
 - **Partisymboler:** partifärger och förkortningar används i stället för logotyper (varumärken).
+- **Grafisk profil:** egen neutral profil, se [design.md](design.md). Partifärger används bara för att märka ut partier.
 - **Organ som ingår:** kommunfullmäktige, kommunstyrelsen, samhällsnämnden, socialnämnden och skolnämnden. Utanför: KSAU, vars protokoll inte publiceras rutinmässigt, samt Överförmyndarnämnden och Valnämnden. De kommunala bolagen ingår bara genom koncernsiffrorna i årsredovisningen.
 - **Historiskt djup:** dokument (protokoll, handlingar, årsplaner, årsredovisningar, delårsrapporter, revisionsrapporter, budgetförslag) hämtas från och med 2022. Det täcker mandatperioderna 2022–2026 och 2026–2030.
 - **Ärenden:** ett ärende kan ha flera diarienummer. Behandlingar kopplas via hänvisningar i beslutsunderlaget, och osäkra kopplingar görs manuellt. Se ADR-0003.

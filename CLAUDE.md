@@ -2,6 +2,9 @@
 
 Insyn i hur kommunpolitiken i Härnösand bedrivs. Se README.md.
 
+- Kravspec: `docs/kravspec.md` (beslut i avsnitt 18).
+- Grafisk profil: `docs/design.md`. Följ den för allt UI. Plattformen är partipolitiskt obunden, så använd ingen partis grafiska profil.
+
 ## Agent skills
 
 ### Issue tracker
