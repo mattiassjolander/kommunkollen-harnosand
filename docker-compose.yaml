@@ -26,7 +26,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       AUTH_ANVANDARE: ${AUTH_ANVANDARE:-}
       PUBLIK_URL: ${PUBLIK_URL:-}
-      ANONYM_LASNING: ${ANONYM_LASNING:-false}
+      ANONYM_LASNING: ${ANONYM_LASNING:-true}
       # true = testinloggning utan lösenord. Aldrig true på en publik server.
       TESTENV: ${TESTENV:-false}
     depends_on:

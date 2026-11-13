@@ -1,35 +1,53 @@
 <script setup lang="ts">
-import { onMounted, provide, ref } from 'vue'
-import { hamtaJag, loggaUt, type Jag } from './api'
+import { computed, onMounted, provide, ref } from 'vue'
+import { hamtaInloggningsmetod, hamtaJag, loggaUt, type Inloggningsmetod, type Jag } from './api'
 import LoggaIn from './views/LoggaIn.vue'
 
 const vyer = [{ till: '/ekonomi', namn: 'Ekonomi' }]
 
 const jag = ref<Jag | null>(null)
-const kontrollerad = ref(false)
+const metod = ref<Inloggningsmetod | null>(null)
+// Inloggningssidan visas när läsning kräver inloggning, när man klickat "Logga in",
+// eller när Google-inloggningen kom tillbaka med ett fel.
+const visaInloggning = ref(new URLSearchParams(window.location.search).has('fel'))
 
 async function kontrollera() {
-  jag.value = await hamtaJag()
-  kontrollerad.value = true
+  ;[jag.value, metod.value] = await Promise.all([hamtaJag(), hamtaInloggningsmetod()])
+  if (jag.value) visaInloggning.value = false
 }
+
+const oppenLasning = computed(() => metod.value?.anonym_lasning ?? false)
+const kraverInloggning = computed(() => !jag.value && (!oppenLasning.value || visaInloggning.value))
 
 /** Anropas av vyer som får 401 (t.ex. när sessionen gått ut). */
 function utloggad() {
   jag.value = null
+  visaInloggning.value = true
 }
 provide('utloggad', utloggad)
 
-async function loggaUtOchVisaInloggning() {
+async function loggaUtOchStanna() {
   await loggaUt()
   jag.value = null
+}
+
+function avbrytInloggning() {
+  visaInloggning.value = false
+  history.replaceState(null, '', window.location.pathname)
 }
 
 onMounted(kontrollera)
 </script>
 
 <template>
-  <template v-if="kontrollerad">
-    <LoggaIn v-if="!jag" @inloggad="kontrollera" />
+  <template v-if="metod">
+    <LoggaIn
+      v-if="kraverInloggning"
+      :metod="metod"
+      :kan-avbryta="oppenLasning"
+      @inloggad="kontrollera"
+      @avbryt="avbrytInloggning"
+    />
     <div v-else class="ram">
       <aside class="nav">
         <div class="ordmarke">
@@ -40,9 +58,12 @@ onMounted(kontrollera)
           <RouterLink v-for="v in vyer" :key="v.till" :to="v.till" class="navlank">{{ v.namn }}</RouterLink>
         </nav>
         <div class="anvandare" data-testid="anvandare">
-          <span class="anvnamn">{{ jag.namn }}</span>
-          <span class="roller">{{ jag.roller.join(', ') }}</span>
-          <button type="button" class="utlank" @click="loggaUtOchVisaInloggning">Logga ut</button>
+          <template v-if="jag">
+            <span class="anvnamn">{{ jag.namn }}</span>
+            <span class="roller">{{ jag.roller.join(', ') }}</span>
+            <button type="button" class="lank" @click="loggaUtOchStanna">Logga ut</button>
+          </template>
+          <button v-else type="button" class="lank" @click="visaInloggning = true">Logga in</button>
         </div>
       </aside>
       <main class="innehall">
@@ -110,7 +131,7 @@ onMounted(kontrollera)
   color: var(--ink-muted);
   font-size: 12px;
 }
-.utlank {
+.lank {
   align-self: flex-start;
   margin-top: 8px;
   padding: 0;
