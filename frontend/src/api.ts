@@ -131,3 +131,20 @@ async function hamta<T>(url: string): Promise<T> {
 export const hamtaStatus = () => hamta<GlobalStatus>('/api/status')
 export const hamtaDatakallor = () => hamta<Kallstatusrad[]>('/api/datakallor')
 export const hamtaKorningslogg = () => hamta<Korningslogg[]>('/api/insamlingar')
+
+// Ekonomiska nyckeltal (kravspec 3.1 och 3.3)
+
+export interface Nyckeltal {
+  id: string
+  prisniva: string | null
+  /** null om ingen insamling har hämtat måttet än. */
+  serie: Serie | null
+}
+
+export interface Nyckeltalsgrupp {
+  id: string
+  titel: string
+  nyckeltal: Nyckeltal[]
+}
+
+export const hamtaEkonomi = () => hamta<{ omrade: string; grupper: Nyckeltalsgrupp[] }>('/api/ekonomi')

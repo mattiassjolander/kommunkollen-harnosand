@@ -50,12 +50,19 @@ npm test
 - **Söm 1** (`backend/tests`): HTTP-API:t mot riktig Postgres, med externa källor utbytta mot inspelade svar i `backend/tests/recordings`. Använder `TEST_DATABASE_URL` om den är satt, annars inbäddad Postgres.
 - **Söm 2** (`frontend/e2e`): Playwright mot riktig backend som hämtar från inspelningarna. Första gången: `npx --prefix frontend playwright install chromium`.
 
+Inspelningarna uppdateras från de riktiga källorna (Kolada och SCB) med:
+
+```bash
+uv run --directory backend python -m app.spela_in tests/recordings
+```
+
+Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [docs/tackning-ekonomi.md](docs/tackning-ekonomi.md).
+
 ## Konfiguration
 
 | Variabel | Vad |
 | --- | --- |
 | `DATABASE_URL` | Postgres-anslutning. Utelämnad i utveckling = inbäddad Postgres. |
-| `KOLADA_NYCKELTAL` | Kommaseparerade Kolada-nyckeltal att hämta (standard `N03007`). |
 | `INSPELNINGAR` | Katalog med inspelade källsvar (bara för test och utveckling). |
 | `SESSION_SECRET` | Hemlighet för sessionskakan. Krävs på servern. Saknas den blir alla utloggade vid omstart. |
 | `SESSION_HTTPS_ONLY` | `true` när appen nås via https. |

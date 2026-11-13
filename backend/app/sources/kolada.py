@@ -13,7 +13,9 @@ BAS = "https://api.kolada.se/v3"
 
 
 def _datum(s: str | None) -> date | None:
-    return date.fromisoformat(s) if s else None
+    # Kolada anger ibland nästa planerade publicering. Ett framtida datum är ingen publicering än.
+    d = date.fromisoformat(s) if s else None
+    return d if d and d <= date.today() else None
 
 
 def _enhet(titel: str) -> str:
@@ -59,8 +61,10 @@ class Kolada:
         kpi = self._hamta_alla(client, f"{BAS}/kpi/{kpi_id}")[0]
         publicerad = _datum(kpi.get("publication_date"))
         matt_id = f"kolada:{kpi_id}"
-        params = {"from_date": sedan.date().isoformat()} if sedan else None
-        rader = self._hamta_alla(client, f"{BAS}/data/kpi/{kpi_id}/municipality/{self.kommun}", params)
+        # Hela serien hämtas varje gång (den är liten). Med from_date skulle ett nyckeltal som lagts
+        # till i katalogen efter källans senaste kontroll bara få de senast ändrade åren.
+        # Insamlingen lagrar ändå bara det som är nytt eller ändrat.
+        rader = self._hamta_alla(client, f"{BAS}/data/kpi/{kpi_id}/municipality/{self.kommun}")
         resultat.matt.append(
             Matt(
                 id=matt_id,

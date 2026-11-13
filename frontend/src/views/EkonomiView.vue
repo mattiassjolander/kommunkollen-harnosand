@@ -1,21 +1,21 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref } from 'vue'
-import { EjInloggad, hamtaSerie, type Serie } from '../api'
-import { tal } from '../format'
-import Kallrad from '../components/Kallrad.vue'
-import Stapeldiagram from '../components/Stapeldiagram.vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { EjInloggad, hamtaEkonomi, type Nyckeltalsgrupp } from '../api'
+import Nyckeltalskort from '../components/Nyckeltalskort.vue'
 
-const MATT = 'kolada:N03007'
-const FORSTA_AR = 2022 // standardvisning enligt kravspec avsnitt 18
+const STANDARD_FRAN = 2022 // standardvisning enligt kravspec avsnitt 18
 
-const serie = ref<Serie | null>(null)
+const route = useRoute()
+const router = useRouter()
+const grupper = ref<Nyckeltalsgrupp[]>([])
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 const utloggad = inject<() => void>('utloggad', () => {})
 
 onMounted(async () => {
   try {
-    serie.value = await hamtaSerie(MATT)
+    grupper.value = (await hamtaEkonomi()).grupper
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
@@ -24,41 +24,54 @@ onMounted(async () => {
   }
 })
 
-const punkter = computed(() => (serie.value?.punkter ?? []).filter((p) => Number(p.period) >= FORSTA_AR))
-const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datakalla.titel}` : ''))
+// Alla år som någon serie har, så att man kan välja hur långt bakåt visningen ska börja.
+const ar = computed(() => {
+  const alla = new Set<number>()
+  for (const g of grupper.value)
+    for (const n of g.nyckeltal) for (const p of n.serie?.punkter ?? []) alla.add(Number(p.period))
+  return [...alla].sort((a, b) => a - b)
+})
+
+// Filtret speglas i URL:en (?fran=2015) så att en vy går att länka till.
+const franAr = ref(Number(route.query.fran) || STANDARD_FRAN)
+watch(franAr, (v) => router.replace({ query: { ...route.query, fran: v === STANDARD_FRAN ? undefined : String(v) } }))
+
+const harData = computed(() => grupper.value.some((g) => g.nyckeltal.some((n) => n.serie)))
 </script>
 
 <template>
   <header class="vyhuvud">
     <h1>Ekonomi</h1>
-    <p class="ingress">Härnösands kommuns ekonomiska utveckling över tid.</p>
+    <p class="ingress">
+      Härnösands kommuns ekonomiska utveckling över tid. Belopp i löpande priser, alltså inte justerade för
+      inflation. Kronor per invånare gör åren lättare att jämföra.
+    </p>
   </header>
 
   <p v-if="laddar">Hämtar uppgifter…</p>
   <p v-else-if="fel" class="fel">Kunde inte hämta uppgifter: {{ fel }}</p>
-  <p v-else-if="!serie" data-testid="tomt">Uppgift saknas. Ingen insamling har körts än.</p>
+  <p v-else-if="!harData" data-testid="tomt">Uppgift saknas. Ingen insamling har körts än.</p>
 
-  <section v-else class="kort" data-testid="nyckeltal">
-    <h3>{{ serie.matt.titel }}</h3>
-    <p class="beskrivning">{{ serie.matt.beskrivning }}</p>
-    <Stapeldiagram :punkter="punkter" :enhet="serie.matt.enhet" :kalla="kallnamn" />
-    <table class="tabell">
-      <caption class="dold">{{ serie.matt.titel }}</caption>
-      <thead>
-        <tr>
-          <th scope="col">År</th>
-          <th scope="col" class="hoger">{{ serie.matt.enhet }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="p in punkter" :key="p.period">
-          <td class="tal">{{ p.period }}</td>
-          <td class="tal hoger">{{ tal(p.varde) }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <Kallrad :serie="serie" :perioder="punkter.map((p) => p.period)" />
-  </section>
+  <template v-else>
+    <div class="filterrad">
+      <label>
+        Visa från
+        <select v-model.number="franAr" data-testid="fran-ar">
+          <option v-for="a in ar" :key="a" :value="a">{{ a }}</option>
+        </select>
+      </label>
+      <nav class="hopp" aria-label="Avsnitt">
+        <a v-for="g in grupper" :key="g.id" :href="`#${g.id}`">{{ g.titel }}</a>
+      </nav>
+    </div>
+
+    <section v-for="g in grupper" :id="g.id" :key="g.id" class="grupp">
+      <h2>{{ g.titel }}</h2>
+      <div class="rutnat">
+        <Nyckeltalskort v-for="n in g.nyckeltal" :key="n.id" :nyckeltal="n" :fran-ar="franAr" />
+      </div>
+    </section>
+  </template>
 </template>
 
 <style scoped>
@@ -68,44 +81,48 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
 .ingress {
   color: var(--ink-secondary);
   margin: 0;
-}
-.kort {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 24px;
-  max-width: 880px;
-}
-.beskrivning {
-  color: var(--ink-secondary);
-  margin: 4px 0 16px;
   max-width: 70ch;
 }
-.tabell {
-  border-collapse: collapse;
-  margin-top: 16px;
-  font-size: 13px;
-  min-width: 240px;
-}
-.tabell th,
-.tabell td {
-  padding: 4px 12px 4px 0;
+.filterrad {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
-  text-align: left;
 }
-.tabell th {
+.filterrad label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--ink-secondary);
-  font-weight: 600;
 }
-.hoger {
-  text-align: right !important;
+.filterrad select {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
 }
-.dold {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
+.hopp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 13px;
+}
+.grupp {
+  margin-bottom: 48px;
+  scroll-margin-top: 16px;
+}
+.grupp h2 {
+  margin-bottom: 16px;
+}
+.rutnat {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+  gap: 16px;
 }
 .fel {
   color: var(--status-critical);

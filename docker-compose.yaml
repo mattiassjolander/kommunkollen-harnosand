@@ -18,7 +18,6 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-kommunkollen}:${POSTGRES_PASSWORD:?Sätt POSTGRES_PASSWORD i .env}@db:5432/${POSTGRES_DB:-kommunkollen}
-      KOLADA_NYCKELTAL: ${KOLADA_NYCKELTAL:-N03007}
       # Inloggning (se README). Utan GOOGLE_CLIENT_ID är Google-inloggningen avstängd.
       SESSION_SECRET: ${SESSION_SECRET:?Sätt SESSION_SECRET i .env}
       SESSION_HTTPS_ONLY: ${SESSION_HTTPS_ONLY:-false}
