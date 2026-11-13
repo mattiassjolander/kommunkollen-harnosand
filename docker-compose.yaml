@@ -19,6 +19,16 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-kommunkollen}:${POSTGRES_PASSWORD:?Sätt POSTGRES_PASSWORD i .env}@db:5432/${POSTGRES_DB:-kommunkollen}
       KOLADA_NYCKELTAL: ${KOLADA_NYCKELTAL:-N03007}
+      # Inloggning (se README). Utan GOOGLE_CLIENT_ID är Google-inloggningen avstängd.
+      SESSION_SECRET: ${SESSION_SECRET:?Sätt SESSION_SECRET i .env}
+      SESSION_HTTPS_ONLY: ${SESSION_HTTPS_ONLY:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      AUTH_ANVANDARE: ${AUTH_ANVANDARE:-}
+      PUBLIK_URL: ${PUBLIK_URL:-}
+      ANONYM_LASNING: ${ANONYM_LASNING:-false}
+      # true = testinloggning utan lösenord. Aldrig true på en publik server.
+      TESTENV: ${TESTENV:-false}
     depends_on:
       db:
         condition: service_healthy

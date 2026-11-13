@@ -31,6 +31,8 @@ def main() -> None:
 
     if not os.environ.get("DATABASE_URL"):
         os.environ["DATABASE_URL"] = inbaddad_postgres(a.databas)
+    # Testinloggning är på i utveckling om inget annat sagts.
+    os.environ.setdefault("TESTENV", "true")
     if a.inspelningar:
         os.environ["INSPELNINGAR"] = str(a.inspelningar.resolve())
 
