@@ -102,11 +102,38 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
     return res
 
 
+# Nyckel för Postgres advisory lock som hindrar att två insamlingar körs samtidigt,
+# oavsett om de startas av schemaläggaren eller manuellt (också från olika processer).
+LASNYCKEL = 0x6B6B_0001
+
+
+class InsamlingPagar(Exception):
+    """En annan insamling pågår redan."""
+
+
 def kor_insamling(
-    conn: psycopg.Connection, kallor: list[Datakalla], client: httpx.Client, utlosare: str = "manuell"
+    conn: psycopg.Connection,
+    kallor: list[Datakalla],
+    client: httpx.Client,
+    utlosare: str = "manuell",
+    planerad_tid: datetime | None = None,
+) -> Korningsresultat:
+    if not conn.execute("SELECT pg_try_advisory_lock(%s) AS ok", (LASNYCKEL,)).fetchone()["ok"]:
+        conn.rollback()
+        raise InsamlingPagar("En insamling pågår redan. Försök igen när den är klar.")
+    try:
+        return _kor(conn, kallor, client, utlosare, planerad_tid)
+    finally:
+        conn.rollback()
+        conn.execute("SELECT pg_advisory_unlock(%s)", (LASNYCKEL,))
+        conn.commit()
+
+
+def _kor(
+    conn: psycopg.Connection, kallor: list[Datakalla], client: httpx.Client, utlosare: str, planerad_tid: datetime | None
 ) -> Korningsresultat:
     korning_id = conn.execute(
-        "INSERT INTO insamlingskorning (utlosare) VALUES (%s) RETURNING id", (utlosare,)
+        "INSERT INTO insamlingskorning (utlosare, planerad_tid) VALUES (%s, %s) RETURNING id", (utlosare, planerad_tid)
     ).fetchone()["id"]
     conn.commit()
 

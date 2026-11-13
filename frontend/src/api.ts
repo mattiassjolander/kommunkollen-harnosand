@@ -91,6 +91,8 @@ export interface GlobalStatus {
   kallor_kontrollerade: number
   kallor_utan_fel: number
   fullstandigt_uppdaterad: boolean
+  /** null om schemat är avstängt. */
+  nasta_korning: string | null
 }
 
 export interface Kallstatusrad {
