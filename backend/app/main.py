@@ -10,19 +10,22 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, db, status
+from . import auth, db, ekonomi, serier, status
 from .auth import Inloggning, krav_roll
 from .insamling import kor_insamling
 from .recorded import InspeladTransport
 from .sources.base import Datakalla
 from .sources.kolada import Kolada
+from .sources.scb import Scb
 
 KOMMUN = "2280"  # Härnösand
 
 
 def standardkallor() -> list[Datakalla]:
-    nyckeltal = os.environ.get("KOLADA_NYCKELTAL", "N03007").split(",")
-    return [Kolada(nyckeltal=[n.strip() for n in nyckeltal if n.strip()], kommun=KOMMUN)]
+    return [
+        Kolada(nyckeltal=ekonomi.KOLADA, kommun=KOMMUN),
+        Scb(matt=ekonomi.SCB, differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN),
+    ]
 
 
 def create_app(
@@ -90,50 +93,26 @@ def create_app(
     @app.get("/api/matt/{matt_id}/serie", dependencies=[Depends(krav_roll("lasare"))])
     def serie(matt_id: str, omrade: str = KOMMUN) -> dict:
         with db.connect(database_url) as conn:
-            matt = conn.execute(
-                """
-                SELECT m.id, m.titel, m.beskrivning, m.enhet, m.kallans_publicering,
-                       d.id AS datakalla_id, d.titel AS datakalla_titel, d.url AS datakalla_url
-                FROM matt m JOIN datakalla d ON d.id = m.datakalla_id
-                WHERE m.id = %s
-                """,
-                (matt_id,),
-            ).fetchone()
-            if matt is None:
-                raise HTTPException(404, f"Måttet {matt_id} finns inte")
-            punkter = conn.execute(
-                """
-                SELECT DISTINCT ON (period) period, varde, kallans_publicering, hamtad, version
-                FROM observation
-                WHERE matt_id = %s AND omrade = %s
-                ORDER BY period, version DESC
-                """,
-                (matt_id, omrade),
-            ).fetchall()
-        return {
-            "matt": {
-                "id": matt["id"],
-                "titel": matt["titel"],
-                "beskrivning": matt["beskrivning"],
-                "enhet": matt["enhet"],
-                "kallans_publicering": matt["kallans_publicering"],
-                "datakalla": {
-                    "id": matt["datakalla_id"],
-                    "titel": matt["datakalla_titel"],
-                    "url": matt["datakalla_url"],
-                },
-            },
-            "omrade": omrade,
-            "punkter": [
-                {
-                    "period": p["period"],
-                    "varde": None if p["varde"] is None else float(p["varde"]),
-                    "kallans_publicering": p["kallans_publicering"],
-                    "hamtad": p["hamtad"],
-                    "version": p["version"],
-                }
-                for p in punkter
-            ],
-        }
+            resultat = serier.las_serie(conn, matt_id, omrade)
+        if resultat is None:
+            raise HTTPException(404, f"Måttet {matt_id} finns inte")
+        return resultat
+
+    @app.get("/api/ekonomi", dependencies=[Depends(krav_roll("lasare"))])
+    def ekonomiska_nyckeltal(omrade: str = KOMMUN) -> dict:
+        """Alla ekonomiska nyckeltal i katalogen, grupperade. Ett mått som inte samlats in än har serie null."""
+        with db.connect(database_url) as conn:
+            grupper = []
+            for g in ekonomi.GRUPPER:
+                nyckeltal = []
+                for matt_id in g.matt:
+                    s = serier.las_serie(conn, matt_id, omrade)
+                    nyckeltal.append({
+                        "id": matt_id,
+                        "prisniva": ekonomi.prisniva(s["matt"]["enhet"]) if s else None,
+                        "serie": s,
+                    })
+                grupper.append({"id": g.id, "titel": g.titel, "nyckeltal": nyckeltal})
+        return {"omrade": omrade, "grupper": grupper}
 
     return app

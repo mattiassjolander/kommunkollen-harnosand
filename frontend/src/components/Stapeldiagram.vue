@@ -2,7 +2,7 @@
 // Stapeldiagram för en tidsserie med en serie. Följer dataviz-reglerna i docs/design.md:
 // nollbaslinje, 4 px rundning på dataänden, hårlinjerutnät och tooltip vid hover.
 import { computed, ref } from 'vue'
-import { tal } from '../format'
+import { axeltal, tal } from '../format'
 
 const props = defineProps<{
   punkter: { period: string; varde: number | null }[]
@@ -31,8 +31,15 @@ const skala = computed(() => {
   const y = (x: number) => M.top + ((max - x) / (max - min)) * inreH
   const ticks: number[] = []
   for (let t = min; t <= max + steg / 2; t += steg) ticks.push(t)
-  return { y, ticks }
+  return { y, ticks, steg }
 })
+
+// Med många år visas bara var n:te årsetikett så att de inte krockar.
+const etikettVarje = computed(() => Math.ceil(props.punkter.length / 12))
+function visaEtikett(i: number): boolean {
+  const n = props.punkter.length
+  return (n - 1 - i) % etikettVarje.value === 0
+}
 
 const band = computed(() => inreB / Math.max(props.punkter.length, 1))
 const stapelB = computed(() => Math.min(48, band.value * 0.6))
@@ -64,7 +71,7 @@ const tipsX = computed(() =>
         <g v-for="t in skala.ticks" :key="t">
           <line :x1="M.left" :x2="B - M.right" :y1="skala.y(t)" :y2="skala.y(t)" :class="{ bas: t === 0 }" />
           <text :x="M.left - 8" :y="skala.y(t)" text-anchor="end" dominant-baseline="middle" class="tal">
-            {{ tal(t) }}
+            {{ axeltal(t, skala.steg) }}
           </text>
         </g>
       </g>
@@ -79,9 +86,37 @@ const tipsX = computed(() =>
           @mouseenter="aktiv = i"
         />
         <path v-if="p.varde !== null" :d="stapel(i, p.varde)" class="stapel" data-testid="stapel" />
-        <text :x="M.left + band * (i + 0.5)" :y="H - 10" text-anchor="middle" class="tal">{{ p.period }}</text>
+        <template v-if="p.varde === null">
+          <!-- Saknat värde ritas aldrig som noll: ordet där det får plats, annars ett streck med förklaring. -->
+          <text
+            v-if="band >= 48"
+            :x="M.left + band * (i + 0.5)"
+            :y="skala.y(0) - 6"
+            text-anchor="middle"
+            class="saknas"
+            data-testid="saknas"
+          >
+            saknas
+          </text>
+          <line
+            v-else
+            :x1="M.left + band * (i + 0.5) - 3"
+            :x2="M.left + band * (i + 0.5) + 3"
+            :y1="skala.y(0) - 6"
+            :y2="skala.y(0) - 6"
+            class="saknasstreck"
+            data-testid="saknas"
+          />
+        </template>
+        <text v-if="visaEtikett(i)" :x="M.left + band * (i + 0.5)" :y="H - 10" text-anchor="middle" class="tal">
+          {{ p.period }}
+        </text>
       </g>
     </svg>
+    <p v-if="band < 48 && punkter.some((p) => p.varde === null)" class="forklaring">
+      <svg width="12" height="8" aria-hidden="true"><line x1="3" x2="9" y1="4" y2="4" class="saknasstreck" /></svg>
+      Uppgift saknas
+    </p>
     <div v-if="aktiv !== null" class="tips" :style="{ left: `${tipsX}%` }" role="tooltip">
       <strong>{{ punkter[aktiv].period }}</strong>
       <span class="tal">{{ tal(punkter[aktiv].varde, enhet) }}</span>
@@ -94,7 +129,7 @@ const tipsX = computed(() =>
 .diagram {
   position: relative;
 }
-svg {
+.diagram > svg {
   width: 100%;
   height: auto;
   display: block;
@@ -109,6 +144,22 @@ svg {
 text {
   fill: var(--ink-muted);
   font-size: 12px;
+}
+.saknas {
+  font-size: 11px;
+  font-style: italic;
+}
+.saknasstreck {
+  stroke: var(--ink-secondary);
+  stroke-width: 2;
+}
+.forklaring {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-muted);
 }
 .stapel {
   fill: var(--series-1);

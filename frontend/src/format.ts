@@ -1,10 +1,27 @@
 // Svenskt talformat: mellanslag som tusentalsavgränsare, komma som decimaltecken.
 
 const heltal = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 })
+const endecimal = new Intl.NumberFormat('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+/** Procent och miljoner kronor visas med en decimal, övrigt i heltal. */
+function decimaler(enhet: string): Intl.NumberFormat {
+  return enhet.includes('%') || enhet === 'mnkr' ? endecimal : heltal
+}
 
 export function tal(v: number | null, enhet = ''): string {
   if (v === null) return 'Uppgift saknas'
-  return enhet ? `${heltal.format(v)} ${enhet}` : heltal.format(v)
+  const s = decimaler(enhet).format(v)
+  return enhet ? `${s} ${enhet}` : s
+}
+
+/** Axeletikett: decimaler bara när stegen är mindre än ett. */
+export function axeltal(v: number, steg: number): string {
+  return (steg < 1 ? endecimal : heltal).format(v)
+}
+
+/** Belopp i tkr visas i mnkr. Källans värde lagras oförändrat, bara visningen skalas. */
+export function visningsskala(enhet: string): { enhet: string; faktor: number } {
+  return enhet === 'tkr' ? { enhet: 'mnkr', faktor: 1 / 1000 } : { enhet, faktor: 1 }
 }
 
 const lopdatum = new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -31,4 +48,10 @@ export function tabelldatum(iso: string | null): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso
   const d = new Date(iso)
   return `${tabelldag.format(d)} ${klockslag.format(d)}`
+}
+
+/** Talet utan enhet men med enhetens antal decimaler (för tabellceller där enheten står i rubriken). */
+export function siffra(v: number | null, enhet: string): string {
+  if (v === null) return 'Uppgift saknas'
+  return decimaler(enhet).format(v)
 }

@@ -8,8 +8,15 @@ MATT = "kolada:N03007"
 
 
 def antal_perioder_i_inspelningen() -> int:
-    data = json.loads((INSPELNINGAR / "kolada" / "data_N03007_2280.json").read_text(encoding="utf-8"))
+    manifest = json.loads((INSPELNINGAR / "manifest.json").read_text(encoding="utf-8"))
+    fil = manifest["api.kolada.se/v3/data/kpi/N03007/municipality/2280"]
+    data = json.loads((INSPELNINGAR / fil).read_text(encoding="utf-8"))
     return len(data["values"])
+
+
+def kallresultat(korning: dict, id: str) -> dict:
+    [k] = [k for k in korning["kallor"] if k["datakalla_id"] == id]
+    return k
 
 
 def test_insamling_ger_tidsserie_med_kalla_och_tidpunkter(redaktor):
@@ -18,10 +25,9 @@ def test_insamling_ger_tidsserie_med_kalla_och_tidpunkter(redaktor):
     assert svar.status_code == 200
     korning = svar.json()
     assert korning["status"] == "lyckad"
-    [kolada] = korning["kallor"]
-    assert kolada["datakalla_id"] == "kolada"
+    kolada = kallresultat(korning, "kolada")
     assert kolada["status"] == "lyckad"
-    assert kolada["antal_nya"] == antal_perioder_i_inspelningen()
+    assert kolada["antal_nya"] >= antal_perioder_i_inspelningen()
 
     serie = api.get(f"/api/matt/{MATT}/serie").json()
     assert serie["matt"]["titel"] == "Årets resultat kommun, kr/inv"
@@ -45,10 +51,10 @@ def test_andra_insamlingen_utan_andringar_ger_inga_nya_uppgifter(redaktor):
     forsta = api.get(f"/api/matt/{MATT}/serie").json()
 
     korning = api.post("/api/insamlingar").json()
-    [kolada] = korning["kallor"]
-    assert kolada["status"] == "inga_nya"
-    assert kolada["antal_nya"] == 0
-    assert kolada["antal_oforandrade"] == antal_perioder_i_inspelningen()
+    for kalla in korning["kallor"]:
+        assert kalla["status"] == "inga_nya"
+        assert kalla["antal_nya"] == 0
+        assert kalla["antal_andrade"] == 0
 
     assert api.get(f"/api/matt/{MATT}/serie").json() == forsta
 
