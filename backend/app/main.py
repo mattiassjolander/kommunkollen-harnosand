@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, db, ekonomi, serier, status
+from . import auth, db, ekonomi, floden, serier, status
 from .auth import Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
@@ -24,10 +24,14 @@ KOMMUN = "2280"  # Härnösand
 FRAN_MILJO = object()  # create_app läser schemat från miljön om inget anges
 
 
+def _unika(matt: list) -> list:
+    return list({m.id: m for m in matt}.values())
+
+
 def standardkallor() -> list[Datakalla]:
     return [
-        Kolada(nyckeltal=ekonomi.KOLADA, kommun=KOMMUN),
-        Scb(matt=ekonomi.SCB, differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN),
+        Kolada(nyckeltal=[*ekonomi.KOLADA, floden.INVANARE.split(":")[1]], kommun=KOMMUN),
+        Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN),
     ]
 
 
@@ -125,5 +129,20 @@ def create_app(
                     })
                 grupper.append({"id": g.id, "titel": g.titel, "nyckeltal": nyckeltal})
         return {"omrade": omrade, "grupper": grupper}
+
+    @app.get("/api/floden", dependencies=[Depends(krav_roll("lasare"))])
+    def ekonomiska_floden(ar: str | None = None, omrade: str = KOMMUN) -> dict:
+        """Sankey-modellen för ett år. Utan år: senaste år med fullständigt underlag."""
+        with db.connect(database_url) as conn:
+            varden = floden.las_varden(conn, omrade)
+            titlar = {r["id"]: r["titel"] for r in conn.execute("SELECT id, titel FROM matt")}
+        ar_lista = [{"ar": a, "fullstandig": floden.modell(varden, a, titlar)["fullstandig"]}
+                    for a in floden.tillgangliga_ar(varden)]
+        if ar is None:
+            fullstandiga = [a["ar"] for a in ar_lista if a["fullstandig"]]
+            ar = fullstandiga[-1] if fullstandiga else (ar_lista[-1]["ar"] if ar_lista else None)
+        if ar is None:
+            return {"ar": None, "tillgangliga_ar": [], "fullstandig": False, "saknas": [], "noder": [], "floden": []}
+        return floden.modell(varden, ar, titlar) | {"omrade": omrade, "tillgangliga_ar": ar_lista}
 
     return app
