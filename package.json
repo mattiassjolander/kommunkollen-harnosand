@@ -1,0 +1,11 @@
+{
+  "name": "kommunkollen",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,magenta \"uv run --directory backend kommunkollen-dev\" \"npm --prefix frontend run dev\"",
+    "test": "uv run --directory backend pytest && npm --prefix frontend run e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}
