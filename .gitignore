@@ -7,6 +7,7 @@ Thumbs.db
 # Miljö
 .env
 .env.*
+!.env.example
 
 # Beroenden och byggen
 node_modules/

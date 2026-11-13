@@ -1,0 +1,43 @@
+# Kör hela appen: frontend (nginx) + backend (FastAPI) + Postgres.
+# Lokalt (kräver Docker):  docker compose up --build
+# Servern:                 docker compose pull && docker compose up -d
+name: kommunkollen
+
+services:
+  frontend:
+    image: ghcr.io/mattiassjolander/kommunkollen-frontend:${TAG:-latest}
+    build: ./frontend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    image: ghcr.io/mattiassjolander/kommunkollen-backend:${TAG:-latest}
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kommunkollen}:${POSTGRES_PASSWORD:?Sätt POSTGRES_PASSWORD i .env}@db:5432/${POSTGRES_DB:-kommunkollen}
+      KOLADA_NYCKELTAL: ${KOLADA_NYCKELTAL:-N03007}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kommunkollen}
+      POSTGRES_USER: ${POSTGRES_USER:-kommunkollen}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Sätt POSTGRES_PASSWORD i .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+    # Ingen port öppnas: bara backend når databasen via det interna nätverket
+
+volumes:
+  db-data:
