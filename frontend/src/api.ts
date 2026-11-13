@@ -71,3 +71,63 @@ export async function hamtaSerie(mattId: string): Promise<Serie | null> {
   if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
   return svar.json()
 }
+
+// Uppdateringsstatus (kravspec avsnitt 12)
+
+export type Kallstatus = 'lyckad' | 'inga_nya' | 'delvis_fel' | 'misslyckad'
+export type Korningsstatus = 'pagar' | 'lyckad' | 'delvis_fel' | 'misslyckad'
+
+export interface Korning {
+  id: number
+  utlosare: 'manuell' | 'schema'
+  startad: string
+  avslutad: string | null
+  status: Korningsstatus
+}
+
+export interface GlobalStatus {
+  senaste_korning: Korning | null
+  senaste_lyckade_korning: Korning | null
+  kallor_kontrollerade: number
+  kallor_utan_fel: number
+  fullstandigt_uppdaterad: boolean
+}
+
+export interface Kallstatusrad {
+  id: string
+  titel: string
+  url: string
+  senaste_kontroll: string | null
+  senaste_lyckade_hamtning: string | null
+  senaste_publicering: string | null
+  status: Kallstatus | null
+  fel: string | null
+}
+
+export interface Kallkorning {
+  datakalla_id: string
+  titel: string
+  status: Kallstatus
+  antal_nya: number
+  antal_andrade: number
+  antal_oforandrade: number
+  fel: string | null
+  senaste_publicering: string | null
+  startad: string
+  avslutad: string | null
+}
+
+export interface Korningslogg extends Korning {
+  kallor: Kallkorning[]
+}
+
+async function hamta<T>(url: string): Promise<T> {
+  const svar = await fetch(url)
+  if (svar.status === 401) throw new EjInloggad()
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+
+export const hamtaStatus = () => hamta<GlobalStatus>('/api/status')
+export const hamtaDatakallor = () => hamta<Kallstatusrad[]>('/api/datakallor')
+export const hamtaKorningslogg = () => hamta<Korningslogg[]>('/api/insamlingar')

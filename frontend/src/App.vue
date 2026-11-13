@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, provide, ref } from 'vue'
 import { hamtaInloggningsmetod, hamtaJag, loggaUt, type Inloggningsmetod, type Jag } from './api'
+import Statusindikator from './components/Statusindikator.vue'
 import LoggaIn from './views/LoggaIn.vue'
 
-const vyer = [{ till: '/ekonomi', namn: 'Ekonomi' }]
+const vyer = [
+  { till: '/ekonomi', namn: 'Ekonomi' },
+  { till: '/datakallor', namn: 'Datakällor' },
+]
 
 const jag = ref<Jag | null>(null)
 const metod = ref<Inloggningsmetod | null>(null)
@@ -66,9 +70,14 @@ onMounted(kontrollera)
           <button v-else type="button" class="lank" @click="visaInloggning = true">Logga in</button>
         </div>
       </aside>
-      <main class="innehall">
-        <RouterView />
-      </main>
+      <div class="kolumn">
+        <header class="sidhuvud">
+          <Statusindikator />
+        </header>
+        <main class="innehall">
+          <RouterView />
+        </main>
+      </div>
     </div>
   </template>
 </template>
@@ -141,6 +150,14 @@ onMounted(kontrollera)
   font: inherit;
   cursor: pointer;
   text-decoration: underline;
+}
+.kolumn {
+  min-width: 0;
+}
+.sidhuvud {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  padding: 12px 48px;
 }
 .innehall {
   padding: 32px 48px;

@@ -4,6 +4,7 @@ import '@fontsource/inter/400.css'
 import '@fontsource/inter/600.css'
 import './styles/tokens.css'
 import App from './App.vue'
+import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
 
 const router = createRouter({
@@ -11,6 +12,7 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/ekonomi' },
     { path: '/ekonomi', component: EkonomiView, meta: { titel: 'Ekonomi' } },
+    { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
   ],
 })
 

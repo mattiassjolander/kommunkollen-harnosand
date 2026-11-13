@@ -8,7 +8,7 @@ finns kvar.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 import psycopg
@@ -19,11 +19,12 @@ from .sources.base import Datakalla, Hamtning
 @dataclass
 class Kallresultat:
     datakalla_id: str
-    status: str  # 'lyckad' | 'inga_nya' | 'misslyckad'
+    status: str  # 'lyckad' | 'inga_nya' | 'delvis_fel' | 'misslyckad'
     antal_nya: int = 0
     antal_andrade: int = 0
     antal_oforandrade: int = 0
     fel: str | None = None
+    senaste_publicering: date | None = None
 
 
 @dataclass
@@ -31,6 +32,18 @@ class Korningsresultat:
     korning_id: int
     status: str  # 'lyckad' | 'delvis_fel' | 'misslyckad'
     kallor: list[Kallresultat]
+
+
+UTAN_FEL = ("lyckad", "inga_nya")
+
+
+def korningsstatus(kallstatusar: list[str]) -> str:
+    """En körning är lyckad om alla källor kontrollerades utan fel, även om inget var nytt."""
+    if all(s in UTAN_FEL for s in kallstatusar):
+        return "lyckad"
+    if all(s == "misslyckad" for s in kallstatusar):
+        return "misslyckad"
+    return "delvis_fel"
 
 
 def _senast_lyckad(conn: psycopg.Connection, datakalla_id: str) -> datetime | None:
@@ -78,7 +91,13 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
             res.antal_nya += 1
         else:
             res.antal_andrade += 1
-    if res.antal_nya or res.antal_andrade:
+    publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
+                                 *(u.kallans_publicering for u in hamtning.uppgifter)) if d]
+    res.senaste_publicering = max(publiceringar, default=None)
+    if hamtning.fel:
+        res.status = "delvis_fel"
+        res.fel = "; ".join(hamtning.fel)
+    elif res.antal_nya or res.antal_andrade:
         res.status = "lyckad"
     return res
 
@@ -110,16 +129,17 @@ def kor_insamling(
             res = Kallresultat(datakalla_id=kalla.id, status="misslyckad", fel=f"{type(e).__name__}: {e}")
         conn.execute(
             """
-            INSERT INTO kallkorning (korning_id, datakalla_id, status, antal_nya, antal_andrade, antal_oforandrade, fel, startad, avslutad)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+            INSERT INTO kallkorning (korning_id, datakalla_id, status, antal_nya, antal_andrade, antal_oforandrade,
+                                     fel, kallans_senaste_publicering, startad, avslutad)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
             """,
-            (korning_id, kalla.id, res.status, res.antal_nya, res.antal_andrade, res.antal_oforandrade, res.fel, startad),
+            (korning_id, kalla.id, res.status, res.antal_nya, res.antal_andrade, res.antal_oforandrade,
+             res.fel, res.senaste_publicering, startad),
         )
         conn.commit()
         resultat.append(res)
 
-    misslyckade = sum(r.status == "misslyckad" for r in resultat)
-    status = "lyckad" if misslyckade == 0 else ("misslyckad" if misslyckade == len(resultat) else "delvis_fel")
+    status = korningsstatus([r.status for r in resultat])
     conn.execute(
         "UPDATE insamlingskorning SET avslutad = now(), status = %s WHERE id = %s", (status, korning_id)
     )

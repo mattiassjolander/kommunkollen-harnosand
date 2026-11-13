@@ -8,6 +8,8 @@ const WEB_PORT = '5180'
 export default defineConfig({
   testDir: 'e2e',
   fullyParallel: false,
+  // Testfilerna delar en databas och startar insamlingar, så de körs efter varandra.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
