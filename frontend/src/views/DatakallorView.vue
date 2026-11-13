@@ -1,0 +1,171 @@
+<script setup lang="ts">
+import { inject, onMounted, ref } from 'vue'
+import {
+  EjInloggad,
+  hamtaDatakallor,
+  hamtaKorningslogg,
+  type Kallstatusrad,
+  type Korningslogg,
+} from '../api'
+import { tabelldatum, tal } from '../format'
+import StatusMarkering from '../components/StatusMarkering.vue'
+
+const kallor = ref<Kallstatusrad[]>([])
+const logg = ref<Korningslogg[]>([])
+const laddar = ref(true)
+const fel = ref<string | null>(null)
+const utloggad = inject<() => void>('utloggad', () => {})
+
+onMounted(async () => {
+  try {
+    ;[kallor.value, logg.value] = await Promise.all([hamtaDatakallor(), hamtaKorningslogg()])
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    fel.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    laddar.value = false
+  }
+})
+
+const UTLOSARE = { manuell: 'Manuell', schema: 'Schemalagd' }
+</script>
+
+<template>
+  <header class="vyhuvud">
+    <h1>Datakällor och uppdateringsstatus</h1>
+    <p class="ingress">
+      När varje källa senast kontrollerades och hämtades, och när källan själv senast publicerade uppgifter. En
+      lyckad kontroll betyder inte att det fanns något nytt.
+    </p>
+  </header>
+
+  <p v-if="laddar">Hämtar uppgifter…</p>
+  <p v-else-if="fel" class="fel">Kunde inte hämta uppgifter: {{ fel }}</p>
+  <template v-else>
+    <section class="kort">
+      <h2>Datakällor</h2>
+      <table class="tabell" data-testid="datakallor">
+        <thead>
+          <tr>
+            <th scope="col">Datakälla</th>
+            <th scope="col">Senaste kontroll</th>
+            <th scope="col">Senaste lyckade hämtning</th>
+            <th scope="col">Senaste publicerade uppgift</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="k in kallor" :key="k.id" :data-kalla="k.id">
+            <th scope="row">
+              <a :href="k.url" target="_blank" rel="noopener">{{ k.titel }}</a>
+            </th>
+            <td class="tal">{{ tabelldatum(k.senaste_kontroll) }}</td>
+            <td class="tal">{{ tabelldatum(k.senaste_lyckade_hamtning) }}</td>
+            <td class="tal">{{ tabelldatum(k.senaste_publicering) }}</td>
+            <td>
+              <StatusMarkering :status="k.status" />
+              <p v-if="k.fel" class="feltext">{{ k.fel }}</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="kort">
+      <h2>Körningslogg</h2>
+      <p v-if="!logg.length" class="ingress">Ingen insamling har körts än.</p>
+      <table v-else class="tabell" data-testid="korningslogg">
+        <thead>
+          <tr>
+            <th scope="col">Körning</th>
+            <th scope="col">Utlöst</th>
+            <th scope="col">Datakälla</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="hoger">Nya</th>
+            <th scope="col" class="hoger">Ändrade</th>
+            <th scope="col" class="hoger">Oförändrade</th>
+            <th scope="col">Fel</th>
+          </tr>
+        </thead>
+        <tbody v-for="k in logg" :key="k.id" class="korning" :data-korning="k.id">
+          <tr v-if="!k.kallor.length">
+            <td class="tal">{{ tabelldatum(k.startad) }}</td>
+            <td>{{ UTLOSARE[k.utlosare] }}</td>
+            <td colspan="6"><StatusMarkering :status="k.status" /></td>
+          </tr>
+          <tr v-for="(r, i) in k.kallor" :key="r.datakalla_id">
+            <td class="tal">{{ i === 0 ? tabelldatum(k.startad) : '' }}</td>
+            <td>{{ i === 0 ? UTLOSARE[k.utlosare] : '' }}</td>
+            <td>{{ r.titel }}</td>
+            <td><StatusMarkering :status="r.status" /></td>
+            <td class="tal hoger">{{ tal(r.antal_nya) }}</td>
+            <td class="tal hoger">{{ tal(r.antal_andrade) }}</td>
+            <td class="tal hoger">{{ tal(r.antal_oforandrade) }}</td>
+            <td class="feltext">{{ r.fel ?? '' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </template>
+</template>
+
+<style scoped>
+.vyhuvud {
+  margin-bottom: 24px;
+}
+.ingress {
+  color: var(--ink-secondary);
+  margin: 0;
+  max-width: 70ch;
+}
+.kort {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+.kort h2 {
+  margin-bottom: 12px;
+}
+.tabell {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+.tabell th,
+.tabell td {
+  padding: 6px 16px 6px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.tabell thead th {
+  color: var(--ink-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tabell tbody th {
+  font-weight: 600;
+}
+.tabell tbody th a {
+  color: inherit;
+}
+.korning tr:last-child td {
+  border-bottom-color: var(--line-strong);
+}
+.hoger {
+  text-align: right !important;
+}
+.feltext {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  max-width: 48ch;
+  overflow-wrap: anywhere;
+}
+.fel {
+  color: var(--status-critical);
+}
+</style>

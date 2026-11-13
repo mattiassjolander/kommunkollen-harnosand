@@ -40,6 +40,9 @@ class Uppgift:
 class Hamtning:
     matt: list[Matt] = field(default_factory=list)
     uppgifter: list[Uppgift] = field(default_factory=list)
+    # Delar av hämtningen som misslyckades medan resten gick bra. Ger status "delvis fel".
+    # Om ingenting gick att hämta ska källan i stället kasta ett undantag.
+    fel: list[str] = field(default_factory=list)
 
 
 class Datakalla(Protocol):

@@ -108,3 +108,25 @@ En person som registrerar och redigerar uppgifter på plattformen.
 **Utgivare**:
 En person som godkänner en redaktörs registrering för publicering. Ingen godkänner sin egen registrering.
 _Avoid_: Granskare, godkännare
+
+## Datainsamling
+
+**Datakälla**:
+Ett ställe plattformen hämtar uppgifter från, t.ex. Kolada eller kommunens protokoll.
+_Avoid_: Källsystem, feed
+
+**Insamlingskörning**:
+Ett tillfälle då plattformen kontrollerar alla datakällor, manuellt eller enligt schema. Varje datakälla får ett eget resultat i körningen.
+
+**Kontroll**:
+Att plattformen frågar en datakälla om nya eller ändrade uppgifter. En kontroll utan fel är lyckad även när inget nytt fanns.
+_Avoid_: Uppdatering (säger inget om huruvida något var nytt)
+
+**Inga nya uppgifter**:
+Resultatet när en kontroll gick bra men källan inte hade något nytt eller ändrat. Det är inte ett fel.
+
+**Delvis fel**:
+En datakälla där en del av uppgifterna gick att hämta men inte allt.
+
+**Fullständigt uppdaterad / delvis inaktuell**:
+Plattformen är fullständigt uppdaterad när den senaste insamlingskörningen kontrollerade alla datakällor utan fel. Annars är informationen delvis inaktuell.

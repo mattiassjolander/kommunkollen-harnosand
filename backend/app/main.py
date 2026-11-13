@@ -7,10 +7,10 @@ import secrets
 from pathlib import Path
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, db
+from . import auth, db, status
 from .auth import Inloggning, krav_roll
 from .insamling import kor_insamling
 from .recorded import InspeladTransport
@@ -71,6 +71,21 @@ def create_app(
             "status": res.status,
             "kallor": [vars(k) for k in res.kallor],
         }
+
+    @app.get("/api/status", dependencies=[Depends(krav_roll("lasare"))])
+    def uppdateringsstatus() -> dict:
+        with db.connect(database_url) as conn:
+            return status.global_status(conn, kallor)
+
+    @app.get("/api/datakallor", dependencies=[Depends(krav_roll("lasare"))])
+    def datakallor() -> list[dict]:
+        with db.connect(database_url) as conn:
+            return status.datakallor(conn, kallor)
+
+    @app.get("/api/insamlingar", dependencies=[Depends(krav_roll("lasare"))])
+    def korningslogg(antal: int = Query(50, ge=1, le=500)) -> list[dict]:
+        with db.connect(database_url) as conn:
+            return status.korningslogg(conn, antal)
 
     @app.get("/api/matt/{matt_id}/serie", dependencies=[Depends(krav_roll("lasare"))])
     def serie(matt_id: str, omrade: str = KOMMUN) -> dict:

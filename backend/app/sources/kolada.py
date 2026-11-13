@@ -44,33 +44,42 @@ class Kolada:
 
     def hamta(self, client: httpx.Client, sedan: datetime | None) -> Hamtning:
         resultat = Hamtning()
+        senaste_fel: Exception | None = None
         for kpi_id in self.nyckeltal:
-            kpi = self._hamta_alla(client, f"{BAS}/kpi/{kpi_id}")[0]
-            publicerad = _datum(kpi.get("publication_date"))
-            matt_id = f"kolada:{kpi_id}"
-            resultat.matt.append(
-                Matt(
-                    id=matt_id,
-                    titel=kpi["title"],
-                    beskrivning=kpi.get("description") or "",
-                    enhet=_enhet(kpi["title"]),
-                    kallans_publicering=publicerad,
-                )
-            )
-            params = {"from_date": sedan.date().isoformat()} if sedan else None
-            for rad in self._hamta_alla(
-                client, f"{BAS}/data/kpi/{kpi_id}/municipality/{self.kommun}", params
-            ):
-                for v in rad["values"]:
-                    if v.get("gender") != "T" or v.get("isdeleted"):
-                        continue
-                    resultat.uppgifter.append(
-                        Uppgift(
-                            matt_id=matt_id,
-                            omrade=rad["municipality"],
-                            period=str(rad["period"]),
-                            varde=None if v["value"] is None else Decimal(str(v["value"])),
-                            kallans_publicering=publicerad,
-                        )
-                    )
+            try:
+                self._hamta_nyckeltal(client, kpi_id, sedan, resultat)
+            except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:
+                senaste_fel = e
+                resultat.fel.append(f"{kpi_id}: {type(e).__name__}: {e}")
+        if senaste_fel is not None and len(resultat.fel) == len(self.nyckeltal):
+            raise senaste_fel
         return resultat
+
+    def _hamta_nyckeltal(self, client: httpx.Client, kpi_id: str, sedan: datetime | None, resultat: Hamtning) -> None:
+        kpi = self._hamta_alla(client, f"{BAS}/kpi/{kpi_id}")[0]
+        publicerad = _datum(kpi.get("publication_date"))
+        matt_id = f"kolada:{kpi_id}"
+        params = {"from_date": sedan.date().isoformat()} if sedan else None
+        rader = self._hamta_alla(client, f"{BAS}/data/kpi/{kpi_id}/municipality/{self.kommun}", params)
+        resultat.matt.append(
+            Matt(
+                id=matt_id,
+                titel=kpi["title"],
+                beskrivning=kpi.get("description") or "",
+                enhet=_enhet(kpi["title"]),
+                kallans_publicering=publicerad,
+            )
+        )
+        for rad in rader:
+            for v in rad["values"]:
+                if v.get("gender") != "T" or v.get("isdeleted"):
+                    continue
+                resultat.uppgifter.append(
+                    Uppgift(
+                        matt_id=matt_id,
+                        omrade=rad["municipality"],
+                        period=str(rad["period"]),
+                        varde=None if v["value"] is None else Decimal(str(v["value"])),
+                        kallans_publicering=publicerad,
+                    )
+                )
