@@ -29,10 +29,10 @@ npm install && npm --prefix frontend install
 npm run dev
 ```
 
-Det startar API:t på `http://127.0.0.1:8000` och webben på `http://localhost:5173`. Databasen är tom tills en insamling har körts:
+Det startar API:t på `http://127.0.0.1:8000` och webben på `http://localhost:5173`, med testinloggning påslagen. Databasen är tom tills en insamling har körts, vilket kräver en inloggad redaktör:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/insamlingar
+curl -c .kaka -X POST http://127.0.0.1:8000/api/auth/test/redaktor && curl -b .kaka -X POST http://127.0.0.1:8000/api/insamlingar
 ```
 
 Vill du köra mot inspelade källsvar i stället för nätet:
@@ -57,3 +57,31 @@ npm test
 | `DATABASE_URL` | Postgres-anslutning. Utelämnad i utveckling = inbäddad Postgres. |
 | `KOLADA_NYCKELTAL` | Kommaseparerade Kolada-nyckeltal att hämta (standard `N03007`). |
 | `INSPELNINGAR` | Katalog med inspelade källsvar (bara för test och utveckling). |
+| `SESSION_SECRET` | Hemlighet för sessionskakan. Krävs på servern. Saknas den blir alla utloggade vid omstart. |
+| `SESSION_HTTPS_ONLY` | `true` när appen nås via https. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-inloggning. Utan klient-id är den avstängd. |
+| `AUTH_ANVANDARE` | Tillåtelselistan: `epost=roll+roll; epost=roll`. Roller: `lasare`, `redaktor`, `utgivare`. |
+| `PUBLIK_URL` | Adressen användarna når appen på, om den skiljer sig från förfrågans (styr Googles redirect-adress). |
+| `ANONYM_LASNING` | `true` öppnar läsning utan inloggning. Skrivning kräver fortfarande inloggning. |
+| `TESTENV` | `true` ger testinloggning utan lösenord. På som standard i `npm run dev`, aldrig på en publik server. |
+
+## Inloggning
+
+All läsning kräver inloggning så länge plattformen är sluten. Bara Google-konton i `AUTH_ANVANDARE` släpps in, och listan läses vid varje förfrågan efter omstart, så en borttagen person loggas ut direkt.
+
+| Roll | Får |
+| --- | --- |
+| `lasare` | läsa alla vyer |
+| `redaktor` | läsa, starta insamling och (senare) registrera uppgifter |
+| `utgivare` | läsa och (senare) godkänna registreringar för publicering |
+
+Så skapas Google-klienten:
+
+1. I [Google Cloud Console](https://console.cloud.google.com/apis/credentials): skapa ett projekt och konfigurera OAuth-samtyckesskärmen (Extern, testläge räcker; lägg till kontona som testanvändare).
+2. Skapa ett OAuth-klient-id av typen *Webbapplikation*.
+3. Lägg till den auktoriserade omdirigerings-URI:n där appen nås, följt av `/api/auth/google/callback`, till exempel:
+   - `http://localhost:5173/api/auth/google/callback` (`npm run dev`)
+   - `http://localhost:8080/api/auth/google/callback` (servern via SSH-tunnel, se [docs/drift.md](docs/drift.md))
+
+   Google tillåter bara `localhost` eller https, inte en lokal IP-adress som `http://192.168.1.11`.
+4. Lägg in id, hemlighet och tillåtelselistan i `.env`.

@@ -12,7 +12,8 @@ def antal_perioder_i_inspelningen() -> int:
     return len(data["values"])
 
 
-def test_insamling_ger_tidsserie_med_kalla_och_tidpunkter(api):
+def test_insamling_ger_tidsserie_med_kalla_och_tidpunkter(redaktor):
+    api = redaktor
     svar = api.post("/api/insamlingar")
     assert svar.status_code == 200
     korning = svar.json()
@@ -38,7 +39,8 @@ def test_insamling_ger_tidsserie_med_kalla_och_tidpunkter(api):
     assert [p["period"] for p in serie["punkter"]] == sorted(punkter)  # i periodordning
 
 
-def test_andra_insamlingen_utan_andringar_ger_inga_nya_uppgifter(api):
+def test_andra_insamlingen_utan_andringar_ger_inga_nya_uppgifter(redaktor):
+    api = redaktor
     api.post("/api/insamlingar")
     forsta = api.get(f"/api/matt/{MATT}/serie").json()
 
@@ -51,5 +53,6 @@ def test_andra_insamlingen_utan_andringar_ger_inga_nya_uppgifter(api):
     assert api.get(f"/api/matt/{MATT}/serie").json() == forsta
 
 
-def test_okant_matt_ger_404(api):
+def test_okant_matt_ger_404(redaktor):
+    api = redaktor
     assert api.get("/api/matt/kolada:FINNS_EJ/serie").status_code == 404

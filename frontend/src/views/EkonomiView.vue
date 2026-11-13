@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { hamtaSerie, type Serie } from '../api'
+import { computed, inject, onMounted, ref } from 'vue'
+import { EjInloggad, hamtaSerie, type Serie } from '../api'
 import { tal } from '../format'
 import Kallrad from '../components/Kallrad.vue'
 import Stapeldiagram from '../components/Stapeldiagram.vue'
@@ -11,11 +11,13 @@ const FORSTA_AR = 2022 // standardvisning enligt kravspec avsnitt 18
 const serie = ref<Serie | null>(null)
 const laddar = ref(true)
 const fel = ref<string | null>(null)
+const utloggad = inject<() => void>('utloggad', () => {})
 
 onMounted(async () => {
   try {
     serie.value = await hamtaSerie(MATT)
   } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
   } finally {
     laddar.value = false

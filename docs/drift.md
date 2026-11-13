@@ -21,12 +21,28 @@ Deploy är avstängt tills repo-variabeln `DEPLOY_ENABLED` är `true` (Settings 
 
 Databasen ligger i Docker-volymen `kommunkollen_db-data` och finns kvar mellan deployer. Migreringarna körs när backend startar.
 
-## Vanliga åtgärder
+## Inloggning på servern
 
-Köra en insamling manuellt:
+Google godkänner bara redirect-adresser på `localhost` eller https, så `http://192.168.1.11` kan inte användas för Google-inloggning. Tills servern har https och ett eget namn nås den med Google-inloggning via en SSH-tunnel:
 
 ```bash
-ssh kommunkollen "curl -s -X POST http://127.0.0.1/api/insamlingar"
+ssh -N -L 8080:127.0.0.1:80 kommunkollen
+```
+
+Öppna sedan http://localhost:8080. Sätt `PUBLIK_URL=http://localhost:8080` i `/opt/kommunkollen/.env` och lägg `http://localhost:8080/api/auth/google/callback` som redirect-URI i Google-klienten.
+
+Ändringar i `.env` (till exempel tillåtelselistan) börjar gälla när backend startas om:
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose up -d backend"
+```
+
+## Vanliga åtgärder
+
+Köra en insamling manuellt (utan inloggning, direkt i backend-containern):
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.insamla"
 ```
 
 Se status och loggar:

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from starlette.middleware.sessions import SessionMiddleware
 
-from . import db
+from . import auth, db
+from .auth import Inloggning, krav_roll
 from .insamling import kor_insamling
 from .recorded import InspeladTransport
 from .sources.base import Datakalla
@@ -26,6 +29,8 @@ def create_app(
     database_url: str | None = None,
     kallor: list[Datakalla] | None = None,
     transport: httpx.BaseTransport | None = None,
+    inloggning: Inloggning | None = None,
+    auth_transport: httpx.BaseTransport | None = None,
 ) -> FastAPI:
     database_url = database_url or os.environ["DATABASE_URL"]
     kallor = kallor if kallor is not None else standardkallor()
@@ -34,17 +39,31 @@ def create_app(
 
     db.migrate(database_url)
     app = FastAPI(title="Kommunkollen Härnösand")
+    app.state.inloggning = inloggning or Inloggning.fran_miljo()
+    app.add_middleware(
+        SessionMiddleware,
+        # Utan SESSION_SECRET blir alla utloggade när appen startas om.
+        secret_key=os.environ.get("SESSION_SECRET") or secrets.token_urlsafe(32),
+        session_cookie="kommunkollen_session",
+        same_site="lax",
+        https_only=os.environ.get("SESSION_HTTPS_ONLY", "false").lower() == "true",
+        max_age=14 * 24 * 3600,
+    )
 
     def http_klient() -> httpx.Client:
         return httpx.Client(transport=transport, timeout=30.0, headers={"User-Agent": "kommunkollen/0.1"})
+
+    def auth_klient() -> httpx.Client:
+        return httpx.Client(transport=auth_transport, timeout=15.0)
+
+    app.include_router(auth.router(auth_klient))
 
     @app.get("/api/halsa")
     def halsa() -> dict:
         return {"status": "ok"}
 
-    @app.post("/api/insamlingar")
+    @app.post("/api/insamlingar", dependencies=[Depends(krav_roll("redaktor"))])
     def starta_insamling() -> dict:
-        # Kräver rollen redaktör när inloggning finns (#4).
         with db.connect(database_url) as conn, http_klient() as client:
             res = kor_insamling(conn, kallor, client, utlosare="manuell")
         return {
@@ -53,7 +72,7 @@ def create_app(
             "kallor": [vars(k) for k in res.kallor],
         }
 
-    @app.get("/api/matt/{matt_id}/serie")
+    @app.get("/api/matt/{matt_id}/serie", dependencies=[Depends(krav_roll("lasare"))])
     def serie(matt_id: str, omrade: str = KOMMUN) -> dict:
         with db.connect(database_url) as conn:
             matt = conn.execute(
