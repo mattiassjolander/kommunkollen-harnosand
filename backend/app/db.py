@@ -8,6 +8,9 @@ import psycopg
 from psycopg.rows import dict_row
 
 
+MIGRERINGSLAS = 0x6B6B_0000
+
+
 def connect(url: str) -> psycopg.Connection:
     return psycopg.connect(url, row_factory=dict_row, autocommit=False)
 
@@ -15,6 +18,8 @@ def connect(url: str) -> psycopg.Connection:
 def migrate(url: str) -> None:
     """Kör alla migreringar som inte redan körts, i filnamnsordning."""
     with connect(url) as conn:
+        # Backend och schemaläggaren startar samtidigt och migrerar båda. Låset gör att den ena väntar.
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRERINGSLAS,))
         conn.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrering (namn text PRIMARY KEY, kord timestamptz NOT NULL DEFAULT now())"
         )

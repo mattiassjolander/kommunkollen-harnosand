@@ -24,7 +24,10 @@ export function visningsskala(enhet: string): { enhet: string; faktor: number } 
   return enhet === 'tkr' ? { enhet: 'mnkr', faktor: 1 / 1000 } : { enhet, faktor: 1 }
 }
 
-const lopdatum = new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })
+// Alla tider visas i svensk tid, oavsett var läsaren befinner sig.
+const TZ = 'Europe/Stockholm'
+
+const lopdatum = new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: TZ })
 
 /** "15 nov. 2026" → "15 nov 2026" (designprofilens löptextformat). */
 export function datum(iso: string | null): string {
@@ -32,7 +35,7 @@ export function datum(iso: string | null): string {
   return lopdatum.format(new Date(iso)).replace('.', '')
 }
 
-const klockslag = new Intl.DateTimeFormat('sv-SE', { hour: '2-digit', minute: '2-digit' })
+const klockslag = new Intl.DateTimeFormat('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: TZ })
 
 /** Löptext med klockslag: "13 nov 2026, 14:02". */
 export function datumTid(iso: string | null): string {
@@ -40,7 +43,7 @@ export function datumTid(iso: string | null): string {
   return `${datum(iso)}, ${klockslag.format(new Date(iso))}`
 }
 
-const tabelldag = new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit' })
+const tabelldag = new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: TZ })
 
 /** Tabellformat: "2026-11-13 14:02", eller bara "2026-08-28" för ett datum utan tid. */
 export function tabelldatum(iso: string | null): string {

@@ -16,7 +16,7 @@ services:
   backend:
     image: ghcr.io/mattiassjolander/kommunkollen-backend:${TAG:-latest}
     build: ./backend
-    environment:
+    environment: &backend-miljo
       DATABASE_URL: postgresql://${POSTGRES_USER:-kommunkollen}:${POSTGRES_PASSWORD:?Sätt POSTGRES_PASSWORD i .env}@db:5432/${POSTGRES_DB:-kommunkollen}
       # Inloggning (se README). Utan GOOGLE_CLIENT_ID är Google-inloggningen avstängd.
       SESSION_SECRET: ${SESSION_SECRET:?Sätt SESSION_SECRET i .env}
@@ -28,6 +28,20 @@ services:
       ANONYM_LASNING: ${ANONYM_LASNING:-true}
       # true = testinloggning utan lösenord. Aldrig true på en publik server.
       TESTENV: ${TESTENV:-false}
+      # Schemalagd insamling (svensk tid). Tomt INSAMLING_DAGAR stänger av schemat.
+      INSAMLING_DAGAR: ${INSAMLING_DAGAR-1,15}
+      INSAMLING_KLOCKAN: ${INSAMLING_KLOCKAN:-03:00}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Schemaläggaren: startar insamlingen enligt schemat. Samma image och miljö som backend.
+  insamlare:
+    image: ghcr.io/mattiassjolander/kommunkollen-backend:${TAG:-latest}
+    build: ./backend
+    command: ["/app/.venv/bin/python", "-m", "app.schemalaggare"]
+    environment: *backend-miljo
     depends_on:
       db:
         condition: service_healthy

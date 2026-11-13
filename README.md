@@ -64,6 +64,8 @@ Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [
 | --- | --- |
 | `DATABASE_URL` | Postgres-anslutning. Utelämnad i utveckling = inbäddad Postgres. |
 | `INSPELNINGAR` | Katalog med inspelade källsvar (bara för test och utveckling). |
+| `INSAMLING_DAGAR` | Dagar i månaden då insamlingen körs automatiskt, t.ex. `1,15` (standard). Tomt stänger av schemat. |
+| `INSAMLING_KLOCKAN` | Klockslag för den automatiska insamlingen, svensk tid (standard `03:00`). |
 | `SESSION_SECRET` | Hemlighet för sessionskakan. Krävs på servern. Saknas den blir alla utloggade vid omstart. |
 | `SESSION_HTTPS_ONLY` | `true` när appen nås via https. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-inloggning. Utan klient-id är den avstängd. |

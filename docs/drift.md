@@ -39,6 +39,20 @@ ssh -N -L 8080:127.0.0.1:80 kommunkollen
 ssh kommunkollen "cd /opt/kommunkollen && docker compose up -d backend"
 ```
 
+## Schemalagd insamling
+
+Tjänsten `insamlare` (samma image som backend) startar insamlingen den 1:a och 15:e varje månad kl 03:00 svensk tid. Schemat ändras med `INSAMLING_DAGAR` och `INSAMLING_KLOCKAN` i `.env`, följt av `docker compose up -d`. Tomt `INSAMLING_DAGAR` stänger av schemat.
+
+- Var tjänsten nere vid en planerad tidpunkt körs insamlingen när den startar igen, en gång.
+- Två insamlingar körs aldrig samtidigt. En manuell insamling under en schemalagd körning (eller tvärtom) får beskedet att en insamling pågår.
+- Statusindikatorn visar nästa planerade körning.
+
+Se schemaläggarens logg:
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose logs --tail 50 insamlare"
+```
+
 ## Vanliga åtgärder
 
 Köra en insamling manuellt (utan inloggning, direkt i backend-containern):

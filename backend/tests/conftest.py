@@ -72,7 +72,8 @@ def google() -> FalskGoogle:
     return FalskGoogle()
 
 
-def skapa_app(database_url: str, google: FalskGoogle, kallor=None, inspelningar: Path = INSPELNINGAR, **inloggning):
+def skapa_app(database_url: str, google: FalskGoogle, kallor=None, inspelningar: Path = INSPELNINGAR, schema=None,
+              **inloggning):
     standard = {
         "google_client_id": GOOGLE_CLIENT_ID,
         "google_client_secret": "hemligt",
@@ -83,6 +84,7 @@ def skapa_app(database_url: str, google: FalskGoogle, kallor=None, inspelningar:
     return create_app(
         database_url=database_url,
         kallor=kallor,
+        schema=schema,
         transport=InspeladTransport(inspelningar),
         inloggning=inst,
         auth_transport=httpx.MockTransport(google),

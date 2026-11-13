@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 import secrets
 from pathlib import Path
 
@@ -12,13 +13,15 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth, db, ekonomi, serier, status
 from .auth import Inloggning, krav_roll
-from .insamling import kor_insamling
+from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
+from .schema import SVERIGE, Schema
 from .sources.base import Datakalla
 from .sources.kolada import Kolada
 from .sources.scb import Scb
 
 KOMMUN = "2280"  # Härnösand
+FRAN_MILJO = object()  # create_app läser schemat från miljön om inget anges
 
 
 def standardkallor() -> list[Datakalla]:
@@ -34,7 +37,10 @@ def create_app(
     transport: httpx.BaseTransport | None = None,
     inloggning: Inloggning | None = None,
     auth_transport: httpx.BaseTransport | None = None,
+    schema: Schema | None | object = FRAN_MILJO,
 ) -> FastAPI:
+    if schema is FRAN_MILJO:
+        schema = Schema.fran_miljo()
     database_url = database_url or os.environ["DATABASE_URL"]
     kallor = kallor if kallor is not None else standardkallor()
     if transport is None and os.environ.get("INSPELNINGAR"):
@@ -68,7 +74,10 @@ def create_app(
     @app.post("/api/insamlingar", dependencies=[Depends(krav_roll("redaktor"))])
     def starta_insamling() -> dict:
         with db.connect(database_url) as conn, http_klient() as client:
-            res = kor_insamling(conn, kallor, client, utlosare="manuell")
+            try:
+                res = kor_insamling(conn, kallor, client, utlosare="manuell")
+            except InsamlingPagar as e:
+                raise HTTPException(409, str(e)) from None
         return {
             "korning_id": res.korning_id,
             "status": res.status,
@@ -78,7 +87,9 @@ def create_app(
     @app.get("/api/status", dependencies=[Depends(krav_roll("lasare"))])
     def uppdateringsstatus() -> dict:
         with db.connect(database_url) as conn:
-            return status.global_status(conn, kallor)
+            resultat = status.global_status(conn, kallor)
+        resultat["nasta_korning"] = schema.nasta(datetime.now(SVERIGE)) if schema else None
+        return resultat
 
     @app.get("/api/datakallor", dependencies=[Depends(krav_roll("lasare"))])
     def datakallor() -> list[dict]:
