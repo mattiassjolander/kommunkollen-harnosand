@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { EjInloggad, hamtaFloden, type Flode, type Flodesmodell } from '../api'
-import { siffra, tal, visningsskala } from '../format'
+import { procentforandring, siffra, tal, talforandring, visningsskala } from '../format'
 import Sankey from '../components/Sankey.vue'
 import StatusMarkering from '../components/StatusMarkering.vue'
 
@@ -14,10 +14,15 @@ const fel = ref<string | null>(null)
 const valt = ref<Flode | null>(null)
 const utloggad = inject<() => void>('utloggad', () => {})
 
-async function ladda(ar?: string) {
+// År, jämförelseår och detaljnivå speglas i URL:en: ?ar=2024&jamfor=2023&verksamhet=490
+const fraga = (namn: string) => (route.query[namn] as string | undefined) || undefined
+const val = computed(() => ({ ar: fraga('ar'), jamfor: fraga('jamfor'), verksamhet: fraga('verksamhet') }))
+
+async function ladda() {
   laddar.value = true
+  fel.value = null
   try {
-    modell.value = await hamtaFloden(ar)
+    modell.value = await hamtaFloden(val.value)
     valt.value = null
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
@@ -26,27 +31,42 @@ async function ladda(ar?: string) {
     laddar.value = false
   }
 }
-onMounted(() => ladda((route.query.ar as string) || undefined))
+watch(val, ladda, { immediate: true, deep: true })
 
-// Valt år speglas i URL:en.
+function satt(andring: Record<string, string | undefined>) {
+  const query = { ...route.query, ...andring }
+  for (const k of Object.keys(query)) if (!query[k]) delete query[k]
+  router.push({ query })
+}
+
 const ar = computed({
   get: () => modell.value?.ar ?? '',
-  set: (v: string) => {
-    router.replace({ query: { ...route.query, ar: v } })
-    ladda(v)
-  },
+  set: (v: string) => satt({ ar: v }),
 })
-watch(
-  () => route.query.ar,
-  (v) => {
-    if (v && v !== modell.value?.ar) ladda(v as string)
-  },
+const jamfor = computed({
+  get: () => fraga('jamfor') ?? '',
+  set: (v: string) => satt({ jamfor: v || undefined, ar: modell.value?.ar ?? undefined }),
+})
+const fordjupa = (id: string) => satt({ verksamhet: id.replace('omrade_', ''), ar: modell.value?.ar ?? undefined })
+const tillbaka = () => satt({ verksamhet: undefined })
+
+const jamforelseAr = computed(() =>
+  [...(modell.value?.tillgangliga_ar ?? [])].reverse().filter((a) => a.ar !== modell.value?.ar),
 )
+const jamfors = computed(() => !!modell.value?.jamforelse_ar && !!modell.value.jamforelse_fullstandig)
+const fordjupbara = computed(() =>
+  modell.value?.verksamhet ? [] : (modell.value?.noder ?? []).filter((n) => n.id.startsWith('omrade_')).map((n) => n.id),
+)
+const mittId = computed(() => modell.value?.noder.find((n) => n.sida === 'mitt')?.id ?? '')
 
 const skala = visningsskala('tkr')
 const mnkr = (tkr: number) => tal(tkr * skala.faktor, skala.enhet)
+const mnkrForandring = (tkr: number | null) => talforandring(tkr === null ? null : tkr * skala.faktor, skala.enhet)
+const forandringMnkr = (tkr: number | null) =>
+  tkr === null ? '–' : `${tkr > 0 ? '+' : ''}${siffra(tkr * skala.faktor, 'mnkr')}`
 const titel = (id: string) => modell.value?.noder.find((n) => n.id === id)?.titel ?? id
-const nod = (f: Flode) => modell.value?.noder.find((n) => n.id === (f.till === 'kommunen' ? f.fran : f.till))
+const yttreId = (f: Flode) => (f.till === mittId.value ? f.fran : f.till)
+const nod = (f: Flode) => modell.value?.noder.find((n) => n.id === yttreId(f))
 const procent = (v: number) => `${siffra(v * 100, '%')} %`
 const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr'))
 </script>
@@ -56,7 +76,7 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
     <h1>Ekonomiska flöden</h1>
     <p class="ingress">
       Hur kommunens intäkter under ett år används. Bredden på varje flöde motsvarar beloppet. Klicka på ett flöde för
-      att se belopp, andel och källa.
+      att se belopp, andel och källa, och på ett verksamhetsområde för att se dess kostnadsslag.
     </p>
   </header>
 
@@ -67,11 +87,29 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
   </p>
 
   <template v-else-if="modell">
+    <nav class="smulor" aria-label="Detaljnivå" data-testid="detaljniva">
+      <template v-if="modell.verksamhet">
+        <a href="#" data-testid="till-kommunniva" @click.prevent="tillbaka">Kommunnivå</a>
+        <span aria-hidden="true"> › </span>
+        <span aria-current="page">{{ modell.verksamhet.titel }}</span>
+      </template>
+      <span v-else aria-current="page">Kommunnivå</span>
+    </nav>
+
     <div class="filterrad">
       <label>
         År
         <select v-model="ar" data-testid="ar">
           <option v-for="a in [...modell.tillgangliga_ar].reverse()" :key="a.ar" :value="a.ar">
+            {{ a.ar }}{{ a.fullstandig ? '' : ' (ofullständigt underlag)' }}
+          </option>
+        </select>
+      </label>
+      <label>
+        Jämför med
+        <select v-model="jamfor" data-testid="jamfor">
+          <option value="">Inget år</option>
+          <option v-for="a in jamforelseAr" :key="a.ar" :value="a.ar">
             {{ a.ar }}{{ a.fullstandig ? '' : ' (ofullständigt underlag)' }}
           </option>
         </select>
@@ -82,6 +120,13 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
         <li>Löpande priser</li>
       </ul>
     </div>
+
+    <p v-if="modell.jamforelse_ar && !modell.jamforelse_fullstandig" class="notis" data-testid="jamforelse-saknas">
+      Jämförelse med {{ modell.jamforelse_ar }} visas inte, eftersom underlaget för det året är ofullständigt.
+    </p>
+    <p v-else-if="jamfors" class="notis">
+      Förändring mot {{ modell.jamforelse_ar }} i löpande priser, alltså utan justering för inflation.
+    </p>
 
     <section v-if="!modell.fullstandig" class="kort ofullstandig" data-testid="ofullstandigt">
       <StatusMarkering status="delvis_fel" :text="`Ofullständigt underlag för ${modell.ar}`" />
@@ -95,7 +140,15 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
 
     <div v-else class="yta">
       <section class="kort diagram">
-        <Sankey :noder="modell.noder" :floden="modell.floden" :valt="valt" @valj="valt = $event" />
+        <h2 v-if="modell.verksamhet" class="diagramrubrik">{{ modell.verksamhet.titel }}: kostnadsslag</h2>
+        <Sankey
+          :noder="modell.noder"
+          :floden="modell.floden"
+          :valt="valt"
+          :fordjupbara="fordjupbara"
+          @valj="valt = $event"
+          @fordjupa="fordjupa"
+        />
       </section>
 
       <aside class="kort detalj" data-testid="flodesdetalj" aria-live="polite">
@@ -108,8 +161,33 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
             <dd class="tal">{{ procent(valt.andel) }}</dd>
             <dt>Per invånare</dt>
             <dd class="tal">{{ kronor(valt.kr_per_invanare) }}</dd>
+            <template v-if="valt.jamforelse">
+              <dt>{{ modell.jamforelse_ar }}</dt>
+              <dd class="tal">
+                {{ valt.jamforelse.belopp === null ? 'Fanns inte' : mnkr(valt.jamforelse.belopp) }}
+              </dd>
+              <dt>Förändring</dt>
+              <dd class="tal" data-testid="forandring">{{ mnkrForandring(valt.jamforelse.forandring) }}</dd>
+              <dt>Förändring, %</dt>
+              <dd class="tal" data-testid="forandring-procent">{{ procentforandring(valt.jamforelse.procent) }}</dd>
+            </template>
           </dl>
+          <p
+            v-if="valt.jamforelse?.titel && valt.jamforelse.titel !== nod(valt)?.titel"
+            class="forklaring"
+          >
+            {{ modell.jamforelse_ar }} var det {{ valt.jamforelse.titel.toLowerCase() }}. Förändringen räknas med tecken.
+          </p>
           <p v-if="nod(valt)?.forklaring" class="forklaring">{{ nod(valt)?.forklaring }}</p>
+          <button
+            v-if="fordjupbara.includes(yttreId(valt))"
+            type="button"
+            class="knapp"
+            data-testid="visa-kostnadsslag"
+            @click="fordjupa(yttreId(valt))"
+          >
+            Visa kostnadsslag för {{ titel(yttreId(valt)) }} ›
+          </button>
           <p class="kallrad">
             Källa:
             <template v-for="(k, i) in valt.kallor" :key="k.url">
@@ -119,7 +197,10 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
             · {{ modell.ar }} · tkr i löpande priser, visas som mnkr
           </p>
         </template>
-        <p v-else class="tips">Klicka på ett flöde i diagrammet för att se belopp, andel, kronor per invånare och källa.</p>
+        <p v-else class="tips">
+          Klicka på ett flöde i diagrammet för att se belopp, andel, kronor per invånare och källa.
+          <template v-if="fordjupbara.length">Klicka på ett verksamhetsområdes namn för att se dess kostnadsslag.</template>
+        </p>
         <p v-if="modell.invanare" class="kallrad">
           Totalt {{ mnkr(modell.totalt ?? 0) }} · {{ tal(modell.invanare) }} invånare 31 december {{ modell.ar }}
           (Kolada N01951)
@@ -134,9 +215,14 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
           <tr>
             <th scope="col">Från</th>
             <th scope="col">Till</th>
-            <th scope="col" class="hoger">mnkr</th>
+            <th scope="col" class="hoger">mnkr {{ modell.ar }}</th>
             <th scope="col" class="hoger">Andel</th>
             <th scope="col" class="hoger">kr/inv</th>
+            <template v-if="jamfors">
+              <th scope="col" class="hoger">mnkr {{ modell.jamforelse_ar }}</th>
+              <th scope="col" class="hoger">Förändring, mnkr</th>
+              <th scope="col" class="hoger">Förändring, %</th>
+            </template>
           </tr>
         </thead>
         <tbody>
@@ -146,6 +232,15 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
             <td class="tal hoger">{{ siffra(f.belopp * skala.faktor, 'mnkr') }}</td>
             <td class="tal hoger">{{ procent(f.andel) }}</td>
             <td class="tal hoger">{{ f.kr_per_invanare === null ? 'Uppgift saknas' : siffra(f.kr_per_invanare, 'kr') }}</td>
+            <template v-if="f.jamforelse">
+              <td class="tal hoger">
+                {{ f.jamforelse.belopp === null ? 'Fanns inte' : siffra(f.jamforelse.belopp * skala.faktor, 'mnkr') }}
+              </td>
+              <td class="tal hoger">
+                {{ forandringMnkr(f.jamforelse.forandring) }}
+              </td>
+              <td class="tal hoger">{{ procentforandring(f.jamforelse.procent) }}</td>
+            </template>
           </tr>
         </tbody>
       </table>
@@ -286,5 +381,44 @@ const kronor = (v: number | null) => (v === null ? 'Uppgift saknas' : tal(v, 'kr
 }
 .fel {
   color: var(--status-critical);
+}
+.smulor {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin-bottom: 12px;
+}
+.smulor a {
+  color: var(--accent);
+}
+.smulor [aria-current] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.notis {
+  color: var(--ink-secondary);
+  font-size: 13px;
+  margin: -12px 0 16px;
+}
+.diagramrubrik {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.sekundar {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.knapp {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  margin: 0 0 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--accent);
+  cursor: pointer;
+}
+.knapp:hover {
+  background: var(--accent-wash);
 }
 </style>

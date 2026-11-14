@@ -151,3 +151,79 @@ def test_ett_ar_dar_summorna_inte_gar_ihop_visas_inte(database_url, google, tmp_
     assert m["fullstandig"] is False
     assert m["floden"] == []
     assert "går inte ihop" in m["saknas"][0]
+
+
+# Fördjupning: ett verksamhetsområdes kostnadsslag (#12)
+
+KOSTNADSSLAG = {"personal", "lokaler", "kop_av_tjanster", "material", "kapitalkostnader", "ovrigt"}
+
+
+def test_klick_pa_verksamhetsomrade_ger_dess_kostnadsslag(api):
+    m = api.get(f"/api/floden?ar={AR}&verksamhet=490").json()
+    assert m["fullstandig"] is True
+    assert m["verksamhet"] == {"kod": "490", "id": "omrade_490", "titel": "Pedagogisk verksamhet"}
+    n = noder(m)
+    assert {i for i, x in n.items() if x["sida"] == "ut"} == KOSTNADSSLAG
+
+    drift = inspelning(DRIFT)
+    v = lambda innehall: scb_varde(drift, "490", AR, innehall)  # noqa: E731
+    brutto = v("000000Z3")
+    assert n["omrade_490"]["sida"] == "mitt"
+    assert n["omrade_490"]["belopp"] == pytest.approx(brutto)
+    assert sum(x["belopp"] for x in n.values() if x["sida"] == "ut") == pytest.approx(brutto)
+    assert n["personal"]["belopp"] == pytest.approx(v("000000YR") + v("000000YS"))
+    assert n["kapitalkostnader"]["belopp"] == pytest.approx(v("000000YY"))
+
+    # Finansieringen hänger ihop med kommunnivån: samma belopp som flödet till området där.
+    kommun = noder(api.get(f"/api/floden?ar={AR}").json())
+    assert n["fran_kommunen"]["belopp"] == pytest.approx(kommun["omrade_490"]["belopp"])
+    assert n["interna_poster"]["belopp"] == pytest.approx(v("000000Z7") + v("000000YY"))
+    for f in m["floden"]:
+        assert "omrade_490" in (f["fran"], f["till"])
+        assert "Driftredovisning" in f["kallor"][0]["titel"]
+
+
+def test_alla_verksamhetsomraden_kan_fordjupas_och_okant_ger_404(api):
+    for kod in ("190", "290", "390", "490", "590", "690", "890"):
+        assert api.get(f"/api/floden?ar={AR}&verksamhet={kod}").json()["fullstandig"] is True, kod
+    assert api.get("/api/floden?verksamhet=999").status_code == 404
+
+
+# Årsjämförelse (#12)
+
+
+def test_tva_ar_jamfors_per_flode_i_kronor_och_procent(api):
+    m = api.get(f"/api/floden?ar={AR}&jamfor=2023").json()
+    assert m["ar"] == AR and m["jamforelse_ar"] == "2023"
+    res = inspelning(RESULT)
+    [skatt] = [f for f in m["floden"] if f["fran"] == "kommunalskatt"]
+    nu, da = scb_varde(res, "040", AR), scb_varde(res, "040", "2023")
+    assert skatt["jamforelse"]["belopp"] == pytest.approx(da)
+    assert skatt["jamforelse"]["forandring"] == pytest.approx(nu - da)
+    assert skatt["jamforelse"]["procent"] == pytest.approx((nu - da) / da)
+    assert all("jamforelse" in f for f in m["floden"])
+
+    # Årets resultat jämförs även om det bytt mellan över- och underskott.
+    # 2024/2023: underskott båda åren. 2024/2022 och 2025/2024: bytt riktning.
+    for ar, tidigare in ((AR, "2023"), (AR, "2022"), ("2025", AR)):
+        m = api.get(f"/api/floden?ar={ar}&jamfor={tidigare}").json()
+        [res_flode] = [f for f in m["floden"] if "resultat" in (f["fran"], f["till"])]
+        r_nu, r_da = scb_varde(res, "120", ar), scb_varde(res, "120", tidigare)
+        tecken = 1 if r_nu >= 0 else -1
+        assert res_flode["jamforelse"]["forandring"] == pytest.approx(tecken * (r_nu - r_da)), ar
+
+
+def test_jamforelse_inom_ett_verksamhetsomrade(api):
+    m = api.get(f"/api/floden?ar={AR}&jamfor=2015&verksamhet=590").json()
+    drift = inspelning(DRIFT)
+    personal = lambda ar: scb_varde(drift, "590", ar, "000000YR") + scb_varde(drift, "590", ar, "000000YS")  # noqa: E731
+    [f] = [f for f in m["floden"] if f["till"] == "personal"]
+    assert f["jamforelse"]["forandring"] == pytest.approx(personal(AR) - personal("2015"))
+    assert f["jamforelse"]["procent"] == pytest.approx((personal(AR) - personal("2015")) / personal("2015"))
+
+
+def test_jamforelse_med_ofullstandigt_ar_fylls_inte_ut(api):
+    m = api.get(f"/api/floden?ar={AR}&jamfor=2005").json()
+    assert m["fullstandig"] is True
+    assert m["jamforelse_ar"] == "2005" and m["jamforelse_fullstandig"] is False
+    assert not any("jamforelse" in f for f in m["floden"])
