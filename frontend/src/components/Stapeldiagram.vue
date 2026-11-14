@@ -3,16 +3,19 @@
 // nollbaslinje, 4 px rundning på dataänden, hårlinjerutnät och tooltip vid hover.
 import { computed, ref } from 'vue'
 import { axeltal, tal } from '../format'
+import type { Mandatperiod } from '../analys'
 
 const props = defineProps<{
   punkter: { period: string; varde: number | null }[]
   enhet: string
   kalla: string
+  /** Mandatperioder som ritas som diskreta bakgrundsband, utan partifärg. */
+  mandatperioder?: Mandatperiod[]
 }>()
 
 const B = 720
 const H = 280
-const M = { top: 16, right: 16, bottom: 32, left: 72 }
+const M = { top: 28, right: 16, bottom: 32, left: 72 } // överst: plats för mandatperiodernas namn
 const inreB = B - M.left - M.right
 const inreH = H - M.top - M.bottom
 
@@ -58,6 +61,21 @@ function stapel(i: number, varde: number): string {
   return `M${x},${y0} V${y1 - r} Q${x},${y1} ${x + r},${y1} H${x + w - r} Q${x + w},${y1} ${x + w},${y1 - r} V${y0} Z`
 }
 
+// Varannan mandatperiod får ett svagt band. Pariteten räknas från valåret, så att samma period
+// alltid har samma utseende oavsett vilken period som visas.
+const band_ = computed(() =>
+  (props.mandatperioder ?? []).flatMap((m) => {
+    const index = props.punkter.flatMap((p, i) => {
+      const ar = Number(p.period)
+      return ar >= m.forsta && ar <= m.sista ? [i] : []
+    })
+    if (!index.length) return []
+    const x = M.left + band.value * index[0]
+    const w = band.value * index.length
+    return [{ ...m, x, w, fylld: ((m.forsta - 1995) / 4) % 2 === 0, visaTitel: w >= 64 }]
+  }),
+)
+
 const aktiv = ref<number | null>(null)
 const tipsX = computed(() =>
   aktiv.value === null ? 0 : ((M.left + band.value * (aktiv.value + 0.5)) / B) * 100,
@@ -67,6 +85,12 @@ const tipsX = computed(() =>
 <template>
   <div class="diagram">
     <svg :viewBox="`0 0 ${B} ${H}`" role="img" :aria-label="`Stapeldiagram, ${enhet}`" @mouseleave="aktiv = null">
+      <g class="mandatperioder" data-testid="mandatperioder">
+        <g v-for="m in band_" :key="m.titel" data-testid="mandatperiod" :data-period="m.titel">
+          <rect :x="m.x" :y="M.top" :width="m.w" :height="inreH" :class="{ fylld: m.fylld }" />
+          <text v-if="m.visaTitel" :x="m.x + 6" :y="M.top - 8" class="periodtitel">{{ m.titel }}</text>
+        </g>
+      </g>
       <g class="rutnat">
         <g v-for="t in skala.ticks" :key="t">
           <line :x1="M.left" :x2="B - M.right" :y1="skala.y(t)" :y2="skala.y(t)" :class="{ bas: t === 0 }" />
@@ -117,6 +141,7 @@ const tipsX = computed(() =>
       <svg width="12" height="8" aria-hidden="true"><line x1="3" x2="9" y1="4" y2="4" class="saknasstreck" /></svg>
       Uppgift saknas
     </p>
+    <p v-if="band_.length" class="forklaring">Bakgrundsbanden visar mandatperioder (valår–valår).</p>
     <div v-if="aktiv !== null" class="tips" :style="{ left: `${tipsX}%` }" role="tooltip">
       <strong>{{ punkter[aktiv].period }}</strong>
       <span class="tal">{{ tal(punkter[aktiv].varde, enhet) }}</span>
@@ -160,6 +185,17 @@ text {
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--ink-muted);
+}
+.mandatperioder rect {
+  fill: transparent;
+}
+.mandatperioder rect.fylld {
+  fill: var(--line);
+  opacity: 0.45;
+}
+.periodtitel {
+  font-size: 11px;
+  fill: var(--ink-muted);
 }
 .stapel {
   fill: var(--series-1);
