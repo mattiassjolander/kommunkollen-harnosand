@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref } from 'vue'
+import { computed, inject, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { EjInloggad, hamtaEkonomi, type Nyckeltalsgrupp } from '../api'
 import { STOR_FORANDRING, csv, laddaNer } from '../analys'
@@ -22,6 +22,11 @@ onMounted(async () => {
     fel.value = e instanceof Error ? e.message : String(e)
   } finally {
     laddar.value = false
+  }
+  // Länkar som /ekonomi#resultat (t.ex. från översikten) hoppar till gruppen när den finns.
+  if (route.hash) {
+    await nextTick()
+    document.getElementById(route.hash.slice(1))?.scrollIntoView()
   }
 })
 
