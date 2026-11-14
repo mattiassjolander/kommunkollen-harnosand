@@ -42,7 +42,8 @@ def standardkallor() -> list[Datakalla]:
                anrop_per_sekund=_anropsgrans("KOLADA", 5)),
         Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
             anrop_per_sekund=_anropsgrans("SCB", 2)),
-        *(Protokollkalla(organ, anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
+        *(Protokollkalla(organ, urval=int(os.environ.get("PROTOKOLL_URVAL") or 0),
+                         anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
     ]
 
 
@@ -185,9 +186,17 @@ def create_app(
         return [{"id": o.id, "namn": o.namn} for o in ORGAN.values()]
 
     @app.get("/api/sammantraden", dependencies=[Depends(krav_roll("lasare"))])
-    def sammantraden(organ: str | None = None) -> list[dict]:
+    def sammantraden(organ: str | None = None, ar: int | None = None) -> list[dict]:
         with db.connect(database_url) as conn:
-            return protokoll.lista_sammantraden(conn, organ)
+            return protokoll.lista_sammantraden(conn, organ, ar)
+
+    @app.get("/api/behandlingar", dependencies=[Depends(krav_roll("lasare"))])
+    def behandlingar(q: str, organ: str | None = None, ar: int | None = None) -> dict:
+        """Sök behandlingar på rubrik eller diarienummer."""
+        if len(q.strip()) < 2:
+            raise HTTPException(422, "Söktexten behöver vara minst två tecken")
+        with db.connect(database_url) as conn:
+            return protokoll.sok_behandlingar(conn, q, organ, ar)
 
     @app.get("/api/sammantraden/{sammantrade_id}", dependencies=[Depends(krav_roll("lasare"))])
     def sammantrade(sammantrade_id: int) -> dict:

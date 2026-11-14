@@ -187,6 +187,10 @@ def _kor(
             (kalla.id, kalla.titel, kalla.url),
         )
         try:
+            if hasattr(kalla, "kanda_dokument"):
+                # Källor med dokument får veta vilka adresser som redan är hämtade.
+                kalla.kanda_dokument = {r["url"] for r in conn.execute(
+                    "SELECT DISTINCT url FROM dokument WHERE datakalla_id = %s", (kalla.id,))}
             with kallklient(client, robusthet, getattr(kalla, "anrop_per_sekund", None)) as kc:
                 hamtning = kalla.hamta(kc, _senast_lyckad(conn, kalla.id))
             res = _lagra(conn, kalla, hamtning, korning_id, startad)

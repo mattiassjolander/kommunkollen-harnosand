@@ -148,22 +148,85 @@ def _sammantrade(t: Tolkning, lop: list[str], layout: list[str]) -> None:
 
 
 # Närvaro, form 1: lista på första sidan
+#
+# Två varianter: kolumner ("Namn (S)  Ledamot  Tjänstgörande för …") eller en rad per person
+# ("Namn (S), ordförande" / "Namn (S) tjänstgörande ersättare för Annan (M)") under rubrikerna
+# Ledamöter och Ersättare.
 
-_AVSNITT = {"Beslutande": "beslutande", "Ej tjänstgörande": "ej_tjanstgorande", "Övriga": "ovrig"}
-_SLUT_PA_LISTA = ("Justerare", "Justeringens", "Sekreterare", "Utses att justera", "Underskrifter")
+_SLUT_PA_LISTA = ("justerare", "justeringens", "sekreterare", "utses att justera", "underskrifter", "paragrafer")
+_UNDERRUBRIKER = {"Ledamöter": "Ledamot", "Ersättare": "Ersättare", "Tjänstgörande ersättare": "Ersättare"}
+_PARAGRAFER = r"§+\s*(?P<par>[\d\s,\-–§]+(?:\s*(?:och|samt)\s*[\d\s,\-–§]+)*)"
+# "Namn (S)", "Namn (S), ordförande", "Namn (S) tjänstgörande för …", "Namn ()" (parti saknas),
+# "Namn (KD" (parentesen inte stängd).
+_PERSON = re.compile(
+    r"^(?P<namn>[^(),]+?)\s*\((?P<parti>[A-ZÅÄÖa-zåäö]{0,4}|-)\)?"
+    r"(?:\s*,\s*(?P<roll>(?!tjänstgör|§|kl\b|närvarande)[^\s,§][^,§]*?))?"
+    r"(?:[\s,]+(?P<rest>(?:tjänstgör|ersätter|jäv|§|kl\b|närvarande).*))?$",
+    re.IGNORECASE,
+)
+_TJANSTGOR = re.compile(
+    r"(?:Tjänstgörande (?:ers\w*ttare )?för|ersätter)\s+(?P<for>[^()§,]+?(?:\s*\([^)]*\))?)"
+    r"(?=\s*(?:,|§|närvarande|kl\b|$))(?:.*?" + _PARAGRAFER + r")?",
+    re.IGNORECASE,
+)
+
+
+def _kategori(etikett: str, nu: str) -> str | None:
+    """Kategorin som en etikett i vänstermarginalen anger. None = listan är slut."""
+    e = etikett.lower()
+    if e.startswith(_SLUT_PA_LISTA):
+        return None
+    if "övriga" in e:
+        return "ovrig"
+    if "ej tjänstgörande" in e or e.startswith("ej "):
+        return "ej_tjanstgorande"
+    if e.startswith("beslutande"):
+        return "beslutande"
+    if e.startswith("närvarande") or e in ("ersättare", "distans", "plats"):
+        return nu  # "Närvarande på plats/distans", eller en radbruten etikett
+    return None
 
 
 def _anteckning(n: Narvaro, text: str) -> None:
     text = " ".join(text.split())
-    if m := re.search(r"Jäv\s*§+\s*([\d\s,\-–och]+)", text):
-        n.jav = paragraflista(m[1])
+    if m := re.search(r"Jäv\s*" + _PARAGRAFER, text, re.IGNORECASE):
+        n.jav = paragraflista(m["par"])
         text = (text[: m.start()] + text[m.end() :]).strip()
-    if m := re.search(r"Tjänstgörande för\s+(.+?)(?:\s*§+\s*([\d\s,\-–och]+))?$", text):
-        n.tjanstgor_for, n.tjanstgor_for_parti = _namn_parti(m[1])
-        if m[2]:
-            n.paragrafer = paragraflista(m[2])
-    elif m := re.fullmatch(r"§+\s*([\d\s,\-–och]+)", text):
-        n.paragrafer = paragraflista(m[1])
+    if m := _TJANSTGOR.search(text):
+        n.tjanstgor_for, n.tjanstgor_for_parti = _namn_parti(m["for"])
+        if m["par"]:
+            n.paragrafer = paragraflista(m["par"])
+        if re.match(r"tjänstgörande ers\w*ttare", m[0], re.IGNORECASE):
+            n.roll = "Ersättare"
+    elif m := re.match(_PARAGRAFER, text):
+        n.paragrafer = paragraflista(m["par"])
+
+
+def _sammanfoga(falt: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Layoutläget kan dela ett ord med bindestreck ("Höglund-   Bystedt") i två fält."""
+    ut: list[tuple[int, str]] = []
+    for kol, text in falt:
+        if ut and ut[-1][1].endswith("-") and not ut[-1][1].endswith(" -"):
+            ut[-1] = (ut[-1][0], ut[-1][1] + text)
+        else:
+            ut.append((kol, text))
+    return ut
+
+
+def _stor_bokstav(roll: str | None) -> str | None:
+    return roll[:1].upper() + roll[1:] if roll else roll
+
+
+def _person(text: str, kategori: str, standardroll: str | None) -> tuple[Narvaro, str] | None:
+    """ "Namn (S), ordförande", "Namn (S) tjänstgörande för Annan (M)" → (person, anteckning)."""
+    m = _PERSON.match(text)
+    if not m:
+        return None
+    n = Narvaro(namn=m["namn"].strip(), parti=m["parti"].upper() or None,
+                roll=_stor_bokstav(m["roll"]) or standardroll, kategori=kategori)
+    if m["rest"]:
+        _anteckning(n, m["rest"])
+    return n, m["rest"] or ""
 
 
 def _narvaro_forsta_sidan(t: Tolkning, layout: str) -> bool:
@@ -171,31 +234,61 @@ def _narvaro_forsta_sidan(t: Tolkning, layout: str) -> bool:
     start = next((i for i, r in enumerate(rader) if re.match(r"\s*Beslutande\s{2,}", r)), None)
     if start is None:
         return False
-    kategori = "beslutande"
+    kategori: str | None = "beslutande"
+    standardroll: str | None = None  # satt när listan har underrubriker (en rad per person)
     namnkolumn = rollkolumn = None
+    lopande_text = False
+    anteckning = ""  # anteckningen på föregående persons rad, som en radbruten rad kan fortsätta
     for rad in rader[start:]:
         if not rad.strip():
             continue
-        falt = _falt(rad)
-        etikett = falt[0][1] if falt and falt[0][0] < 10 else None
-        if etikett:
-            if etikett.startswith(_SLUT_PA_LISTA):
-                break
-            if etikett in _AVSNITT:
-                kategori = _AVSNITT[etikett]
-            elif etikett in ("Närvarande ej tjänstgörande", "Övriga närvarande", "Ersättare", "ersättare"):
-                kategori = "ej_tjanstgorande" if "rsättare" in etikett or "ej" in etikett else "ovrig"
-            else:
+        falt = _sammanfoga(_falt(rad))
+        if falt and falt[0][0] < 10:
+            kategori = _kategori(falt[0][1], kategori or "beslutande")
+            if kategori is None:
                 break
             falt = falt[1:]
+            # En etikett med stort mellanrum ("Närvarande på        distans") ger ett fält till.
+            while falt and namnkolumn is not None and falt[0][0] < namnkolumn - 4:
+                falt = falt[1:]
         if not falt:
             continue
+        if "Se närvaro" in rad or "närvarolista" in rad.lower():
+            return False  # Listan finns på egna sidor.
+        if len(falt) == 1 and falt[0][1] in _UNDERRUBRIKER:
+            standardroll = _UNDERRUBRIKER[falt[0][1]]
+            namnkolumn = namnkolumn if namnkolumn is not None else falt[0][0]
+            continue
+        forsta = falt[0][1]
+        if forsta.strip() in ("-", "–") or forsta.lower().startswith("övriga"):
+            continue  # "inga", "Övriga enligt § 13"
+        if kategori == "ovrig" and "(" not in forsta and ("," in forsta or lopande_text or standardroll):
+            # Tjänstepersoner i löptext ("Namn, förvaltningschef, Namn, …"), ev. över flera rader,
+            # tas inte med.
+            lopande_text = True
+            continue
+        lopande_text = False
+        if standardroll is not None:
+            # En rad per person.
+            text = re.sub(r"(\w)-\s+(\w)", r"\1-\2", " ".join(" ".join(f for _, f in falt).split()))
+            if ny := _person(text, kategori, standardroll):
+                t.narvaro.append(ny[0])
+                anteckning = ny[1]
+            elif t.narvaro:
+                # Radbruten fortsättning ("§§ 26-27", "16:10", "för Annan (M)") hör till raden ovanför.
+                anteckning = f"{anteckning} {text}"
+                _anteckning(t.narvaro[-1], anteckning)
+            continue
+        if t.narvaro and not forsta[:1].isupper():
+            anteckning = f"{anteckning} {forsta}"
+            _anteckning(t.narvaro[-1], anteckning)
+            continue
+
+        # Variant med kolumner: "Namn (S)   Ledamot   Tjänstgörande för …".
         if namnkolumn is None:
             namnkolumn = falt[0][0]
             if len(falt) > 1:
                 rollkolumn = falt[1][0]
-        if "Se närvaro" in rad or "närvarolista" in rad:
-            return False  # Listan finns på egna sidor.
         # En rad som bara fortsätter rollen ("ordförande" under "1:e vice").
         if t.narvaro and falt[0][0] > namnkolumn + 15:
             for kol, text in falt:
@@ -204,11 +297,24 @@ def _narvaro_forsta_sidan(t: Tolkning, layout: str) -> bool:
                 else:
                     _anteckning(t.narvaro[-1], text)
             continue
-        namn, parti = _namn_parti(falt[0][1])
         roll = falt[1][1] if len(falt) > 1 else None
-        n = Narvaro(namn=namn, parti=parti, roll=roll, kategori=kategori)
-        for _, text in falt[2:]:
-            _anteckning(n, text)
+        anteckningar = [f for _, f in falt[2:]]
+        if ny := _person(" ".join(forsta.split()), kategori, None):
+            # "Namn (S) tjänstgörande ersättare" i namnkolumnen
+            namn, parti = ny[0].namn, ny[0].parti
+            if ny[1]:
+                anteckningar.insert(0, ny[1])
+        else:
+            namn, parti = _namn_parti(forsta)
+        # "Ersättare ersätter Namn" står i rollkolumnen med ett mellanslag.
+        # Även "Tjänstgörande ersättare för Namn (V) § 127" och "Ledamot §§ 121-126" står så.
+        if roll and (m := re.search(r"(?:^|\s+)(?:ersätter|tjänstgör|§).*$", roll, re.IGNORECASE)):
+            anteckningar.insert(0, m[0])
+            roll = roll[: m.start()] or None
+        n = Narvaro(namn=namn, parti=parti, roll=_stor_bokstav(roll), kategori=kategori)
+        for a in anteckningar:
+            _anteckning(n, a)
+        anteckning = " ".join(anteckningar)
         t.narvaro.append(n)
     return bool(t.narvaro)
 
@@ -216,8 +322,30 @@ def _narvaro_forsta_sidan(t: Tolkning, layout: str) -> bool:
 # Närvaro, form 2: tabeller på egna sidor
 
 
+_KOLUMNNAMN = (("Part", "Parti"), ("När", "Närvaro"), ("Tjänstg", "Tjänstgöring"))
+
+
 def _kolumner(rubrikrad: str) -> list[tuple[int, str]]:
-    return _falt(rubrikrad)
+    """Rubrikerna kan vara avstavade över två rader ("Part"/"i", "Närv"/"aro")."""
+    def namn(text: str) -> str:
+        return next((hel for borjan, hel in _KOLUMNNAMN if text.startswith(borjan)), text)
+    return [(kol, namn(text)) for kol, text in _falt(rubrikrad)]
+
+
+def _logiska_rader(rad_iter, kolumner: list[tuple[int, str]], namnkolumn: str):
+    """En person per post. Rader utan parti fortsätter föregående (radbrutna namn, paragrafer)."""
+    post: dict[str, str] | None = None
+    for rad in rad_iter:
+        v = _per_kolumn(rad, kolumner)
+        if v.get(namnkolumn) and v.get("Parti"):
+            if post:
+                yield post
+            post = v
+        elif post is not None:
+            for k, text in v.items():
+                post[k] = f"{post.get(k, '')} {text}".strip()
+    if post:
+        yield post
 
 
 def _per_kolumn(rad: str, kolumner: list[tuple[int, str]]) -> dict[str, str]:
@@ -235,7 +363,7 @@ def _narvarotabeller(t: Tolkning, layout: list[str]) -> bool:
     for sida in layout:
         rader = sida.splitlines()
         for i, rad in enumerate(rader):
-            if re.search(r"Närvaro.*lista.*ledamöter|Närvarolista ledamöter", rad):
+            if re.search(r"Närvaro.*lista.*ledamöter|Närvaro-\s+och\s+voteringslista", rad, re.IGNORECASE):
                 hittade |= _ledamotstabell(t, rader[i + 1 :])
             elif re.search(r"Närvaro.*tjänstgöringslista.*ersättare", rad):
                 hittade |= _ersattartabell(t, rader[i + 1 :])
@@ -252,23 +380,23 @@ def _tabellrader(rader: list[str]):
 
 
 def _narvarotecken(text: str | None) -> tuple[bool, list[int] | None]:
-    """'X' = närvarande, '-' eller tomt = frånvarande, '§§ 1-6, 8-14' = närvarande vid de paragraferna."""
+    """'X' = närvarande, '-' eller tomt = frånvarande, '§§ 1-6, 8-14' eller 'X §§ 1-13' = närvarande
+    vid de paragraferna."""
     text = (text or "").strip()
-    if text.upper().startswith("X"):
-        return True, None
     if "§" in text or re.search(r"\d", text):
         return True, paragraflista(text)
+    if text.upper().startswith("X"):
+        return True, None
     return False, None
 
 
 def _ledamotstabell(t: Tolkning, rader: list[str]) -> bool:
     rad_iter = _tabellrader(rader)
-    rubrik = next(rad_iter, None)
-    if not rubrik or "Ledamot" not in rubrik:
+    rubrik = next((r for r in rad_iter if re.search(r"\bPart", r) and re.search(r"\bLedamot\b", r)), None)
+    if not rubrik:
         return False
     kolumner = _kolumner(rubrik)
-    for rad in rad_iter:
-        v = _per_kolumn(rad, kolumner)
+    for v in _logiska_rader(rad_iter, kolumner, "Ledamot"):
         namn = v.get("Ledamot")
         if not namn or namn.lower().startswith("vakant"):
             continue
@@ -283,13 +411,12 @@ def _ledamotstabell(t: Tolkning, rader: list[str]) -> bool:
 
 def _ersattartabell(t: Tolkning, rader: list[str]) -> bool:
     rad_iter = _tabellrader(rader)
-    rubrik = next(rad_iter, None)
-    if not rubrik or "Ersättare" not in rubrik:
+    rubrik = next((r for r in rad_iter if re.search(r"\bPart", r) and re.search(r"\bErsättare\b", r)), None)
+    if not rubrik:
         return False
     kolumner = _kolumner(rubrik)
     partier = {n.namn: n.parti for n in t.narvaro}
-    for rad in rad_iter:
-        v = _per_kolumn(rad, kolumner)
+    for v in _logiska_rader(rad_iter, kolumner, "Ersättare"):
         namn = v.get("Ersättare")
         if not namn or namn.lower().startswith("vakant"):
             continue
@@ -301,12 +428,13 @@ def _ersattartabell(t: Tolkning, rader: list[str]) -> bool:
         n = Narvaro(namn=" ".join(namn.split()), parti=parti, roll="Ersättare",
                     kategori="beslutande" if for_namn else "ej_tjanstgorande")
         if for_namn:
-            n.tjanstgor_for, n.tjanstgor_for_parti = " ".join(for_namn.split()), partier.get(for_namn)
+            for_namn = " ".join(for_namn.split())
             if m := re.search(r"§+\s*([\d\s,\-–och]+)$", for_namn):
-                n.tjanstgor_for = for_namn[: m.start()].strip()
+                for_namn = for_namn[: m.start()].strip()
                 n.paragrafer = paragraflista(m[1])
             elif paragrafer:
                 n.paragrafer = paragrafer
+            n.tjanstgor_for, n.tjanstgor_for_parti = for_namn, partier.get(for_namn)
         t.narvaro.append(n)
     return True
 

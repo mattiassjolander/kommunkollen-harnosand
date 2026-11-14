@@ -2,7 +2,7 @@
 
 En inspelningskatalog innehåller `manifest.json`, som mappar "värd/sökväg" till en fil
 med svarets innehåll, t.ex. {"api.kolada.se/v3/kpi/N03007": "kolada/kpi_N03007.json"}.
-Querysträngen ignoreras. En förfrågan som saknas i manifestet ger ett fel, så att ett
+Querysträngen ignoreras, utom för inspelningar vars nyckel har den (t.ex. "…/sida.html?folder=…"). En förfrågan som saknas i manifestet ger ett fel, så att ett
 test aldrig av misstag går mot nätet.
 """
 
@@ -26,7 +26,9 @@ class InspeladTransport(httpx.BaseTransport):
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         nyckel = f"{request.url.host}{request.url.path}"
-        fil = self.manifest.get(nyckel)
+        # Sidor som skiljs åt av frågesträngen (t.ex. Sitevisions arkivmappar) spelas in med den.
+        fraga = request.url.query.decode()
+        fil = (self.manifest.get(f"{nyckel}?{fraga}") if fraga else None) or self.manifest.get(nyckel)
         if fil is None:
             raise httpx.ConnectError(f"Ingen inspelning för {nyckel}", request=request)
         innehall = (self.katalog / fil).read_bytes()

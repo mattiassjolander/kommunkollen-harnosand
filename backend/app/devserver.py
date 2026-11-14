@@ -38,6 +38,8 @@ def main() -> None:
         # Inspelade svar behöver ingen anropsgräns.
         for kalla in ("KOLADA", "SCB", "PROTOKOLL"):
             os.environ.setdefault(f"{kalla}_ANROP_PER_SEKUND", "0")
+        # Inspelningarna har två protokoll per sida och årsmapp.
+        os.environ.setdefault("PROTOKOLL_URVAL", "2")
 
     from .main import create_app
 

@@ -4,6 +4,10 @@ Ett protokoll sparas som plattformens egen kopia med SHA-256. Nytt innehåll und
 adress blir en ny version. Varje ny version tolkas (se `protokolltolkning`), och sammanträdets
 automatiskt tolkade uppgifter ersätts med den nya tolkningen. Sammanträdet behåller sitt id,
 så länkar till det fortsätter att fungera.
+
+Hela protokollet är det primära. Ett paragrafprotokoll (omedelbart justerade paragrafer) visas
+som sammanträdet tills hela protokollet finns, och ersätts då av det. Paragrafprotokollet sparas
+kvar som dokument.
 """
 
 from __future__ import annotations
@@ -65,6 +69,18 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
         # Utan tolkning identifieras sammanträdet av filen. Datumet tas ur filnamnet om det går.
         datum = t.datum or _datum_ur_filnamn(d.filnamn)
         nyckel = f"fil:{d.filnamn}"
+    if d.typ == "paragrafprotokoll":
+        # Ett paragrafprotokoll gäller bara tills hela protokollet finns, och ersätter inte ett annat
+        # paragrafprotokoll från samma sammanträde. Dokumentet sparas ändå.
+        befintlig = conn.execute(
+            """
+            SELECT d.typ, d.url FROM sammantrade s JOIN dokument d ON d.id = s.dokument_id
+            WHERE s.organ = %s AND s.nyckel = %s
+            """,
+            (d.organ, nyckel),
+        ).fetchone()
+        if befintlig is not None and (befintlig["typ"] == "protokoll" or befintlig["url"] != d.url):
+            return
     sammantrade_id = conn.execute(
         """
         INSERT INTO sammantrade (organ, nyckel, datum, starttid, sluttid, plats, dokument_id, tolkning, avvikelser, tolkad)
@@ -105,7 +121,8 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
 
 _SAMMANTRADE = """
     SELECT s.id, s.organ, s.datum, s.starttid, s.sluttid, s.plats, s.tolkning, s.avvikelser, s.tolkad,
-           d.id AS dokument_id, d.url AS dokument_url, d.filnamn, d.version AS dokument_version,
+           d.id AS dokument_id, d.url AS dokument_url, d.filnamn, d.typ AS dokument_typ,
+           d.version AS dokument_version,
            d.sha256, d.storlek, d.hamtad, d.datakalla_id, k.titel AS datakalla_titel,
            (SELECT count(*) FROM behandling b WHERE b.sammantrade_id = s.id) AS antal_behandlingar,
            (SELECT min(paragraf) FROM behandling b WHERE b.sammantrade_id = s.id) AS forsta_paragraf,
@@ -134,6 +151,7 @@ def _sammantrade(rad: dict) -> dict:
             "url": rad["dokument_url"],
             "kopia": f"/api/dokument/{rad['dokument_id']}",
             "filnamn": rad["filnamn"],
+            "typ": rad["dokument_typ"],
             "version": rad["dokument_version"],
             "sha256": rad["sha256"],
             "storlek": rad["storlek"],
@@ -144,13 +162,50 @@ def _sammantrade(rad: dict) -> dict:
     }
 
 
-def lista_sammantraden(conn: psycopg.Connection, organ: str | None = None) -> list[dict]:
+def lista_sammantraden(conn: psycopg.Connection, organ: str | None = None, ar: int | None = None) -> list[dict]:
     rader = conn.execute(
         f"{_SAMMANTRADE} WHERE (%(organ)s::text IS NULL OR s.organ = %(organ)s) "
+        "AND (%(ar)s::int IS NULL OR extract(year FROM s.datum) = %(ar)s) "
         "ORDER BY s.datum DESC NULLS LAST, s.starttid DESC NULLS LAST, s.id DESC",
-        {"organ": organ},
+        {"organ": organ, "ar": ar},
     ).fetchall()
     return [_sammantrade(r) for r in rader]
+
+
+SOKTRAFFAR = 200
+
+
+def sok_behandlingar(
+    conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | None = None
+) -> dict:
+    """Behandlingar vars rubrik eller diarienummer innehåller söktexten, senaste först."""
+    monster = "%" + q.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_") + "%"
+    rader = conn.execute(
+        """
+        SELECT b.paragraf, b.rubrik, b.diarienummer, s.id AS sammantrade_id, s.organ, s.datum, s.tolkning,
+               count(*) OVER () AS antal
+        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
+        WHERE (b.rubrik ILIKE %(m)s OR EXISTS (SELECT 1 FROM unnest(b.diarienummer) dnr WHERE dnr ILIKE %(m)s))
+          AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
+          AND (%(ar)s::int IS NULL OR extract(year FROM s.datum) = %(ar)s)
+        ORDER BY s.datum DESC NULLS LAST, s.id DESC, b.ordning
+        LIMIT %(grans)s
+        """,
+        {"m": monster, "organ": organ, "ar": ar, "grans": SOKTRAFFAR},
+    ).fetchall()
+    return {
+        "antal": rader[0]["antal"] if rader else 0,
+        "traffar": [
+            {
+                "paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"],
+                "sammantrade": {
+                    "id": r["sammantrade_id"], "datum": r["datum"], "tolkning": r["tolkning"],
+                    "organ": {"id": r["organ"], "namn": ORGAN[r["organ"]].namn if r["organ"] in ORGAN else r["organ"]},
+                },
+            }
+            for r in rader
+        ],
+    }
 
 
 def _narvaro(rader: list[dict]) -> list[Narvaro]:

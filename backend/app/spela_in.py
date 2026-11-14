@@ -9,9 +9,9 @@ för samma adress skrivs över, övriga lämnas kvar.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
-import sys
 from pathlib import Path
 
 import httpx
@@ -38,6 +38,11 @@ class InspelandeTransport(httpx.BaseTransport):
             stam = "_".join(delar[-4:])
             if stam.lower().endswith(andelse):
                 stam = stam[: -len(andelse)]
+            fraga = request.url.query.decode()
+            if fraga and andelse == ".html":
+                # Samma sida med olika frågesträng (Sitevisions arkivmappar) är olika svar.
+                nyckel = f"{nyckel}?{fraga}"
+                stam = f"{stam}_{fraga}"
             fil = f"{request.url.host.split('.')[-2]}/{re.sub(r'[^A-Za-z0-9]+', '_', stam)}{andelse}"
             (self.katalog / fil).parent.mkdir(parents=True, exist_ok=True)
             (self.katalog / fil).write_bytes(innehall)
@@ -48,12 +53,16 @@ class InspelandeTransport(httpx.BaseTransport):
 
 
 def main() -> None:
-    katalog = Path(sys.argv[1] if len(sys.argv) > 1 else "tests/recordings")
+    p = argparse.ArgumentParser(description="Spelar in svar från de riktiga källorna till testerna.")
+    p.add_argument("katalog", type=Path, nargs="?", default=Path("tests/recordings"))
+    p.add_argument("kallor", nargs="*", metavar="kalla", help="källans id, t.ex. harnosand-protokoll-kf (standard: alla)")
+    a = p.parse_args()
+    katalog: Path = a.katalog
     manifestfil = katalog / "manifest.json"
     manifest = json.loads(manifestfil.read_text(encoding="utf-8")) if manifestfil.exists() else {}
     transport = InspelandeTransport(katalog)
     with httpx.Client(transport=transport, timeout=60.0, headers={"User-Agent": "kommunkollen/0.1"}) as client:
-        valda = set(sys.argv[2:])
+        valda = set(a.kallor)
         for kalla in standardkallor():
             if valda and kalla.id not in valda:
                 continue
