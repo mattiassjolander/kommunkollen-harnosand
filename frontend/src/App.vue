@@ -6,6 +6,7 @@ import LoggaIn from './views/LoggaIn.vue'
 
 const vyer = [
   { till: '/ekonomi', namn: 'Ekonomi' },
+  { till: '/floden', namn: 'Ekonomiska flöden' },
   { till: '/datakallor', namn: 'Datakällor' },
 ]
 

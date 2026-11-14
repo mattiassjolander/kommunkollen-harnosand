@@ -150,3 +150,47 @@ export interface Nyckeltalsgrupp {
 }
 
 export const hamtaEkonomi = () => hamta<{ omrade: string; grupper: Nyckeltalsgrupp[] }>('/api/ekonomi')
+
+// Ekonomiska flöden – Sankey (kravspec 4)
+
+export interface Kallhanvisning {
+  titel: string
+  url: string
+}
+
+export interface Flodesnod {
+  id: string
+  titel: string
+  sida: 'in' | 'ut' | 'mitt'
+  /** tkr */
+  belopp: number
+  forklaring: string
+  kallor: Kallhanvisning[]
+}
+
+export interface Flode {
+  fran: string
+  till: string
+  /** tkr */
+  belopp: number
+  andel: number
+  kr_per_invanare: number | null
+  kallor: Kallhanvisning[]
+}
+
+export interface Flodesmodell {
+  ar: string | null
+  tillgangliga_ar: { ar: string; fullstandig: boolean }[]
+  fullstandig: boolean
+  saknas: string[]
+  flodestyp: 'brutto' | 'netto'
+  indelning: string
+  prisniva: string
+  noder: Flodesnod[]
+  floden: Flode[]
+  totalt: number | null
+  invanare: number | null
+}
+
+export const hamtaFloden = (ar?: string) =>
+  hamta<Flodesmodell>(ar ? `/api/floden?ar=${encodeURIComponent(ar)}` : '/api/floden')
