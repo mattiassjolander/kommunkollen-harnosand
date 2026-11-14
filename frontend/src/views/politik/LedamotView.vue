@@ -12,7 +12,7 @@ import {
   type Ledamot,
   type Ledamotsrad,
 } from '../../api'
-import { paragraftext, sammantradesdatum } from '../../format'
+import { namnOchParti, paragraftext, rosttext, sammantradesdatum } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
@@ -54,6 +54,13 @@ watch(
 )
 
 const KATEGORI = { beslutande: 'Beslutande', ej_tjanstgorande: 'Närvarande ersättare', franvarande: 'Frånvarande' }
+
+function vinst(r: Ledamot['roster'][number]) {
+  if (!r.vinnare) return r.resultat ? `Ordföranden: ${r.resultat}` : '–'
+  return r.vinnare === r.rost ? 'Röstade med det vinnande förslaget' : r.rost === 'ja' || r.rost === 'nej' ? 'Röstade mot' : '–'
+}
+const rostadForslag = (r: Ledamot['roster'][number]) =>
+  r.rost === 'ja' ? r.ja_forslag : r.rost === 'nej' ? r.nej_forslag : null
 
 function period(fran: string | null, till: string | null) {
   if (!fran) return '–'
@@ -213,6 +220,50 @@ const delaUpp = (namn: { id: number; namn: string }) =>
               <span v-if="s.paragrafer" class="anteckning"> · vid {{ paragraftext(s.paragrafer) }}</span>
               <span v-if="s.jav.length" class="anteckning"> · jäv {{ paragraftext(s.jav) }}</span>
             </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="kort" aria-labelledby="rost-rubrik" data-testid="ledamotens-roster">
+      <h2 id="rost-rubrik">Röster i voteringar <span class="antal">({{ l.roster.length }})</span></h2>
+      <p class="ingress">Som voteringslistorna i protokollen anger det. Beslut utan votering syns inte här.</p>
+      <p v-if="!l.roster.length" class="anteckning">Personen finns inte i någon voteringslista.</p>
+      <table v-else class="tabell">
+        <thead>
+          <tr>
+            <th scope="col">Sammanträde</th>
+            <th scope="col">Ärende</th>
+            <th scope="col">Parti</th>
+            <th scope="col">Röst</th>
+            <th scope="col">Utfall</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="(r, i) in l.roster"
+            :key="i"
+            data-testid="ledamotens-rost"
+            :data-datum="r.sammantrade.datum"
+            :data-paragraf="r.paragraf"
+            :data-rost="r.rost"
+          >
+            <td class="tal">{{ r.sammantrade.datum ?? '–' }}<span class="anteckning"> · {{ r.sammantrade.organ.id }}</span></td>
+            <th scope="row">
+              <RouterLink
+                :to="`/politik/sammantraden/${r.sammantrade.id}/paragraf/${r.paragraf}${r.antal_voteringar > 1 ? `#votering-${r.votering}` : ''}`"
+              >
+                § {{ r.paragraf }} {{ r.rubrik }}
+              </RouterLink>
+              <span v-if="r.antal_voteringar > 1" class="anteckning"> · votering {{ r.votering }} av {{ r.antal_voteringar }}</span>
+            </th>
+            <td><Partimarkering :parti="r.parti" /></td>
+            <td>
+              {{ rosttext(r.rost) }}
+              <span v-if="rostadForslag(r)" class="anteckning"> · {{ rostadForslag(r) }}</span>
+              <span v-if="r.ersatt" class="anteckning"> · ersättare för {{ namnOchParti(r.ersatt.namn, r.ersatt.parti) }}</span>
+            </td>
+            <td class="anteckning">{{ vinst(r) }}</td>
           </tr>
         </tbody>
       </table>

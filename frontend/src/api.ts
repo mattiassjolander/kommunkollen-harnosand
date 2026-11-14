@@ -310,6 +310,46 @@ export interface Behandlingsrad {
   rubrik: string
   diarienummer: string[]
   beslut: string | null
+  /** Saknas när behandlingen saknar voteringar respektive reservationer. */
+  antal_voteringar?: number
+  antal_reservationer?: number
+}
+
+export interface Namngiven {
+  namn: string
+  parti: string | null
+  ledamot_id: number | null
+}
+
+export type Rostval = 'ja' | 'nej' | 'avstar' | 'franvarande'
+
+export interface Rostantal {
+  ja: number | null
+  nej: number | null
+  avstar: number | null
+  franvarande: number | null
+}
+
+export interface Votering {
+  nummer: number
+  ja_forslag: string | null
+  nej_forslag: string | null
+  /** Siffrorna som protokollets text anger. */
+  angivet: Rostantal
+  /** Räknat ur voteringslistan. */
+  lista: { ja: number; nej: number; avstar: number; franvarande: number }
+  resultat: string | null
+  /** Vilket förslag som vann enligt protokollets text. Null när det inte går att avgöra. */
+  vinnare: 'ja' | 'nej' | null
+  roster: {
+    /** Null för en tom stol utan namn. */
+    namn: string | null
+    parti: string | null
+    rost: Rostval
+    ledamot_id: number | null
+    ersatt: Namngiven | null
+  }[]
+  per_parti: { parti: string | null; ja: number; nej: number; avstar: number; franvarande: number }[]
 }
 
 export interface Sammantrade extends Sammantradesrad {
@@ -323,6 +363,10 @@ export interface Behandling extends Behandlingsrad {
   jav: Person[]
   foregaende: number | null
   nasta: number | null
+  yrkanden: { text: string; personer: Namngiven[] }[]
+  propositionsordning: string | null
+  voteringar: Votering[]
+  reservationer: { text: string; personer: Namngiven[]; partier: string[] }[]
 }
 
 export class Saknas extends Error {}
@@ -400,6 +444,22 @@ export interface Ledamot {
     tjanstgor_for: { namn: string; parti: string | null } | null
     paragrafer: number[] | null
     jav: number[]
+  }[]
+  /** Röster i voteringar, senaste först. */
+  roster: {
+    sammantrade: { id: number; datum: string | null; organ: Organ }
+    paragraf: number
+    rubrik: string
+    votering: number
+    antal_voteringar: number
+    namn: string
+    parti: string | null
+    rost: Rostval
+    ersatt: { namn: string; parti: string | null } | null
+    ja_forslag: string | null
+    nej_forslag: string | null
+    vinnare: 'ja' | 'nej' | null
+    resultat: string | null
   }[]
 }
 

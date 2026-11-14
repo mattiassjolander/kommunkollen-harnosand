@@ -95,6 +95,10 @@ const tid = computed(() =>
             <span class="rubrik">{{ b.rubrik || 'Rubrik saknas' }}</span>
           </RouterLink>
           <span v-if="b.diarienummer.length" class="dnr">{{ b.diarienummer.join(', ') }}</span>
+          <span v-if="b.antal_voteringar" class="etikett" data-testid="har-votering">
+            {{ b.antal_voteringar > 1 ? `${b.antal_voteringar} voteringar` : 'Votering' }}
+          </span>
+          <span v-if="b.antal_reservationer" class="etikett" data-testid="har-reservation">Reservation</span>
           <p v-if="b.beslut" class="beslut">{{ b.beslut }}</p>
         </li>
       </ol>
@@ -205,6 +209,15 @@ const tid = computed(() =>
   margin-left: 12px;
   font-size: 12px;
   color: var(--ink-muted);
+}
+.etikett {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-size: 11px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
 }
 .beslut {
   margin: 6px 0 0 60px;

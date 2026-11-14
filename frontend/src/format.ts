@@ -111,3 +111,10 @@ export function sammantradesdatum(iso: string | null): string {
   if (!iso) return 'Datum okänt'
   return veckodagsdatum.format(new Date(`${iso}T12:00:00Z`))
 }
+
+const ROST = { ja: 'Ja', nej: 'Nej', avstar: 'Avstår', franvarande: 'Frånvarande' } as const
+
+/** Rösten som voteringslistan anger den. */
+export function rosttext(r: keyof typeof ROST): string {
+  return ROST[r]
+}
