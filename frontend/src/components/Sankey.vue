@@ -1,12 +1,20 @@
 <script setup lang="ts">
-// Sankey med tre kolumner: intäktstyper → Kommunens intäkter → utflöden.
+// Sankey med tre kolumner: inflöden → mittnod → utflöden. På kommunnivån är mittnoden Kommunens
+// intäkter, i en fördjupning ett verksamhetsområdes bruttokostnad.
 // Noder och flöden beräknas i backend. Här görs bara layouten: höjd proportionell mot belopp.
 import { computed, ref } from 'vue'
 import type { Flode, Flodesnod } from '../api'
-import { tal, visningsskala } from '../format'
+import { procentforandring, tal, visningsskala } from '../format'
 
-const props = defineProps<{ noder: Flodesnod[]; floden: Flode[]; valt: Flode | null }>()
-const emit = defineEmits<{ valj: [Flode] }>()
+const props = defineProps<{
+  noder: Flodesnod[]
+  floden: Flode[]
+  valt: Flode | null
+  /** Noder som går att fördjupa (verksamhetsområden på kommunnivån). */
+  fordjupbara?: string[]
+}>()
+const emit = defineEmits<{ valj: [Flode]; fordjupa: [string] }>()
+const kanFordjupas = (id: string) => props.fordjupbara?.includes(id) ?? false
 
 const B = 1120
 const H = 560
@@ -26,7 +34,7 @@ interface Placerad extends Flodesnod {
 
 const layout = computed(() => {
   const sidor = { in: props.noder.filter((n) => n.sida === 'in'), ut: props.noder.filter((n) => n.sida === 'ut') }
-  const mitt = props.noder.find((n) => n.sida === 'mitt')
+  const mitt = props.noder.find((n) => n.sida === 'mitt')!
   const total = mitt?.belopp ?? 1
   // Samma skala på båda sidor: den sida som har flest noder (mest mellanrum) bestämmer.
   const k = Math.min(...(['in', 'ut'] as const).map((s) => (H - (sidor[s].length - 1) * MELLANRUM) / total))
@@ -46,9 +54,9 @@ const layout = computed(() => {
   // Flödenas band. I mittnoden staplas de i samma ordning som noderna på respektive sida.
   const mittY = { in: (H - mittH) / 2, ut: (H - mittH) / 2 }
   const band = props.floden.map((f) => {
-    const inat = f.till === 'kommunen'
+    const inat = f.till === mitt.id
     const yttre = placerade.get(inat ? f.fran : f.till)!
-    const inre = placerade.get('kommunen')!
+    const inre = placerade.get(mitt.id)!
     const h = Math.max(1, f.belopp * k)
     const sida = inat ? 'in' : 'ut'
     const yInre = mittY[sida]
@@ -60,8 +68,19 @@ const layout = computed(() => {
     const d = `M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1} L${x1},${y1 + h} C${mx},${y1 + h} ${mx},${y0 + h} ${x0},${y0 + h} Z`
     return { f, d, id: inat ? f.fran : f.till, titel: yttre.titel }
   })
-  return { noder: [...placerade.values()], band }
+  // Förändringen mot jämförelseåret visas vid nodens etikett.
+  const forandring = new Map(
+    props.floden.map((f) => [f.till === mitt.id ? f.fran : f.till, f.jamforelse] as const),
+  )
+  return { noder: [...placerade.values()], band, forandring }
 })
+
+function forandringstext(id: string): string | null {
+  const j = layout.value.forandring.get(id)
+  if (!j) return null
+  if (j.belopp === null) return 'ny'
+  return j.procent === null ? null : procentforandring(j.procent)
+}
 
 const hovrad = ref<string | null>(null)
 const aktivt = (id: string) => hovrad.value === id || (props.valt && (props.valt.fran === id || props.valt.till === id))
@@ -107,8 +126,19 @@ const aktivt = (id: string) => hovrad.value === id || (props.valt && (props.valt
         :text-anchor="n.sida === 'in' ? 'end' : 'start'"
         dominant-baseline="middle"
         class="etikett"
+        :class="{ fordjupbar: kanFordjupas(n.id) }"
+        :role="kanFordjupas(n.id) ? 'link' : undefined"
+        :tabindex="kanFordjupas(n.id) ? 0 : undefined"
+        :aria-label="kanFordjupas(n.id) ? `Visa kostnadsslag för ${n.titel}` : undefined"
+        :data-fordjupa="kanFordjupas(n.id) ? n.id : undefined"
+        @click="kanFordjupas(n.id) && emit('fordjupa', n.id)"
+        @keydown.enter.prevent="kanFordjupas(n.id) && emit('fordjupa', n.id)"
       >
-        {{ n.titel }} <tspan class="belopp tal">{{ mnkr(n.belopp) }}</tspan>
+        <tspan class="namn">{{ n.titel }}</tspan><tspan v-if="kanFordjupas(n.id)" class="pil"> ›</tspan>
+        <tspan class="belopp tal" dx="4">{{ mnkr(n.belopp) }}</tspan>
+        <tspan v-if="forandringstext(n.id)" class="forandring tal" dx="6" data-testid="nodforandring">
+          {{ forandringstext(n.id) }}
+        </tspan>
       </text>
     </g>
   </svg>
@@ -148,7 +178,27 @@ const aktivt = (id: string) => hovrad.value === id || (props.valt && (props.valt
 .etikett.stark {
   font-weight: 600;
 }
-.belopp {
+.belopp,
+.forandring {
   fill: var(--ink-muted);
+}
+.fordjupbar {
+  cursor: pointer;
+}
+.fordjupbar .namn {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 2px;
+}
+.fordjupbar:hover .namn,
+.fordjupbar:focus-visible .namn {
+  fill: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.fordjupbar:focus-visible {
+  outline: none;
+}
+.pil {
+  fill: var(--accent);
 }
 </style>

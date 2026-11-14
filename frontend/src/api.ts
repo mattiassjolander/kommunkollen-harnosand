@@ -176,6 +176,24 @@ export interface Flode {
   andel: number
   kr_per_invanare: number | null
   kallor: Kallhanvisning[]
+  /** Finns när ett jämförelseår är valt och båda åren har fullständigt underlag. */
+  jamforelse?: Jamforelse
+}
+
+export interface Jamforelse {
+  /** Beloppet jämförelseåret (tkr), null om flödet inte fanns då. */
+  belopp: number | null
+  titel: string | null
+  /** tkr */
+  forandring: number | null
+  /** Andel, t.ex. 0.05 för 5 %. null när jämförelsebeloppet är noll eller saknas. */
+  procent: number | null
+}
+
+export interface Verksamhet {
+  kod: string
+  id: string
+  titel: string
 }
 
 export interface Flodesmodell {
@@ -190,7 +208,20 @@ export interface Flodesmodell {
   floden: Flode[]
   totalt: number | null
   invanare: number | null
+  /** null på kommunnivån, annars det verksamhetsområde som fördjupas. */
+  verksamhet: Verksamhet | null
+  jamforelse_ar?: string
+  jamforelse_fullstandig?: boolean
+  jamforelse_totalt?: number | null
 }
 
-export const hamtaFloden = (ar?: string) =>
-  hamta<Flodesmodell>(ar ? `/api/floden?ar=${encodeURIComponent(ar)}` : '/api/floden')
+export interface Flodesval {
+  ar?: string
+  jamfor?: string
+  verksamhet?: string
+}
+
+export function hamtaFloden(val: Flodesval = {}) {
+  const q = new URLSearchParams(Object.entries(val).filter(([, v]) => v) as [string, string][])
+  return hamta<Flodesmodell>(`/api/floden${q.size ? `?${q}` : ''}`)
+}
