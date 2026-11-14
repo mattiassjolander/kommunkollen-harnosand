@@ -2,10 +2,11 @@
 // Stapeldiagram för en tidsserie med en serie. Följer dataviz-reglerna i docs/design.md:
 // nollbaslinje, 4 px rundning på dataänden, hårlinjerutnät och tooltip vid hover.
 import { computed, ref } from 'vue'
-import { axeltal, tal } from '../format'
+import { axeltal, tabelldatum, tal } from '../format'
+import type { Revision } from '../api'
 
 const props = defineProps<{
-  punkter: { period: string; varde: number | null }[]
+  punkter: { period: string; varde: number | null; revision?: Revision }[]
   enhet: string
   kalla: string
 }>()
@@ -108,6 +109,17 @@ const tipsX = computed(() =>
             data-testid="saknas"
           />
         </template>
+        <!-- Reviderat värde: ↻ ovanför stapeln, detaljerna i tooltipen. -->
+        <text
+          v-if="p.revision"
+          :x="M.left + band * (i + 0.5)"
+          :y="skala.y(Math.max(p.varde ?? 0, 0)) - (p.varde === null ? 20 : 6)"
+          text-anchor="middle"
+          class="reviderad"
+          data-testid="reviderad"
+        >
+          ↻
+        </text>
         <text v-if="visaEtikett(i)" :x="M.left + band * (i + 0.5)" :y="H - 10" text-anchor="middle" class="tal">
           {{ p.period }}
         </text>
@@ -120,6 +132,12 @@ const tipsX = computed(() =>
     <div v-if="aktiv !== null" class="tips" :style="{ left: `${tipsX}%` }" role="tooltip">
       <strong>{{ punkter[aktiv].period }}</strong>
       <span class="tal">{{ tal(punkter[aktiv].varde, enhet) }}</span>
+      <template v-if="punkter[aktiv].revision">
+        <span class="tipsrevision" data-testid="revisionstips">
+          ↻ Reviderat. Tidigare <span class="tal">{{ tal(punkter[aktiv].revision!.tidigare, enhet) }}</span>
+        </span>
+        <span class="tipskalla">Ändrat {{ tabelldatum(punkter[aktiv].revision!.andrad) }} · {{ punkter[aktiv].revision!.kalla }}</span>
+      </template>
       <span class="tipskalla">{{ kalla }}</span>
     </div>
   </div>
@@ -185,6 +203,14 @@ text {
   flex-direction: column;
   pointer-events: none;
   white-space: nowrap;
+}
+text.reviderad {
+  fill: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tipsrevision {
+  color: var(--ink-secondary);
 }
 .tipskalla {
   font-size: 12px;
