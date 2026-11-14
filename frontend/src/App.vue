@@ -29,6 +29,7 @@ function utloggad() {
   visaInloggning.value = true
 }
 provide('utloggad', utloggad)
+provide('jag', jag)
 
 async function loggaUtOchStanna() {
   await loggaUt()

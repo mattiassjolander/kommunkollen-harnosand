@@ -35,3 +35,21 @@ test('vyn Datakällor visar status per källa och körningsloggen', async ({ pag
   await expect(logg.locator('tbody.korning').first()).toContainText('Inga nya uppgifter')
   await expect(logg).toContainText('Lyckad')
 })
+
+test('en redaktör kan köra om en enskild källa från vyn Datakällor', async ({ page }) => {
+  await page.goto('/datakallor')
+  // Läsare utan inloggning ser ingen knapp.
+  await expect(page.getByTestId('datakallor')).toBeVisible()
+  await expect(page.getByTestId('kor-om-scb')).toHaveCount(0)
+
+  await page.request.post('/api/auth/test/redaktor')
+  await page.reload()
+  const senaste = page.getByTestId('korningslogg').locator('tbody.korning').first()
+  const fore = await senaste.getAttribute('data-korning')
+  await page.getByTestId('kor-om-scb').click()
+  await expect(senaste).not.toHaveAttribute('data-korning', fore!)
+  // Den nya körningen gäller bara SCB.
+  await expect(senaste.locator('> tr')).toHaveCount(1)
+  await expect(senaste).toContainText('SCB')
+  await page.request.post('/api/auth/logga-ut')
+})

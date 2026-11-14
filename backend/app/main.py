@@ -15,6 +15,7 @@ from . import auth, db, ekonomi, serier, status
 from .auth import Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
+from .robust import Robusthet
 from .schema import SVERIGE, Schema
 from .sources.base import Datakalla
 from .sources.kolada import Kolada
@@ -24,10 +25,17 @@ KOMMUN = "2280"  # Härnösand
 FRAN_MILJO = object()  # create_app läser schemat från miljön om inget anges
 
 
+def _anropsgrans(namn: str, standard: float) -> float | None:
+    """Anrop per sekund från miljön, t.ex. SCB_ANROP_PER_SEKUND=2. 0 betyder ingen gräns."""
+    varde = float(os.environ.get(f"{namn}_ANROP_PER_SEKUND") or standard)
+    return varde or None
+
+
 def standardkallor() -> list[Datakalla]:
     return [
-        Kolada(nyckeltal=ekonomi.KOLADA, kommun=KOMMUN),
-        Scb(matt=ekonomi.SCB, differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN),
+        Kolada(nyckeltal=ekonomi.KOLADA, kommun=KOMMUN, anrop_per_sekund=_anropsgrans("KOLADA", 5)),
+        Scb(matt=ekonomi.SCB, differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
+            anrop_per_sekund=_anropsgrans("SCB", 2)),
     ]
 
 
@@ -38,6 +46,7 @@ def create_app(
     inloggning: Inloggning | None = None,
     auth_transport: httpx.BaseTransport | None = None,
     schema: Schema | None | object = FRAN_MILJO,
+    robusthet: Robusthet | None = None,
 ) -> FastAPI:
     if schema is FRAN_MILJO:
         schema = Schema.fran_miljo()
@@ -72,10 +81,14 @@ def create_app(
         return {"status": "ok"}
 
     @app.post("/api/insamlingar", dependencies=[Depends(krav_roll("redaktor"))])
-    def starta_insamling() -> dict:
+    def starta_insamling(kalla: str | None = None) -> dict:
+        """Kör alla källor, eller bara `kalla` (omkörning av en enskild källa)."""
+        valda = kallor if kalla is None else [k for k in kallor if k.id == kalla]
+        if not valda:
+            raise HTTPException(404, f"Datakällan {kalla} finns inte")
         with db.connect(database_url) as conn, http_klient() as client:
             try:
-                res = kor_insamling(conn, kallor, client, utlosare="manuell")
+                res = kor_insamling(conn, valda, client, utlosare="manuell", robusthet=robusthet)
             except InsamlingPagar as e:
                 raise HTTPException(409, str(e)) from None
         return {
