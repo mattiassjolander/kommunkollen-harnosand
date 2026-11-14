@@ -20,7 +20,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from . import ledamoter
-from .protokolltolkning import Narvaro, Tolkning, beslutande_vid, tolka
+from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_vid, tolka
 from .sources.base import Dokument
 from .sources.harnosand import ORGAN
 
@@ -144,14 +144,48 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
             [(sammantrade_id, i, n.namn, n.parti, n.roll, n.kategori, n.tjanstgor_for, n.tjanstgor_for_parti,
               n.paragrafer, n.jav) for i, n in enumerate(t.narvaro)],
         )
-        cur.executemany(
-            """
-            INSERT INTO behandling (sammantrade_id, ordning, paragraf, rubrik, diarienummer, beslut)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            [(sammantrade_id, i, b.paragraf, b.rubrik, b.diarienummer, b.beslut) for i, b in enumerate(t.behandlingar)],
-        )
+    for i, b in enumerate(t.behandlingar):
+        _lagra_behandling(conn, sammantrade_id, i, b)
     ledamoter.registrera(conn, (n.namn for n in t.narvaro if n.kategori != "ovrig"))
+
+
+def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: int, b: Behandling) -> None:
+    behandling_id = conn.execute(
+        """
+        INSERT INTO behandling (sammantrade_id, ordning, paragraf, rubrik, diarienummer, beslut, propositionsordning)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """,
+        (sammantrade_id, ordning, b.paragraf, b.rubrik, b.diarienummer, b.beslut, b.propositionsordning),
+    ).fetchone()["id"]
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO yrkande (behandling_id, ordning, text, personer) VALUES (%s, %s, %s, %s)",
+            [(behandling_id, i, y.text, Jsonb([{"namn": n, "parti": p} for n, p in y.personer]))
+             for i, y in enumerate(b.yrkanden)],
+        )
+        cur.executemany(
+            "INSERT INTO reservation (behandling_id, ordning, text, personer, partier) VALUES (%s, %s, %s, %s, %s)",
+            [(behandling_id, i, r.text, Jsonb([{"namn": n, "parti": p} for n, p in r.personer]), r.partier)
+             for i, r in enumerate(b.reservationer)],
+        )
+    for i, v in enumerate(b.voteringar):
+        votering_id = conn.execute(
+            """
+            INSERT INTO votering (behandling_id, ordning, ja_forslag, nej_forslag, ja, nej, avstar, franvarande,
+                                  resultat, vinnare)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+            """,
+            (behandling_id, i, v.ja_forslag, v.nej_forslag, v.ja, v.nej, v.avstar, v.franvarande, v.resultat,
+             v.vinnare),
+        ).fetchone()["id"]
+        with conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO rost (votering_id, ordning, namn, parti, rost, ersatt, ersatt_parti)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                [(votering_id, k, r.namn, r.parti, r.rost, r.ersatt, r.ersatt_parti) for k, r in enumerate(v.roster)],
+            )
 
 
 # Läsning
@@ -266,7 +300,11 @@ def _las_narvaro(conn: psycopg.Connection, sammantrade_id: int) -> list[Narvaro]
 
 
 def _behandling(r: dict) -> dict:
-    return {"paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"], "beslut": r["beslut"]}
+    ut = {"paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"], "beslut": r["beslut"]}
+    for k in ("antal_voteringar", "antal_reservationer"):
+        if k in r:
+            ut[k] = r[k]
+    return ut
 
 
 def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | None:
@@ -274,7 +312,13 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
     if rad is None:
         return None
     behandlingar = conn.execute(
-        "SELECT * FROM behandling WHERE sammantrade_id = %s ORDER BY ordning", (sammantrade_id,)).fetchall()
+        """
+        SELECT b.*, (SELECT count(*) FROM votering v WHERE v.behandling_id = b.id) AS antal_voteringar,
+               (SELECT count(*) FROM reservation r WHERE r.behandling_id = b.id) AS antal_reservationer
+        FROM behandling b WHERE b.sammantrade_id = %s ORDER BY b.ordning
+        """,
+        (sammantrade_id,),
+    ).fetchall()
     narvaro = _las_narvaro(conn, sammantrade_id)
     personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
     return _sammantrade(rad) | {
@@ -302,12 +346,72 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
     ).fetchone()
     narvaro = _las_narvaro(conn, sammantrade_id)
     personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
-    return _behandling(b) | {
+    return _behandling(b) | _yrkanden_och_voteringar(conn, b) | {
         "sammantrade": _sammantrade(rad),
         "beslutande": [_person(n, personer) for n in beslutande_vid(narvaro, paragraf)],
         "jav": [_person(n, personer) for n in narvaro if paragraf in n.jav],
         "foregaende": grannar["foregaende"],
         "nasta": grannar["nasta"],
+    }
+
+
+def _partiordning(parti: str | None) -> tuple:
+    # Alfabetiskt efter förkortning (design.md), partilös och okänt parti sist.
+    return (parti is None, parti == "-", parti or "")
+
+
+def _yrkanden_och_voteringar(conn: psycopg.Connection, b: dict) -> dict:
+    yrkanden = conn.execute(
+        "SELECT text, personer FROM yrkande WHERE behandling_id = %s ORDER BY ordning", (b["id"],)).fetchall()
+    reservationer = conn.execute(
+        "SELECT text, personer, partier FROM reservation WHERE behandling_id = %s ORDER BY ordning", (b["id"],)
+    ).fetchall()
+    voteringar = conn.execute("SELECT * FROM votering WHERE behandling_id = %s ORDER BY ordning", (b["id"],)).fetchall()
+    roster = conn.execute(
+        """
+        SELECT r.* FROM rost r JOIN votering v ON v.id = r.votering_id
+        WHERE v.behandling_id = %s ORDER BY r.votering_id, r.ordning
+        """,
+        (b["id"],),
+    ).fetchall()
+    namn = [n for r in roster for n in (r["namn"], r["ersatt"]) if n]
+    namn += [p["namn"] for y in [*yrkanden, *reservationer] for p in y["personer"]]
+    personer = ledamoter.personer_for(conn, namn)
+
+    def med_id(p: dict) -> dict:
+        return p | {"ledamot_id": personer.get(p["namn"])}
+
+    ut_voteringar = []
+    for v in voteringar:
+        vr = [r for r in roster if r["votering_id"] == v["id"]]
+        per_parti: dict[str | None, dict[str, int]] = {}
+        for r in vr:
+            per_parti.setdefault(r["parti"], {"ja": 0, "nej": 0, "avstar": 0, "franvarande": 0})[r["rost"]] += 1
+        ut_voteringar.append({
+            "nummer": v["ordning"] + 1,
+            "ja_forslag": v["ja_forslag"], "nej_forslag": v["nej_forslag"],
+            # Siffrorna som protokollets text anger, och siffrorna i voteringslistan.
+            "angivet": {"ja": v["ja"], "nej": v["nej"], "avstar": v["avstar"], "franvarande": v["franvarande"]},
+            "lista": {k: sum(1 for r in vr if r["rost"] == k) for k in ("ja", "nej", "avstar", "franvarande")},
+            "resultat": v["resultat"],
+            "vinnare": v["vinnare"],
+            "roster": [
+                {"namn": r["namn"], "parti": r["parti"], "rost": r["rost"],
+                 "ledamot_id": personer.get(r["namn"]) if r["namn"] else None,
+                 "ersatt": {"namn": r["ersatt"], "parti": r["ersatt_parti"], "ledamot_id": personer.get(r["ersatt"])}
+                 if r["ersatt"] else None}
+                for r in vr
+            ],
+            "per_parti": [{"parti": p} | antal for p, antal in sorted(per_parti.items(), key=lambda x: _partiordning(x[0]))],
+        })
+    return {
+        "yrkanden": [{"text": y["text"], "personer": [med_id(p) for p in y["personer"]]} for y in yrkanden],
+        "propositionsordning": b["propositionsordning"],
+        "voteringar": ut_voteringar,
+        "reservationer": [
+            {"text": r["text"], "personer": [med_id(p) for p in r["personer"]], "partier": r["partier"]}
+            for r in reservationer
+        ],
     }
 
 

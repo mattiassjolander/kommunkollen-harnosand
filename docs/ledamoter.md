@@ -19,6 +19,7 @@ Partiet visas alltid med förkortning. Partiets färg är bara en prick bredvid 
 - Parti över tid, som perioder av sammanträden i följd med samma parti.
 - Organ, roller och närvaro: antal sammanträden som beslutande, som ej tjänstgörande ersättare och som frånvarande.
 - Alla sammanträden, senaste först, med roll, vem en ersättare tjänstgjorde för, vilka paragrafer och jäv.
+- Röster i voteringar, senaste först, med länk till behandlingen och om rösten gick med det vinnande förslaget (`roster` i API:t).
 
 Namn på sammanträdets och behandlingens sidor länkar till ledamotens sida.
 

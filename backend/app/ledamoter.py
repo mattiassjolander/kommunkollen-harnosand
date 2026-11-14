@@ -168,7 +168,39 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
             }
             for f in reversed(forekomster)
         ],
+        "roster": _roster(conn, [n["namn"] for n in namn]),
     }
+
+
+def _roster(conn: psycopg.Connection, namn: list[str]) -> list[dict]:
+    """Personens röster i voteringar under något av sina namn, senaste först."""
+    rader = conn.execute(
+        """
+        SELECT r.namn, r.parti, r.rost, r.ersatt, r.ersatt_parti,
+               v.ordning, v.ja_forslag, v.nej_forslag, v.vinnare, v.resultat,
+               (SELECT count(*) FROM votering v2 WHERE v2.behandling_id = b.id) AS antal_voteringar,
+               b.paragraf, b.rubrik, s.id AS sammantrade_id, s.datum, s.organ
+        FROM rost r
+        JOIN votering v ON v.id = r.votering_id
+        JOIN behandling b ON b.id = v.behandling_id
+        JOIN sammantrade s ON s.id = b.sammantrade_id
+        WHERE r.namn = ANY(%s)
+        ORDER BY s.datum DESC, s.id DESC, b.ordning, v.ordning
+        """,
+        (namn,),
+    ).fetchall()
+    return [
+        {
+            "sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": _organ(r["organ"])},
+            "paragraf": r["paragraf"], "rubrik": r["rubrik"],
+            "votering": r["ordning"] + 1, "antal_voteringar": r["antal_voteringar"],
+            "namn": r["namn"], "parti": r["parti"], "rost": r["rost"],
+            "ersatt": {"namn": r["ersatt"], "parti": r["ersatt_parti"]} if r["ersatt"] else None,
+            "ja_forslag": r["ja_forslag"], "nej_forslag": r["nej_forslag"],
+            "vinnare": r["vinnare"], "resultat": r["resultat"],
+        }
+        for r in rader
+    ]
 
 
 def _person(conn: psycopg.Connection, ledamot_id: int) -> int:

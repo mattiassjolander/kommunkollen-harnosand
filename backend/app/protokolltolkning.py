@@ -40,11 +40,74 @@ class Narvaro:
 
 
 @dataclass
+class Yrkande:
+    text: str
+    # De som yrkar eller ställer sig bakom. Tom när yrkandet inte står med namn,
+    # t.ex. "Ordförande yrkar bifall till liggande förslag."
+    personer: list[tuple[str, str | None]] = field(default_factory=list)
+
+
+@dataclass
+class Reservation:
+    text: str
+    # De som reserverar sig, med namn i texten eller som parti ("Sverigedemokraterna reserverar sig").
+    personer: list[tuple[str, str | None]] = field(default_factory=list)
+    partier: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Rost:
+    # Den som röstade, en tjänstgörande ersättare när en sådan står i listan. None för en tom stol
+    # utan namn ("--- tom stol ---").
+    namn: str | None
+    parti: str | None
+    rost: str  # 'ja' | 'nej' | 'avstar' | 'franvarande'
+    ersatt: str | None = None  # ledamoten som ersättaren tjänstgjorde för
+    ersatt_parti: str | None = None
+
+
+@dataclass
+class Votering:
+    ja_forslag: str | None
+    nej_forslag: str | None
+    # Siffrorna som protokollets text anger. None när texten inte anger dem.
+    ja: int | None
+    nej: int | None
+    avstar: int | None
+    resultat: str | None  # "kommunfullmäktige beslutat enligt kommunstyrelsens förslag"
+    franvarande: int | None = None  # "2 frånvarande", "1 tom stol"
+    roster: list[Rost] = field(default_factory=list)
+
+    @property
+    def vinnare(self) -> str | None:
+        """'ja' eller 'nej': det förslag som ordförandens konstaterande anger. Det räknas inte fram ur
+        siffrorna, eftersom en minoritet kan kräva återremiss trots att ja-sidan har flest röster."""
+        if not (self.resultat and self.ja_forslag and self.nej_forslag):
+            return None
+        def karna(s: str) -> str:
+            # "att kommunfullmäktige ska bifalla liggande förslag" → "liggandeförslag"
+            s = re.sub(
+                r"^(?:att\s+)?(?:(?:kommunfullmäktige|fullmäktige|kommunstyrelsen|nämnden|\w+nämnden)\s+)?"
+                r"(?:ska\s+|beslutar\s+|beslutat\s+)?(?:besluta\s+|bifalla\s+)?(?:enligt\s+)?",
+                "", s.strip(), flags=re.I,
+            )
+            return re.sub(r"\s+", "", s).casefold()
+
+        res = re.sub(r"\s+", "", self.resultat).casefold()
+        ja, nej = karna(self.ja_forslag) in res, karna(self.nej_forslag) in res
+        return "ja" if ja and not nej else "nej" if nej and not ja else None
+
+
+@dataclass
 class Behandling:
     paragraf: int
     rubrik: str
     diarienummer: list[str]
     beslut: str | None
+    yrkanden: list[Yrkande] = field(default_factory=list)
+    propositionsordning: str | None = None
+    voteringar: list[Votering] = field(default_factory=list)
+    reservationer: list[Reservation] = field(default_factory=list)
 
 
 @dataclass
@@ -467,8 +530,16 @@ def _beslutar(rad: str) -> bool:
     return bool(re.fullmatch(r"[A-ZÅÄÖ][\wåäöé-]+ beslutar", rad))
 
 
+# Rubriker inom en behandling som har ett nummer eller ordningstal: "Propositionsordning 2",
+# "Votering och utfall 1", "Andra voteringen".
+_NUMRERAD_RUBRIK = re.compile(
+    r"(?:Propositionsordning|Votering och utfall|Votering|Omröstning)(?: \d+)?"
+    r"|(?:Första|Andra|Tredje|Fjärde|Femte) voteringen|Voteringsbilagor?|Anteckning|Anteckningar"
+)
+
+
 def _ar_rubrik(rad: str) -> bool:
-    return rad in _RUBRIKER or _beslutsrubrik(rad) or _beslutar(rad)
+    return rad in _RUBRIKER or _beslutsrubrik(rad) or _beslutar(rad) or bool(_NUMRERAD_RUBRIK.fullmatch(rad))
 
 
 def _sidmobler(sida: str) -> list[str]:
@@ -550,7 +621,14 @@ def _behandlingar(t: Tolkning, lop: list[str]) -> None:
             t.avvikelser.append(f"§ {nr}: rubriken hittades inte")
         if beslut is None and any(_beslutsrubrik(r) or _beslutar(r) for r in kropp):
             t.avvikelser.append(f"§ {nr}: beslutet hittades inte")
-        t.behandlingar.append(Behandling(paragraf=nr, rubrik=rubrik, diarienummer=dnr, beslut=beslut))
+        sektioner = _sektioner(kropp[j:])
+        prop = [_lopande(s) for s in sektioner.get("propositionsordning", []) if s]
+        t.behandlingar.append(Behandling(
+            paragraf=nr, rubrik=rubrik, diarienummer=dnr, beslut=beslut,
+            yrkanden=[y for s in sektioner.get("yrkande", []) for y in _yrkanden(_lopande(s))],
+            propositionsordning="\n\n".join(prop) or None,
+            reservationer=[r for s in sektioner.get("reservation", []) for r in _reservationer(_lopande(s))],
+        ))
 
 
 def _beslutstext(kropp: list[str]) -> str | None:
@@ -583,6 +661,485 @@ def _stycke(rader: list[str]) -> str:
         else:
             ut.append(r)
     return "\n".join(" ".join(s.split()) for s in ut)
+
+
+# Yrkanden, propositionsordning och reservationer
+
+_PARTINAMN = {
+    "Socialdemokraterna": "S", "Moderaterna": "M", "Sverigedemokraterna": "SD", "Centerpartiet": "C",
+    "Vänsterpartiet": "V", "Kristdemokraterna": "KD", "Liberalerna": "L", "Miljöpartiet": "MP",
+}
+_ORD = r"[A-ZÅÄÖÉ][\wåäöéüÅÄÖ'’-]*"
+_NAMN_PARTI = re.compile(rf"(?P<namn>{_ORD}(?: {_ORD}){{1,3}}) \((?P<parti>[A-ZÅÄÖ]{{1,4}}|-)\)")
+
+
+def _sektioner(kropp: list[str]) -> dict[str, list[list[str]]]:
+    """Raderna under rubrikerna Yrkande, Propositionsordning och Reservation, ett avsnitt per rubrik."""
+    ut: dict[str, list[list[str]]] = {}
+    aktuell: list[str] | None = None
+    for r in kropp:
+        if r.startswith("_____"):
+            break
+        if _ar_rubrik(r):
+            nyckel = ("yrkande" if r.startswith("Yrkande") else "reservation" if r.startswith("Reservation")
+                      else "propositionsordning" if r.startswith("Propositionsordning") else None)
+            aktuell = None if nyckel is None else []
+            if nyckel:
+                ut.setdefault(nyckel, []).append(aktuell)
+        elif aktuell is not None:
+            aktuell.append(r)
+    return ut
+
+
+def _lopande(rader: list[str]) -> str:
+    """Rader till löpande text. Ett avstavat ord i radslutet sätts ihop."""
+    text = ""
+    for r in rader:
+        r = " ".join(r.split())
+        if text.endswith("-") and not text.endswith(" -"):
+            # "Eva-" / "Clara" är ett namn med bindestreck, "Sverige-" / "demokraterna" ett avstavat ord.
+            text = text + r if r[:1].isupper() else text[:-1] + r
+        else:
+            text = f"{text} {r}" if text else r
+    return text
+
+
+def _meningar_med_person(text: str) -> list[tuple[str | None, str | None, str]]:
+    """Delar texten där en mening börjar med "Namn (Parti)". Text före första personen får namn None."""
+    starter = [m for m in _NAMN_PARTI.finditer(text) if m.start() == 0 or text[: m.start()].rstrip().endswith((".", ":"))]
+    delar: list[tuple[str | None, str | None, str]] = []
+    if not starter or starter[0].start() > 0:
+        forsta = text[: starter[0].start()] if starter else text
+        if forsta.strip():
+            delar.append((None, None, forsta.strip()))
+    for k, m in enumerate(starter):
+        slut = starter[k + 1].start() if k + 1 < len(starter) else len(text)
+        delar.append((m["namn"], m["parti"], text[m.start() : slut].strip()))
+    return delar
+
+
+def _yrkanden(text: str) -> list[Yrkande]:
+    ut: list[Yrkande] = []
+    for _, _, s in _meningar_med_person(text) if text else []:
+        # Personerna före verbet: "Eva-Clara Viklund (M), Olle Löfgren (L) och Glenn Sehlin (SD) ställer sig bakom …"
+        fore = re.split(r"\b(?:yrkar|föreslår|ställer|instämmer|tillstyrker|lämnar|bifaller)\b", s, maxsplit=1)[0]
+        ut.append(Yrkande(text=s, personer=[(m["namn"], m["parti"]) for m in _NAMN_PARTI.finditer(fore)]))
+    return ut
+
+
+def _reservationer(text: str) -> list[Reservation]:
+    """En reservation per mening som innehåller "reserverar sig". Skriftliga reservationer följer
+    i protokollet efter meningen och tas med i texten."""
+    if not text:
+        return []
+    meningar = re.split(r"(?<=[.!?])\s+(?=[A-ZÅÄÖ])", text)
+    ut: list[Reservation] = []
+    for m in meningar:
+        if "reserver" in m or not ut:
+            personer = [(p["namn"], p["parti"]) for p in _NAMN_PARTI.finditer(m.split("reserver")[0])]
+            partier = [kort for namn, kort in _PARTINAMN.items() if re.search(rf"\b{namn}\b", m.split("reserver")[0])]
+            ut.append(Reservation(text=m, personer=personer, partier=partier))
+        else:
+            ut[-1].text = f"{ut[-1].text} {m}"
+    return ut
+
+
+# Voteringar
+#
+# En votering inleds med ordförandens propositionsordning ("ställer följande propositionsordning")
+# och följs av utfallet. Voteringslistorna står i samma paragraf, direkt efter utfallet eller
+# samlade under "Voteringsbilagor", i samma ordning som voteringarna. Listorna läses ur layouten,
+# eftersom rösten i de flesta protokoll är ett kryss i kolumnen Ja, Nej eller Avstår.
+
+_PARTIER = ("S", "V", "MP", "M", "C", "L", "KD", "SD", "-")
+_ROSTORD = {"ja": "ja", "nej": "nej", "avstår": "avstar", "avstod": "avstar", "frånvarande": "franvarande"}
+
+
+def _layoutrader(layout: list[str]) -> list[str]:
+    """Layoutens rader utan sidhuvud, sidfot och organets namn överst på sidan."""
+    ut: list[str] = []
+    for sida in layout:
+        rader = sida.splitlines()
+        kvar = _sidmobler(sida)
+        organ = kvar[0] if kvar and not kvar[0].startswith("§") and len(kvar[0].split()) <= 3 and not _ar_rubrik(kvar[0]) else None
+        if any(r in ("Ärendelista", "Innehållsförteckning") for r in kvar[:4]):
+            continue
+        tillatna = set(kvar) - ({organ} if organ else set())
+        ut.extend(r for r in rader if r.strip() and r.strip() in tillatna and not _sidhuvud(r))
+    return ut
+
+
+def _sidhuvud(rad: str) -> bool:
+    """Sidhuvudets delar, som i layouten kan stå på samma rad: "SAMMANTRÄDESPROTOKOLL 16(39)"."""
+    s = " ".join(rad.split())
+    return bool(re.fullmatch(
+        r"(?:Sida\s*)?(?:SAMMANTRÄDESPROTOKOLL\s*)?(?:Sida\s*)?(?:\d+\(\d+\))?|(?:Sammanträdesdatum\s*)?\d{4}-\s?\d{2}-\s?\d{2}"
+        r"|Sammanträdesdatum", s
+    ))
+
+
+def _voteringar(t: Tolkning, layout: list[str]) -> None:
+    behandlingar = {b.paragraf: b for b in t.behandlingar}
+    rader = _layoutrader(layout)
+    # Rader som kan inleda en paragraf: "§ N" följt av högst ett diarienummer.
+    kandidater: list[tuple[int, int]] = []
+    for i, r in enumerate(rader):
+        s = re.sub(r"(\d{4})-\s+(\d)", r"\1-\2", " ".join(r.split()))  # "Dnr 2025- 000008"
+        m = _PARAGRAFRAD.match(s)
+        if not m or int(m[1]) not in behandlingar:
+            continue
+        rest = _DIARIENUMMER.sub("", m[2]).strip(" ,")
+        if rest and not re.fullmatch(r"Dnr\.?:?\s*(\S*\d\S*)(?:\s+[\d.]+)?", rest):
+            continue
+        kandidater.append((i, int(m[1])))
+    starter = _stigande(kandidater)
+    for k, (i, nr) in enumerate(starter):
+        slut = starter[k + 1][0] if k + 1 < len(starter) else len(rader)
+        behandlingar[nr].voteringar = _voteringar_i(rader[i + 1 : slut])
+    # Röster i en kolumn i närvarolistan före paragraferna ("Vot § 6"): "Hur de enskilda ledamöterna
+    # röstat framgår av voteringskolumnen på sidan 2."
+    for nr, roster in _rosttabeller(rader[: starter[0][0]] if starter else []):
+        utan_lista = [v for v in behandlingar[nr].voteringar if not v.roster] if nr in behandlingar else []
+        if utan_lista:
+            utan_lista[0].roster = roster
+    for _, nr in starter:
+        b = behandlingar[nr]
+        for v_nr, v in enumerate(b.voteringar, 1):
+            if not v.roster:
+                continue
+            # Listan ska stämma med siffrorna i protokollets text. Frånvarande jämförs bara när texten anger dem.
+            slag = ["ja", "nej", "avstar"] + (["franvarande"] if v.franvarande is not None else [])
+            raknat = {r: sum(1 for x in v.roster if x.rost == r) for r in slag}
+            angivet = {"ja": v.ja, "nej": v.nej, "avstar": v.avstar or 0, "franvarande": v.franvarande}
+            angivet = {r: angivet[r] for r in slag}
+            if v.ja is not None and raknat != angivet:
+                ord_ = {"ja": "ja", "nej": "nej", "avstar": "avstår", "franvarande": "frånvarande"}
+                t.avvikelser.append(
+                    f"§ {nr}, votering {v_nr}: voteringslistan har "
+                    + ", ".join(f"{raknat[r]} {ord_[r]}" for r in slag)
+                    + ", protokollets text " + ", ".join(f"{angivet[r]} {ord_[r]}" for r in slag)
+                )
+
+
+def _stigande(kandidater: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Den längsta följden med stigande paragrafnummer. Paragraferna kommer i nummerordning,
+    medan en paragrafhänvisning i en förteckning före dem inte gör det."""
+    if not kandidater:
+        return []
+    langd = [1] * len(kandidater)
+    fore = [-1] * len(kandidater)
+    for b in range(len(kandidater)):
+        for a in range(b):
+            if kandidater[a][1] < kandidater[b][1] and langd[a] + 1 > langd[b]:
+                langd[b], fore[b] = langd[a] + 1, a
+    k = max(range(len(kandidater)), key=lambda x: (langd[x], -x))
+    ut = []
+    while k != -1:
+        ut.append(kandidater[k])
+        k = fore[k]
+    return ut[::-1]
+
+
+def _voteringar_i(rader: list[str]) -> list[Votering]:
+    text = [" ".join(r.split()) for r in rader]
+    anslag = [i for i, s in enumerate(text) if re.search(r"ställer (?:upp )?följande\s*propositionsordning", s, re.I)]
+    voteringar: list[Votering] = []
+    for k, i in enumerate(anslag):
+        slut = anslag[k + 1] if k + 1 < len(anslag) else len(text)
+        # Utfallet står i texten direkt efter propositionsordningen, före en tabell eller nästa rubrik.
+        stycke: list[str] = []
+        for s in text[i:slut]:
+            if _tabellhuvud(s) or (stycke and _ar_rubrik(s)):
+                break
+            stycke.append(s)
+        v = _utfall(_lopande(stycke))
+        if v.ja is None or v.resultat is None:
+            # Utfallet kan stå efter voteringslistan.
+            efter = _utfall(_lopande(text[i:slut]))
+            if v.ja is None:
+                v.ja, v.nej, v.avstar, v.franvarande = efter.ja, efter.nej, efter.avstar, efter.franvarande
+            v.resultat = v.resultat or efter.resultat
+        voteringar.append(v)
+    tabeller = _rosttabeller(rader)
+    for v, (_, roster) in zip(voteringar, tabeller):
+        v.roster = roster
+    return voteringar
+
+
+def _utfall(text: str) -> Votering:
+    ja_f = nej_f = None
+    for monster in (
+        # "ja för kommunstyrelsens förslag och nej för …", "ja till …", "ja för liggande förslag och nej återremiss"
+        r"\bja (?:för|till) (?P<ja>.+?),? och nej (?:för |till )?(?P<nej>.+?)\s?\.",
+        r"\bJa = (?P<ja>.+?)\s?\.\s*Nej = (?P<nej>.+?)\s?\.",
+        r"vill att (?P<ja>.+?) röstar ja och den som vill att (?P<nej>.+?) röstar nej",
+    ):
+        if m := re.search(monster, text, re.I):
+            # "Ja = ärendet ska avgöras idag (21)": siffran i parentes hör till utfallet.
+            ja_f, nej_f = (re.sub(r"\s*\(\d+\)$", "", m[k].strip()) for k in ("ja", "nej"))
+            break
+
+    def tal(ord_: str) -> int | None:
+        m = re.search(rf"(\d+)\s*(?:som\s+)?(?:röstar\s+)?{ord_}", text, re.I)
+        return int(m[1]) if m else None
+
+    ja, nej, avstar = tal(r"ja\b"), tal(r"nej\b"), tal(r"avst(?:år|od)")
+    franvarande = [int(m[1]) for m in re.finditer(r"(\d+)\s*(?:frånvarande|tom(?:ma)? stol(?:ar)?|som inte röstat)", text, re.I)]
+    # Ordförandens sista konstaterande är beslutet ("… konstaterar att 21 röstar Ja, och 18 röstar Nej.
+    # Ordförande konstaterar att fullmäktige beslutat enligt …").
+    resultat = None
+    for m in re.finditer(r"(?:finner|konstaterar)\s+(?:efter acklamation\s+)?(?:ordförande[n]?\s+)?(?:därmed\s+)?att\s+(?P<res>.+?)\.", text, re.I):
+        if not re.match(r"\d+ röstar", m["res"]):
+            resultat = m["res"].strip()
+    return Votering(ja_forslag=ja_f, nej_forslag=nej_f, ja=ja, nej=nej, avstar=avstar, resultat=resultat,
+                    franvarande=sum(franvarande) if franvarande else None)
+
+
+def _tabellhuvud(s: str) -> bool:
+    return bool(re.match(r"Ledamot\b.*\bParti\b", s) or re.match(r"#\s+Namn och parti\s+Röst$", s)
+                or _NAMNKOLUMN_HUVUD.fullmatch(s))
+
+
+_NAMNKOLUMN_HUVUD = re.compile(r"Ledamot/tjänstgörande ersättare(?:\s*§\s*(\d+))?\s+Ja\s+Nej\b.*")
+
+
+def _rosttabeller(rader: list[str]) -> list[tuple[int | None, list[Rost]]]:
+    """Voteringslistorna, med paragrafen som tabellhuvudet anger ("Vot § 18") när det gör det."""
+    tabeller: list[tuple[int | None, list[Rost]]] = []
+    i = 0
+    while i < len(rader):
+        s = " ".join(rader[i].split())
+        paragraf = re.search(r"§\s*(\d+)", s)
+        nr = int(paragraf[1]) if paragraf else None
+        # En närvarolista har samma kolumner men ingen kolumn för Ja och Nej.
+        if re.match(r"Ledamot\b.*\bParti\b", s) and any(
+            re.search(r"\bJa\b.*\bNej\b", r) for r in rader[i : i + 3]
+        ):
+            roster, i = _kolumntabell(rader, i)
+            tabeller.append((nr, roster))
+        elif _NAMNKOLUMN_HUVUD.fullmatch(s):
+            roster, i = _namnkolumntabell(rader, i)
+            tabeller.append((nr, roster))
+        elif re.match(r"#\s+Namn och parti\s+Röst$", s):
+            roster, i = _numrerad_tabell(rader, i + 1)
+            tabeller.append((nr, roster))
+        else:
+            i += 1
+    return tabeller
+
+
+def _namnkolumntabell(rader: list[str], i: int) -> tuple[list[Rost], int]:
+    """Tabell med "Namn (Parti)" i en kolumn och kryss under Ja, Nej eller Avstår."""
+    kolumner = {
+        ("avstar" if m[1].startswith("Avst") else _ROSTORD[m[1].lower()]): m.start()
+        for m in re.finditer(r"\b(Ja|Nej|Avst\w*)", rader[i])
+    }
+    roster: list[Rost] = []
+    i += 1
+    while i < len(rader):
+        m = re.fullmatch(r"\s*(?P<namn>\S.*?)(?: \((?P<parti>[A-ZÅÄÖ]{1,4}|-)\))?\s{2,}(?P<x>X|x)\s*", rader[i])
+        if not m:
+            break
+        rost = min(kolumner, key=lambda k: abs(kolumner[k] - m.start("x")))
+        roster.append(Rost(namn=" ".join(m["namn"].split()), parti=m["parti"], rost=rost))
+        i += 1
+    return roster, i
+
+
+def _kolumntabell(rader: list[str], i: int) -> tuple[list[Rost], int]:
+    """Tabell med kolumnerna Ledamot, Ersättare, Parti och Ja, Nej (och ibland Avstår)."""
+    parti_pos = rader[i].index("Parti")
+    votering = re.search(r"§\s*(\d+)", rader[i])  # "Vot § 18"
+    paragraf = int(votering[1]) if votering else None
+    # Kolumnernas läge räknas från partikolumnen. Typsnittet är proportionellt, så krysset hamnar
+    # längre till höger ju längre namnet är, men avståndet från partiet är stabilt. Det gäller även
+    # när tabellen fortsätter på en ny sida med annan indragning.
+    kolumner: dict[str, float] = {}
+    j = i
+    for k in range(i, min(i + 3, len(rader))):
+        for m in re.finditer(r"\b(Ja|Nej|Avst\w*)", rader[k]):  # rubriken kan vara avkortad: "Avst"
+            kolumner["avstar" if m[1].startswith("Avst") else _ROSTORD[m[1].lower()]] = m.start() - parti_pos
+        if kolumner:
+            j = k
+            break
+    if narvaro := re.search(r"\bNär", rader[i]):
+        # Närvaro- och voteringslistan har en kolumn för närvaro före rösterna.
+        kolumner["narvaro"] = narvaro.start() - parti_pos
+    rader_ut: list[_Tabellrad] = []
+    i = j + 1
+    while i < len(rader):
+        r = rader[i]
+        rad = _kolumnrad(r, kolumner)
+        if rad:
+            rader_ut.append(rad)
+        elif r[:1].strip() and len(r.split()) <= 2:
+            pass  # organets namn överst på en ny sida, i vänstermarginalen
+        elif rader_ut and (fortsattning := _fortsattning(r)):
+            # Ett namn som bryts över två rader ("Anne-Cathrine" / "Genberg §§ 30-32").
+            borjan = len(r) - len(r.lstrip())
+            sista = rader_ut[-1]
+            person = sista.ersattare if sista.ersattare and borjan >= sista.ers_borjan - 3 else sista.ledamot
+            person.namn = f"{person.namn} {fortsattning.namn}".strip()
+            person.paragrafer = person.paragrafer or fortsattning.paragrafer
+        else:
+            break
+        i += 1
+    return [rost for rad in rader_ut if (rost := rad.rost(paragraf))], i
+
+
+@dataclass
+class _Person:
+    namn: str
+    paragrafer: list[int] | None = None  # "Mohamed Abdulwahab § 12": bara vid vissa paragrafer
+
+
+_PARAGRAFREF = r"§§?\s*\d[\d\s,\-–]*"
+
+
+def _person_i_kolumn(text: str) -> _Person:
+    # "Bengt Wallgren §" med paragrafnumret på nästa rad: tecknet tas bort, numret läses som fortsättning.
+    m = re.fullmatch(rf"(?P<namn>.*?)\s*(?:(?P<ref>{_PARAGRAFREF})|§§?)?", text.strip())
+    # Rollen efter namnet hör inte till namnet: "Hans Rosengren (1 vice)", "(ordf)".
+    namn = re.sub(r"\s*\((?:\d:?e?\s*vice|vice|ordf\.?|ordförande)\)$", "", m["namn"], flags=re.I)
+    return _Person(namn=namn, paragrafer=paragraflista(m["ref"]) if m["ref"] else None)
+
+
+@dataclass
+class _Tabellrad:
+    ledamot: _Person
+    ersattare: _Person | None
+    ers_borjan: int  # var ersättarkolumnen börjar på raden
+    parti: str
+    markering: str | None  # 'ja' | 'nej' | 'avstar' ur krysset eller ordet, None utan kryss
+    streck: bool
+    avstar_kolumn: bool = False
+
+    def rost(self, paragraf: int | None) -> Rost | None:
+        return _tabellrost(self, paragraf)
+
+
+def _tom(namn: str) -> bool:
+    return bool(re.fullmatch(r"-*\s*(?:tom stol|vakant)\s*-*", namn, re.I))
+
+
+def _tabellrost(rad: "_Tabellrad", paragraf: int | None) -> Rost | None:
+    """Vem som röstade och hur. Har ledamoten eller ersättaren paragrafer ("§§ 19-29") avgör
+    voteringens paragraf vem av dem som var beslutande."""
+    led, ers, rost = rad.ledamot, rad.ersattare, rad.markering
+
+    def vid(p: _Person) -> bool | None:
+        return None if p.paragrafer is None or paragraf is None else paragraf in p.paragrafer
+
+    if ers and _tom(ers.namn):
+        # Tom stol vid vissa paragrafer ("Tom stol § 12"), annars hela sammanträdet.
+        if vid(ers) is False:
+            ers = None
+        elif rost is None or vid(ers) is True:
+            return Rost(namn=None if _tom(led.namn) else led.namn, parti=rad.parti, rost="franvarande")
+        else:
+            ers = None
+    if rost is None and rad.streck:
+        # Streck i stället för kryss. Har tabellen en kolumn för Avstår betyder streck i alla kolumner
+        # att ledamoten inte röstade. Utan den kolumnen markerar strecken att ledamoten avstod.
+        rost = "franvarande" if rad.avstar_kolumn else "avstar"
+    if _tom(led.namn):
+        if not ers:
+            return Rost(namn=None, parti=rad.parti, rost="franvarande")  # tom stol utan namn
+        return Rost(namn=ers.namn, parti=rad.parti, rost=rost or "franvarande")
+    if ers and (vid(ers) is False or vid(led) is True):
+        ers = None  # ledamoten var beslutande vid den här paragrafen
+    if rost is None:
+        return Rost(namn=ers.namn if ers else led.namn, parti=rad.parti, rost="franvarande")
+    if ers:
+        return Rost(namn=ers.namn, parti=rad.parti, rost=rost, ersatt=led.namn, ersatt_parti=rad.parti)
+    return Rost(namn=led.namn, parti=rad.parti, rost=rost)
+
+
+def _fortsattning(r: str) -> _Person | None:
+    s = r.strip()
+    if not s or _ar_rubrik(" ".join(s.split())):
+        return None  # t.ex. "Reservationer" direkt efter tabellen
+    if re.fullmatch(r"\d[\d\s,\-–]*", s):
+        return _Person(namn="", paragrafer=paragraflista(s))  # "§" på raden före
+    p = _person_i_kolumn(s)
+    if not p.namn:
+        return p if p.paragrafer else None
+    if len(p.namn.split()) <= 2 and re.fullmatch(rf"{_ORD}(?: {_ORD})?", p.namn):
+        return p
+    return None
+
+
+_MARKERINGAR = re.compile(r"(?:\s+(?:X|x|-|Ja|Nej|Avstår|§§?|[\d\-–,]+))*\s*")
+
+
+def _kolumnrad(r: str, kolumner: dict[str, float]) -> "_Tabellrad | None":
+    """En rad i tabellen. Partiet är det första parti som bara följs av röstmarkeringar
+    ("X", "-", "Avstår", "§§ 19-30")."""
+    p = next(
+        (m for m in re.finditer(r"(?<=\s)(KD|SD|MP|S|V|M|C|L|-)(?=\s|$)", r)
+         if r[: m.start()].strip() and _MARKERINGAR.fullmatch(r[m.end() :])),
+        None,
+    )
+    if p is None:
+        return None
+    # Kolumnerna till vänster om partiet: ledamot och ersättare, där en paragrafhänvisning
+    # ("§§ 19-29") kan stå i en egen kolumn efter namnet. Ett ensamt kryss räknas inte.
+    personer: list[tuple[int, _Person]] = []
+    for m in re.finditer(r"\S+(?: \S+)*", r[: p.start()]):
+        if m[0] in ("X", "x", "-"):
+            continue
+        if re.fullmatch(_PARAGRAFREF, m[0]) and personer:
+            personer[-1][1].paragrafer = paragraflista(m[0])
+            continue
+        personer.append((m.start(), _person_i_kolumn(m[0])))
+    if not personer:
+        return None
+    rost = None
+    streck = False
+    for m in re.finditer(r"\S+", r[p.end() :]):
+        tecken, pos = m[0], p.end() + m.start()
+        kolumn = min(kolumner, key=lambda k: abs(kolumner[k] - (pos - p.start()))) if kolumner else None
+        if kolumn == "narvaro":
+            continue  # "X", "-" eller "§§ 1-11" i närvarokolumnen
+        if tecken.lower() in _ROSTORD:
+            rost = _ROSTORD[tecken.lower()]
+        elif tecken in ("X", "x") and kolumn:
+            rost = kolumn
+        elif tecken == "-":
+            streck = True
+        if rost:
+            break
+    ersattare = None
+    if len(personer) > 1:
+        ersattare = _Person(" ".join(q.namn for _, q in personer[1:]), personer[-1][1].paragrafer)
+    return _Tabellrad(ledamot=personer[0][1], ersattare=ersattare,
+                      ers_borjan=personer[1][0] if len(personer) > 1 else 10**6,
+                      parti=p[1], markering=rost, streck=streck, avstar_kolumn="avstar" in kolumner)
+
+
+_NUMRERAD_RAD = re.compile(r"(\d+)\s+(?P<np>.+?)\s+(?P<rost>Ja|Nej|Avstår|Frånvarande)")
+_NAMN_OCH_PARTI = re.compile(
+    r"(?P<namn>.+?) \((?P<parti>[^)]*)\)(?: \(-\))?(?: ersatt av (?P<ers>.+?) \((?P<ersp>[^)]*)\))?"
+)
+
+
+def _numrerad_tabell(rader: list[str], i: int) -> tuple[list[Rost], int]:
+    """Numrerad lista med "Namn och parti" och "Röst", där en ersättare står som "X ersatt av Y"."""
+    roster: list[Rost] = []
+    while i < len(rader):
+        s = " ".join(rader[i].split())
+        m = _NUMRERAD_RAD.fullmatch(s)
+        n = _NAMN_OCH_PARTI.fullmatch(m["np"]) if m else None
+        if not n:
+            break
+        rost = _ROSTORD[m["rost"].lower()]
+        parti = n["parti"] or None
+        if n["ers"]:
+            roster.append(Rost(namn=n["ers"], parti=n["ersp"] or None, rost=rost, ersatt=n["namn"], ersatt_parti=parti))
+        else:
+            roster.append(Rost(namn=n["namn"], parti=parti, rost=rost))
+        i += 1
+    return roster, i
 
 
 # Kontroller mot protokollets egna uppgifter
@@ -643,6 +1200,7 @@ def _tolka(pdf: bytes) -> Tolkning:
         if not _narvarotabeller(t, layout[:6]):
             t.avvikelser.append("Närvarolistan hittades inte")
     _behandlingar(t, lop)
+    _voteringar(t, layout)
     if not t.behandlingar:
         t.avvikelser.append("Inga behandlingar hittades")
         # Ett protokollsutdrag har färre sidor än protokollet, men saknas alla behandlingar
