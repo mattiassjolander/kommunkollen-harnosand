@@ -292,6 +292,8 @@ export interface Sammantradesrad {
 }
 
 export interface Person {
+  /** Personen i ledamotsregistret. Saknas för övriga närvarande. */
+  ledamot_id: number | null
   namn: string
   /** Som protokollet anger det. '-' är partilös, null betyder att protokollet inte anger parti. */
   parti: string | null
@@ -356,3 +358,61 @@ export const sokBehandlingar = (q: string, organ?: string, ar?: string) => {
 export const hamtaSammantrade = (id: number | string) => hamtaEllerSaknas<Sammantrade>(`/api/sammantraden/${id}`)
 export const hamtaBehandling = (id: number | string, paragraf: number | string) =>
   hamtaEllerSaknas<Behandling>(`/api/sammantraden/${id}/behandlingar/${paragraf}`)
+
+// Ledamotsregistret (#30)
+
+export interface Ledamotsrad {
+  id: number
+  namn: string
+  /** Andra namn som en redaktör slagit ihop med personen. */
+  andra_namn: string[]
+  /** Partiet enligt det senaste protokollet. */
+  parti: string | null
+  partier: string[]
+  organ: Organ[]
+  antal_sammantraden: number
+  senast: string | null
+}
+
+export interface Ledamot {
+  id: number
+  namn: string
+  /** Satt när adressen gällde ett namn som slagits ihop med personen. */
+  sammanslagen_med: number | null
+  namn_varianter: { id: number; namn: string; huvudnamn: boolean; antal: number }[]
+  partier_over_tid: { parti: string | null; fran: string | null; till: string | null; antal: number }[]
+  organ: {
+    organ: Organ
+    roller: string[]
+    antal: number
+    fran: string | null
+    till: string | null
+    beslutande: number
+    ej_tjanstgorande: number
+    franvarande: number
+  }[]
+  sammantraden: {
+    sammantrade: { id: number; datum: string | null; starttid: string | null; organ: Organ; tolkning: string }
+    namn: string
+    parti: string | null
+    roll: string | null
+    kategori: 'beslutande' | 'ej_tjanstgorande' | 'franvarande'
+    tjanstgor_for: { namn: string; parti: string | null } | null
+    paragrafer: number[] | null
+    jav: number[]
+  }[]
+}
+
+export const hamtaLedamoter = () => hamta<Ledamotsrad[]>('/api/ledamoter')
+export const hamtaLedamot = (id: number | string) => hamtaEllerSaknas<Ledamot>(`/api/ledamoter/${id}`)
+
+async function skrivLedamot(url: string): Promise<Ledamot> {
+  const svar = await fetch(url, { method: 'POST' })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
+export const slaIhopLedamoter = (huvud: number, med: number) =>
+  skrivLedamot(`/api/ledamoter/${huvud}/sammanslagningar?med=${med}`)
+export const delaUppLedamot = (namnId: number) => skrivLedamot(`/api/ledamoter/${namnId}/uppdelning`)

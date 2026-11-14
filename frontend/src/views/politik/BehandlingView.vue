@@ -2,7 +2,8 @@
 import { computed, inject, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaBehandling, Saknas, type Behandling } from '../../api'
-import { namnOchParti, parti, sammantradesdatum } from '../../format'
+import { namnOchParti, sammantradesdatum } from '../../format'
+import Partimarkering from '../../components/Partimarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
@@ -72,7 +73,9 @@ const lank = (p: number) => `${sammantradeslank.value}/paragraf/${p}`
       </p>
       <ul class="personer">
         <li v-for="p in b.beslutande" :key="p.namn" data-testid="person">
-          {{ p.namn }} <span :class="{ saknas: p.parti === null }">({{ parti(p.parti) }})</span>
+          <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
+          <template v-else>{{ p.namn }}</template>
+          <Partimarkering :parti="p.parti" />
           <span v-if="p.tjanstgor_for" class="anteckning">
             tjänstgör för {{ namnOchParti(p.tjanstgor_for.namn, p.tjanstgor_for.parti) }}
           </span>
@@ -81,7 +84,11 @@ const lank = (p: number) => `${sammantradeslank.value}/paragraf/${p}`
       <template v-if="b.jav.length">
         <h3>Jäv</h3>
         <ul class="personer" data-testid="jav">
-          <li v-for="p in b.jav" :key="p.namn">{{ namnOchParti(p.namn, p.parti) }}</li>
+          <li v-for="p in b.jav" :key="p.namn">
+            <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
+            <template v-else>{{ p.namn }}</template>
+            <Partimarkering :parti="p.parti" />
+          </li>
         </ul>
       </template>
     </section>
