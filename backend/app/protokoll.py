@@ -62,14 +62,49 @@ def lagra_dokument(
     return ("ny" if version == 1 else "andrad"), fel
 
 
-def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: Tolkning, tolkad: datetime) -> None:
+def _nyckel(d: Dokument, t: Tolkning) -> tuple[str, date | None]:
     if t.tolkad:
-        datum = t.datum
-        nyckel = f"{datum.isoformat()} {t.starttid}" if t.starttid else datum.isoformat()
-    else:
-        # Utan tolkning identifieras sammanträdet av filen. Datumet tas ur filnamnet om det går.
-        datum = t.datum or _datum_ur_filnamn(d.filnamn)
-        nyckel = f"fil:{d.filnamn}"
+        return (f"{t.datum.isoformat()} {t.starttid}" if t.starttid else t.datum.isoformat()), t.datum
+    # Utan tolkning identifieras sammanträdet av filen. Datumet tas ur filnamnet om det går.
+    return f"fil:{d.filnamn}", t.datum or _datum_ur_filnamn(d.filnamn)
+
+
+def tolka_om(conn: psycopg.Connection, tolkad: datetime) -> dict[str, int]:
+    """Tolkar om de lagrade protokollen med den nuvarande tolkningen, t.ex. efter att den förbättrats.
+
+    Sammanträdena behåller sina id, så att länkar till dem fortsätter att fungera. Hela protokoll
+    tolkas före paragrafprotokoll, som bara gäller tills protokollet finns.
+    """
+    rader = conn.execute(
+        """
+        SELECT s.id, s.organ, s.nyckel, s.tolkning, d.id AS dokument_id, d.url, d.filnamn, d.typ, d.innehall
+        FROM sammantrade s JOIN dokument d ON d.id = s.dokument_id
+        ORDER BY d.typ = 'paragrafprotokoll', s.id
+        """
+    ).fetchall()
+    antal = {"sammantraden": len(rader), "nu_tolkade": 0, "nu_ej_tolkade": 0}
+    for r in rader:
+        d = Dokument(url=r["url"], filnamn=r["filnamn"], typ=r["typ"], organ=r["organ"], innehall=bytes(r["innehall"]))
+        t = tolka(d.innehall)
+        nyckel, _ = _nyckel(d, t)
+        if nyckel != r["nyckel"]:
+            if conn.execute(
+                "SELECT 1 FROM sammantrade WHERE organ = %s AND nyckel = %s", (d.organ, nyckel)
+            ).fetchone():
+                # Sammanträdet finns redan, ur ett annat dokument. Det avgör _lagra_tolkning.
+                conn.execute("DELETE FROM sammantrade WHERE id = %s", (r["id"],))
+            else:
+                conn.execute("UPDATE sammantrade SET nyckel = %s WHERE id = %s", (nyckel, r["id"]))
+        _lagra_tolkning(conn, d, r["dokument_id"], t, tolkad)
+        if t.tolkad and r["tolkning"] == "ej_tolkad":
+            antal["nu_tolkade"] += 1
+        elif not t.tolkad and r["tolkning"] == "tolkad":
+            antal["nu_ej_tolkade"] += 1
+    return antal
+
+
+def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: Tolkning, tolkad: datetime) -> None:
+    nyckel, datum = _nyckel(d, t)
     if d.typ == "paragrafprotokoll":
         # Ett paragrafprotokoll gäller bara tills hela protokollet finns, och ersätter inte ett annat
         # paragrafprotokoll från samma sammanträde. Dokumentet sparas ändå.

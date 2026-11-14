@@ -71,6 +71,12 @@ Köra en insamling manuellt (utan inloggning, direkt i backend-containern):
 ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.insamla"
 ```
 
+Tolka om de lagrade protokollen efter en förbättrad tolkning (hämtar inget från kommunen):
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.tolka_om"
+```
+
 Se status och loggar:
 
 ```bash
