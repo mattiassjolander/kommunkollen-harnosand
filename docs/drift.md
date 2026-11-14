@@ -57,7 +57,8 @@ ssh kommunkollen "cd /opt/kommunkollen && docker compose logs --tail 50 insamlar
 
 - Ett fel hos en källa stoppar inte de andra. Källan får status Misslyckad med felmeddelandet i vyn Datakällor.
 - Nätverksfel, timeout (30 s) och svar 429 eller 5xx försöks igen två gånger, efter 2 och 4 sekunder.
-- Anropen mot varje källa begränsas av `KOLADA_ANROP_PER_SEKUND` och `SCB_ANROP_PER_SEKUND`.
+- Anropen mot varje källa begränsas av `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND` och `PROTOKOLL_ANROP_PER_SEKUND`.
+- Ett protokoll som inte går att tolka sparas och visas ändå. Källan får status Delvis fel, och felmeddelandet anger vilket protokoll det gäller.
 - Avbryts en körning (t.ex. vid omstart) återupptas den vid nästa insamling. Källor som redan var klara hoppas över, och inga uppgifter dubbleras.
 - En redaktör kan köra om en enskild källa med knappen Kör om i vyn Datakällor.
 

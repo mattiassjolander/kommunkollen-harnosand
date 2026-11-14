@@ -35,6 +35,9 @@ def main() -> None:
     os.environ.setdefault("TESTENV", "true")
     if a.inspelningar:
         os.environ["INSPELNINGAR"] = str(a.inspelningar.resolve())
+        # Inspelade svar behöver ingen anropsgräns.
+        for kalla in ("KOLADA", "SCB", "PROTOKOLL"):
+            os.environ.setdefault(f"{kalla}_ANROP_PER_SEKUND", "0")
 
     from .main import create_app
 

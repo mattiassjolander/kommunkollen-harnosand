@@ -8,6 +8,9 @@ import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
 import FlodenView from './views/FlodenView.vue'
 import OversiktView from './views/OversiktView.vue'
+import BehandlingView from './views/politik/BehandlingView.vue'
+import PolitikView from './views/politik/PolitikView.vue'
+import SammantradeView from './views/politik/SammantradeView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -15,6 +18,13 @@ const router = createRouter({
     { path: '/', component: OversiktView, meta: { titel: 'Översikt' } },
     { path: '/ekonomi', component: EkonomiView, meta: { titel: 'Ekonomi' } },
     { path: '/floden', component: FlodenView, meta: { titel: 'Ekonomiska flöden' } },
+    { path: '/politik', component: PolitikView, meta: { titel: 'Politik och beslut' } },
+    { path: '/politik/sammantraden/:id', component: SammantradeView, meta: { titel: 'Sammanträde' } },
+    {
+      path: '/politik/sammantraden/:id/paragraf/:paragraf',
+      component: BehandlingView,
+      meta: { titel: 'Behandling' },
+    },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
   ],
 })

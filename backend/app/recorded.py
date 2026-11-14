@@ -14,6 +14,9 @@ from pathlib import Path
 import httpx
 
 
+TYPER = {".pdf": "application/pdf", ".html": "text/html; charset=utf-8"}
+
+
 class InspeladTransport(httpx.BaseTransport):
     def __init__(self, katalog: Path) -> None:
         self.katalog = Path(katalog)
@@ -27,6 +30,5 @@ class InspeladTransport(httpx.BaseTransport):
         if fil is None:
             raise httpx.ConnectError(f"Ingen inspelning för {nyckel}", request=request)
         innehall = (self.katalog / fil).read_bytes()
-        return httpx.Response(
-            200, content=innehall, headers={"content-type": "application/json"}, request=request
-        )
+        typ = TYPER.get(Path(fil).suffix.lower(), "application/json")
+        return httpx.Response(200, content=innehall, headers={"content-type": typ}, request=request)

@@ -50,11 +50,15 @@ npm test
 - **Söm 1** (`backend/tests`): HTTP-API:t mot riktig Postgres, med externa källor utbytta mot inspelade svar i `backend/tests/recordings`. Använder `TEST_DATABASE_URL` om den är satt, annars inbäddad Postgres.
 - **Söm 2** (`frontend/e2e`): Playwright mot riktig backend som hämtar från inspelningarna. Första gången: `npx --prefix frontend playwright install chromium`.
 
-Inspelningarna uppdateras från de riktiga källorna (Kolada och SCB) med:
+Inspelningarna uppdateras från de riktiga källorna (Kolada, SCB och protokollen på harnosand.se) med:
 
 ```bash
 uv run --directory backend python -m app.spela_in tests/recordings
 ```
+
+Ange källans id för att bara spela in en källa, t.ex. `... tests/recordings harnosand-protokoll-kf`. Testerna av protokollen har förväntade värden som är kontrollerade för hand, så de behöver ses över när protokollen spelas in på nytt.
+
+Hur protokollen hämtas och tolkas står i [docs/protokoll.md](docs/protokoll.md).
 
 Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [docs/tackning-ekonomi.md](docs/tackning-ekonomi.md).
 
@@ -66,7 +70,7 @@ Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [
 | `INSPELNINGAR` | Katalog med inspelade källsvar (bara för test och utveckling). |
 | `INSAMLING_DAGAR` | Dagar i månaden då insamlingen körs automatiskt, t.ex. `1,15` (standard). Tomt stänger av schemat. |
 | `INSAMLING_KLOCKAN` | Klockslag för den automatiska insamlingen, svensk tid (standard `03:00`). |
-| `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND` | Högsta anropsfrekvens mot källan (standard 5 respektive 2). `0` tar bort gränsen. |
+| `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND`, `PROTOKOLL_ANROP_PER_SEKUND` | Högsta anropsfrekvens mot källan (standard 5, 2 respektive 1). `0` tar bort gränsen. |
 | `SESSION_SECRET` | Hemlighet för sessionskakan. Krävs på servern. Saknas den blir alla utloggade vid omstart. |
 | `SESSION_HTTPS_ONLY` | `true` när appen nås via https. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-inloggning. Utan klient-id är den avstängd. |

@@ -124,6 +124,7 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 | Reviderad av källan | Liten ikon ↻ vid värdet, och tooltip med tidigare värde och datum |
 | Dokumenterad kostnad | Hel fyllning |
 | Uppskattad kostnad | Diagonal skraffering (45°) i samma färg, och texten "uppskattad" |
+| Automatiskt tolkad uppgift (ur protokoll, ej granskad) | Prickad kantlinje, ikonen ⚙ och texten "Automatiskt tolkad, ej granskad". Ett protokoll som inte gick att tolka får varningsikonen ! och texten "Kunde inte tolkas automatiskt" |
 | AI-analys (ej bekräftad) | Streckad kantlinje och etiketten **Analys**, aldrig samma stil som fakta |
 | Ofullständigt underlag | Grå skraffering och texten "Ofullständigt underlag" |
 | Saknas | Tomt med texten "Uppgift saknas", aldrig noll |

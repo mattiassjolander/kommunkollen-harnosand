@@ -34,6 +34,7 @@ def utan_anropsgrans(monkeypatch):
     # Inspelade svar behöver ingen anropsgräns. Testerna av gränsen sätter den själva.
     monkeypatch.setenv("KOLADA_ANROP_PER_SEKUND", "0")
     monkeypatch.setenv("SCB_ANROP_PER_SEKUND", "0")
+    monkeypatch.setenv("PROTOKOLL_ANROP_PER_SEKUND", "0")
 
 
 @pytest.fixture(scope="session")

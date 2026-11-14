@@ -33,6 +33,7 @@ services:
       INSAMLING_KLOCKAN: ${INSAMLING_KLOCKAN:-03:00}
       KOLADA_ANROP_PER_SEKUND: ${KOLADA_ANROP_PER_SEKUND:-5}
       SCB_ANROP_PER_SEKUND: ${SCB_ANROP_PER_SEKUND:-2}
+      PROTOKOLL_ANROP_PER_SEKUND: ${PROTOKOLL_ANROP_PER_SEKUND:-1}
     depends_on:
       db:
         condition: service_healthy

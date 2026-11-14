@@ -13,6 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
+from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
 from .sources.base import Datakalla, Hamtning
 
@@ -92,12 +93,23 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
             res.antal_nya += 1
         else:
             res.antal_andrade += 1
+    fel = list(hamtning.fel)
+    for d in hamtning.dokument:
+        utfall, dokumentfel = lagra_dokument(conn, kalla.id, d, korning_id, hamtad)
+        if utfall == "ny":
+            res.antal_nya += 1
+        elif utfall == "andrad":
+            res.antal_andrade += 1
+        else:
+            res.antal_oforandrade += 1
+        if dokumentfel:
+            fel.append(dokumentfel)
     publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
                                  *(u.kallans_publicering for u in hamtning.uppgifter)) if d]
     res.senaste_publicering = max(publiceringar, default=None)
-    if hamtning.fel:
+    if fel:
         res.status = "delvis_fel"
-        res.fel = "; ".join(hamtning.fel)
+        res.fel = "; ".join(fel)
     elif res.antal_nya or res.antal_andrade:
         res.status = "lyckad"
     return res

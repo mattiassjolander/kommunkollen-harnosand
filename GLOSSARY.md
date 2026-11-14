@@ -15,6 +15,14 @@ Den tjänstepersonsorganisation som bereder ärenden åt ett organ. Förvaltning
 Ett möte i ett organ, dokumenterat i ett protokoll.
 _Avoid_: Möte
 
+**Protokoll**:
+Den justerade dokumentationen av ett helt sammanträde: närvaro, behandlingar, yrkanden, voteringar och beslut. Protokollet är huvudkällan för allt som hände på sammanträdet.
+_Avoid_: Helprotokoll, mötesanteckningar
+
+**Paragrafprotokoll**:
+Ett protokoll för en eller några enstaka behandlingar, som justeras eller lämnas ut före protokollet för hela sammanträdet (direktjustering, protokollsutdrag). Det gäller bara tills protokollet finns.
+_Avoid_: Utdrag (som begrepp)
+
 **Ledamot**:
 En förtroendevald som deltar i ett organs sammanträde, som ordinarie ledamot eller som tjänstgörande ersättare. Partitillhörigheten är den som protokollet anger för personen vid just det sammanträdet.
 _Avoid_: Politiker, representant
@@ -53,6 +61,9 @@ Ett förslag till beslut som en ledamot eller ett parti lägger fram vid en beha
 **Votering**:
 En omröstning vid en behandling, där varje ledamots röst (ja, nej, avstår) är dokumenterad i protokollet. En behandling kan ha flera voteringar, till exempel först om kontraproposition och sedan en huvudvotering.
 _Avoid_: Omröstning (som begrepp), röstning
+
+**Reservation**:
+En ledamots eller ett partis anmälan i protokollet om att de inte står bakom beslutet vid en behandling.
 
 ## Ekonomiska konsekvenser
 
@@ -108,6 +119,10 @@ En person som registrerar och redigerar uppgifter på plattformen.
 **Utgivare**:
 En person som godkänner en redaktörs registrering för publicering. Ingen godkänner sin egen registrering.
 _Avoid_: Granskare, godkännare
+
+**Automatiskt tolkad uppgift**:
+En uppgift som plattformen har läst ut ur ett protokoll utan att någon redaktör har granskat den. Den visas för läsare med en markering om att den inte är granskad.
+_Avoid_: Ogranskad uppgift, maskinuppgift
 
 ## Datainsamling
 

@@ -8,6 +8,7 @@ const vyer = [
   { till: '/', namn: 'Översikt' },
   { till: '/ekonomi', namn: 'Ekonomi' },
   { till: '/floden', namn: 'Ekonomiska flöden' },
+  { till: '/politik', namn: 'Politik och beslut' },
   { till: '/datakallor', namn: 'Datakällor' },
 ]
 
