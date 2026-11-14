@@ -13,12 +13,29 @@ export interface Matt {
   datakalla: Datakalla
 }
 
-export interface Punkt {
-  period: string
+export interface Version {
   varde: number | null
   kallans_publicering: string | null
+  /** När plattformen hämtade den här versionen. */
   hamtad: string
   version: number
+}
+
+/** Ett värde för en period: aktuell version plus tidigare versioner (kravspec 11.5 och 12.3). */
+export interface Punkt extends Version {
+  period: string
+  senast_hamtad: string
+  senast_andrad: string
+  reviderad: boolean
+  /** Tidigare versioner, senaste först. */
+  historik: Version[]
+}
+
+/** Det som visas vid ↻: föregående värde (i visningsenheten), när det ändrades och av vilken källa. */
+export interface Revision {
+  tidigare: number | null
+  andrad: string
+  kalla: string
 }
 
 export interface Serie {
