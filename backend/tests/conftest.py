@@ -35,6 +35,8 @@ def utan_anropsgrans(monkeypatch):
     monkeypatch.setenv("KOLADA_ANROP_PER_SEKUND", "0")
     monkeypatch.setenv("SCB_ANROP_PER_SEKUND", "0")
     monkeypatch.setenv("PROTOKOLL_ANROP_PER_SEKUND", "0")
+    # Inspelningarna har två protokoll per sida och årsmapp (spela_in med PROTOKOLL_URVAL=2).
+    monkeypatch.setenv("PROTOKOLL_URVAL", "2")
 
 
 @pytest.fixture(scope="session")

@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { EjInloggad, hamtaOrgan, hamtaSammantraden, type Organ, type Sammantradesrad } from '../../api'
+import {
+  EjInloggad,
+  hamtaOrgan,
+  hamtaSammantraden,
+  sokBehandlingar,
+  type Organ,
+  type Sammantradesrad,
+  type Sokresultat,
+} from '../../api'
 import { sammantradesdatum } from '../../format'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
@@ -14,10 +22,18 @@ const sammantraden = ref<Sammantradesrad[]>([])
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 
-const valtOrgan = computed<string>({
-  get: () => (typeof route.query.organ === 'string' ? route.query.organ : ''),
-  set: (v) => router.replace({ query: { ...route.query, organ: v || undefined } }),
-})
+// Organ, år och söktext speglas i URL:en, så att en vy går att dela.
+function fraga(namn: string) {
+  return computed<string>({
+    get: () => (typeof route.query[namn] === 'string' ? (route.query[namn] as string) : ''),
+    set: (v) => router.replace({ query: { ...route.query, [namn]: v || undefined } }),
+  })
+}
+const valtOrgan = fraga('organ')
+const valtAr = fraga('ar')
+const sokning = fraga('q')
+const soktext = ref(sokning.value)
+const sokresultat = ref<Sokresultat | null>(null)
 
 async function ladda() {
   laddar.value = true
@@ -31,14 +47,39 @@ async function ladda() {
     laddar.value = false
   }
 }
-onMounted(ladda)
-watch(valtOrgan, ladda)
+async function sok() {
+  const q = sokning.value.trim()
+  if (q.length < 2) {
+    sokresultat.value = null
+    return
+  }
+  try {
+    sokresultat.value = await sokBehandlingar(q, valtOrgan.value || undefined, valtAr.value || undefined)
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    fel.value = e instanceof Error ? e.message : String(e)
+  }
+}
+onMounted(() => Promise.all([ladda(), sok()]))
+watch(valtOrgan, () => Promise.all([ladda(), sok()]))
+watch(valtAr, sok)
+watch(sokning, (q) => {
+  soktext.value = q
+  sok()
+})
+function skickaSokning() {
+  sokning.value = soktext.value.trim()
+}
+
+// Åren som finns bland sammanträdena, för årsfiltret.
+const ar = computed(() => [...new Set(sammantraden.value.map((s) => s.datum?.slice(0, 4)).filter(Boolean))] as string[])
 
 // Sammanträdena grupperade per år, senaste först (API:t sorterar redan).
 const perAr = computed(() => {
   const grupper = new Map<string, Sammantradesrad[]>()
   for (const s of sammantraden.value) {
     const ar = s.datum?.slice(0, 4) ?? 'Datum okänt'
+    if (valtAr.value && ar !== valtAr.value) continue
     grupper.set(ar, [...(grupper.get(ar) ?? []), s])
   }
   return [...grupper.entries()]
@@ -67,13 +108,70 @@ const paragrafer = (s: Sammantradesrad) =>
         <option v-for="o in organ" :key="o.id" :value="o.id">{{ o.namn }}</option>
       </select>
     </label>
+    <label>
+      År
+      <select v-model="valtAr" data-testid="ar">
+        <option value="">Alla år</option>
+        <option v-for="a in ar" :key="a" :value="a">{{ a }}</option>
+      </select>
+    </label>
+    <form role="search" class="sok" @submit.prevent="skickaSokning">
+      <label>
+        Sök ärende
+        <input
+          v-model="soktext"
+          type="search"
+          placeholder="Rubrik eller diarienummer"
+          data-testid="sok"
+          @search="skickaSokning"
+        />
+      </label>
+      <button type="submit">Sök</button>
+    </form>
   </div>
+
+  <section v-if="sokresultat" class="kort" aria-labelledby="sokrubrik" data-testid="sokresultat">
+    <h2 id="sokrubrik">
+      {{ sokresultat.antal === 1 ? '1 behandling' : `${sokresultat.antal} behandlingar` }} som matchar ”{{ sokning }}”
+    </h2>
+    <p v-if="sokresultat.antal > sokresultat.traffar.length" class="ingress">
+      Visar de {{ sokresultat.traffar.length }} senaste. Välj organ eller år för att smalna av.
+    </p>
+    <p v-if="!sokresultat.antal" class="ingress">Inga behandlingar matchar sökningen.</p>
+    <table v-else class="tabell">
+      <thead>
+        <tr>
+          <th scope="col">Ärende</th>
+          <th scope="col">Diarienummer</th>
+          <th scope="col">Organ</th>
+          <th scope="col">Sammanträde</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="t in sokresultat.traffar"
+          :key="`${t.sammantrade.id}-${t.paragraf}`"
+          data-testid="soktraff"
+          :data-paragraf="t.paragraf"
+        >
+          <th scope="row">
+            <RouterLink :to="`/politik/sammantraden/${t.sammantrade.id}/paragraf/${t.paragraf}`">
+              § {{ t.paragraf }} {{ t.rubrik }}
+            </RouterLink>
+          </th>
+          <td class="tal">{{ t.diarienummer.join(', ') || '–' }}</td>
+          <td>{{ t.sammantrade.organ.namn }}</td>
+          <td class="tal">{{ t.sammantrade.datum ?? '–' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
 
   <p v-if="laddar">Hämtar uppgifter…</p>
   <p v-else-if="fel" class="fel">Kunde inte hämta uppgifter: {{ fel }}</p>
   <p v-else-if="!sammantraden.length" class="ingress">Inga protokoll har hämtats än.</p>
 
-  <section v-for="[ar, rader] in perAr" v-else :key="ar" class="kort" :aria-labelledby="`ar-${ar}`">
+  <section v-for="[ar, rader] in perAr" v-else-if="!sokresultat" :key="ar" class="kort" :aria-labelledby="`ar-${ar}`">
     <h2 :id="`ar-${ar}`">{{ ar }}</h2>
     <table class="tabell" data-testid="sammantraden">
       <thead>
@@ -113,6 +211,7 @@ const paragrafer = (s: Sammantradesrad) =>
 }
 .filter {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 24px;
   font-size: 13px;
@@ -122,6 +221,26 @@ const paragrafer = (s: Sammantradesrad) =>
   align-items: center;
   gap: 8px;
   color: var(--ink-secondary);
+}
+.sok {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.filter input,
+.filter button {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+.filter input {
+  width: 22ch;
+}
+.filter button {
+  cursor: pointer;
 }
 .filter select {
   font: inherit;

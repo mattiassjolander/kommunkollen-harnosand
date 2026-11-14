@@ -266,6 +266,8 @@ export interface Protokollkalla {
   /** Plattformens egen kopia. */
   kopia: string
   filnamn: string
+  /** 'paragrafprotokoll' gäller bara tills hela protokollet publiceras. */
+  typ: 'protokoll' | 'paragrafprotokoll'
   version: number
   sha256: string
   storlek: number
@@ -334,6 +336,23 @@ async function hamtaEllerSaknas<T>(url: string): Promise<T> {
 export const hamtaOrgan = () => hamta<Organ[]>('/api/organ')
 export const hamtaSammantraden = (organ?: string) =>
   hamta<Sammantradesrad[]>(`/api/sammantraden${organ ? `?organ=${encodeURIComponent(organ)}` : ''}`)
+export interface Soktraff {
+  paragraf: number
+  rubrik: string
+  diarienummer: string[]
+  sammantrade: { id: number; datum: string | null; tolkning: 'tolkad' | 'ej_tolkad'; organ: Organ }
+}
+export interface Sokresultat {
+  /** Antal träffar totalt. Högst 200 skickas. */
+  antal: number
+  traffar: Soktraff[]
+}
+export const sokBehandlingar = (q: string, organ?: string, ar?: string) => {
+  const p = new URLSearchParams({ q })
+  if (organ) p.set('organ', organ)
+  if (ar) p.set('ar', ar)
+  return hamta<Sokresultat>(`/api/behandlingar?${p}`)
+}
 export const hamtaSammantrade = (id: number | string) => hamtaEllerSaknas<Sammantrade>(`/api/sammantraden/${id}`)
 export const hamtaBehandling = (id: number | string, paragraf: number | string) =>
   hamtaEllerSaknas<Behandling>(`/api/sammantraden/${id}/behandlingar/${paragraf}`)

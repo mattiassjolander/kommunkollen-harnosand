@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { API_PORT } from '../playwright.config'
 
 test.beforeAll(async ({ request }) => {
+  test.setTimeout(180_000) // insamlingen tolkar ett femtiotal protokoll
   const api = `http://127.0.0.1:${API_PORT}`
   expect((await request.post(`${api}/api/auth/test/redaktor`)).ok()).toBeTruthy()
   expect((await request.post(`${api}/api/insamlingar`)).ok()).toBeTruthy()

@@ -1,7 +1,8 @@
 """Protokoll från kommunfullmäktige: insamling, tolkning och API (#28).
 
-Insamlingen körs mot inspelade svar från harnosand.se: KF:s sida och protokollen för 2026.
-De förväntade värdena är kontrollerade för hand mot protokollen.
+Insamlingen körs mot inspelade svar från harnosand.se: KF:s sida och protokollen för 2026
+(utan arkivet, se test_protokoll_organ.py). De förväntade värdena är kontrollerade för hand
+mot protokollen.
 """
 
 from __future__ import annotations
@@ -11,13 +12,29 @@ import io
 
 import httpx
 import psycopg
+import pytest
 from conftest import INSPELNINGAR, skapa_app
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 
 from app.recorded import InspeladTransport
+from app.sources.harnosand import Protokollkalla
 
 KALLA = "harnosand-protokoll-kf"
+
+
+def kf() -> list[Protokollkalla]:
+    """KF:s protokoll från organets sida, alla, utan arkivet."""
+    return [Protokollkalla("KF", arkiv_fran=None, anrop_per_sekund=None)]
+
+
+def kf_app(database_url, google, **kw):
+    return skapa_app(database_url, google, kallor=kf(), **kw)
+
+
+@pytest.fixture
+def api(database_url: str, google) -> TestClient:
+    return TestClient(kf_app(database_url, google))
 
 
 def kor(api: TestClient, kalla: str | None = KALLA) -> dict:
@@ -65,7 +82,8 @@ def test_insamlingen_hamtar_kf_protokollen_som_versionerade_kopior(api):
     [res] = korning["kallor"]
     assert res["datakalla_id"] == KALLA
     assert res["status"] == "lyckad"
-    assert res["antal_nya"] == 8  # paragrafprotokollet "§ 129" på sidan tas inte med här
+    # 8 protokoll och paragrafprotokollet "§ 129". Det sparas, men sammanträdet visar hela protokollet.
+    assert res["antal_nya"] == 9
 
     lista = api.get("/api/sammantraden", params={"organ": "KF"}).json()
     assert [(s["datum"], s["starttid"]) for s in lista] == [
@@ -197,11 +215,11 @@ def test_avvikelser_mot_protokollets_egna_uppgifter_redovisas(api):
 
 def test_ett_protokoll_som_inte_gar_att_tolka_visas_anda_och_ger_delvis_fel(database_url, google):
     transport = MedUtbytta({"Protokoll kommunfullmäktige 2026-06-15.pdf": tom_pdf()})
-    api = TestClient(skapa_app(database_url, google, transport=transport))
+    api = TestClient(kf_app(database_url, google, transport=transport))
     [res] = kor(api)["kallor"]
     assert res["status"] == "delvis_fel"
     assert "Protokoll kommunfullmäktige 2026-06-15.pdf: kunde inte tolkas automatiskt" in res["fel"]
-    assert res["antal_nya"] == 8
+    assert res["antal_nya"] == 9
 
     lista = api.get("/api/sammantraden").json()
     [ej] = [s for s in lista if s["tolkning"] == "ej_tolkad"]
@@ -217,21 +235,21 @@ def test_ett_protokoll_som_inte_gar_att_tolka_visas_anda_och_ger_delvis_fel(data
 
 
 def test_nytt_innehall_under_samma_adress_blir_en_ny_version(database_url, google):
-    api = TestClient(skapa_app(database_url, google))
+    api = TestClient(kf_app(database_url, google))
     kor(api)
     fore = sammantrade(api, "2026-09-28")
 
     # Oförändrade protokoll: inga nya uppgifter.
     [res] = kor(api)["kallor"]
-    assert (res["status"], res["antal_oforandrade"]) == ("inga_nya", 8)
+    assert (res["status"], res["antal_oforandrade"]) == ("inga_nya", 9)
 
     # Kommunen byter innehållet i filen (här: samma protokoll med en tillagd kommentar).
     url = fore["protokoll"]["url"]
     original = httpx.Client(transport=InspeladTransport(INSPELNINGAR)).get(url).content
-    api2 = TestClient(skapa_app(database_url, google,
+    api2 = TestClient(kf_app(database_url, google,
                                 transport=MedUtbytta({"2026-09-28.pdf": original + b"\n%andrad\n"})))
     [res] = kor(api2)["kallor"]
-    assert (res["status"], res["antal_andrade"], res["antal_oforandrade"]) == ("lyckad", 1, 7)
+    assert (res["status"], res["antal_andrade"], res["antal_oforandrade"]) == ("lyckad", 1, 8)
 
     efter = sammantrade(api2, "2026-09-28")
     assert efter["id"] == fore["id"]  # samma sammanträde, så länkar fortsätter att fungera
@@ -245,10 +263,10 @@ def test_nytt_innehall_under_samma_adress_blir_en_ny_version(database_url, googl
 
 
 def test_lasning_ar_oppen_utan_inloggning(database_url, google):
-    api = TestClient(skapa_app(database_url, google, anonym_lasning=True))
+    api = TestClient(kf_app(database_url, google, anonym_lasning=True))
     kor(api)
     api.post("/api/auth/logga-ut")
     lista = api.get("/api/sammantraden")
     assert lista.status_code == 200
     assert api.get(f"/api/sammantraden/{lista.json()[0]['id']}").status_code == 200
-    assert api.get("/api/organ").json() == [{"id": "KF", "namn": "Kommunfullmäktige"}]
+    assert api.get("/api/organ").json()[0] == {"id": "KF", "namn": "Kommunfullmäktige"}

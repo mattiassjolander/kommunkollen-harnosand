@@ -17,6 +17,10 @@ defineProps<{ protokoll: Protokollkalla; paragraf?: number }>()
     · Hämtad {{ datum(protokoll.hamtad) }}
     <span class="hash" :title="`SHA-256 ${protokoll.sha256}`">· SHA-256 {{ protokoll.sha256.slice(0, 12) }}…</span>
   </p>
+  <p v-if="protokoll.typ === 'paragrafprotokoll'" class="kallrad" data-testid="paragrafprotokoll">
+    Uppgifterna kommer från ett paragrafprotokoll med de paragrafer som justerades direkt. De ersätts
+    när hela protokollet publiceras.
+  </p>
 </template>
 
 <style scoped>

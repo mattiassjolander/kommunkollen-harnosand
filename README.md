@@ -53,10 +53,10 @@ npm test
 Inspelningarna uppdateras från de riktiga källorna (Kolada, SCB och protokollen på harnosand.se) med:
 
 ```bash
-uv run --directory backend python -m app.spela_in tests/recordings
+PROTOKOLL_URVAL=2 uv run --directory backend python -m app.spela_in tests/recordings
 ```
 
-Ange källans id för att bara spela in en källa, t.ex. `... tests/recordings harnosand-protokoll-kf`. Testerna av protokollen har förväntade värden som är kontrollerade för hand, så de behöver ses över när protokollen spelas in på nytt.
+`PROTOKOLL_URVAL=2` begränsar protokollen till två per sida och årsmapp, vilket är vad testerna förväntar sig. Utan det hämtas alla protokoll sedan 2022 (cirka 200 MB). Ange källans id för att bara spela in en källa, t.ex. `... tests/recordings harnosand-protokoll-kf`. Testerna av protokollen har förväntade värden som är kontrollerade för hand, så de behöver ses över när protokollen spelas in på nytt.
 
 Hur protokollen hämtas och tolkas står i [docs/protokoll.md](docs/protokoll.md).
 
@@ -71,6 +71,7 @@ Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [
 | `INSAMLING_DAGAR` | Dagar i månaden då insamlingen körs automatiskt, t.ex. `1,15` (standard). Tomt stänger av schemat. |
 | `INSAMLING_KLOCKAN` | Klockslag för den automatiska insamlingen, svensk tid (standard `03:00`). |
 | `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND`, `PROTOKOLL_ANROP_PER_SEKUND` | Högsta anropsfrekvens mot källan (standard 5, 2 respektive 1). `0` tar bort gränsen. |
+| `PROTOKOLL_URVAL` | Högst så många protokoll per organsida och årsmapp. Bara för inspelningar och test, sätts inte i drift. |
 | `SESSION_SECRET` | Hemlighet för sessionskakan. Krävs på servern. Saknas den blir alla utloggade vid omstart. |
 | `SESSION_HTTPS_ONLY` | `true` när appen nås via https. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-inloggning. Utan klient-id är den avstängd. |
