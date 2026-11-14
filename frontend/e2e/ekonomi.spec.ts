@@ -93,6 +93,44 @@ test('visningen startar 2022 men kan börja tidigare, och valet speglas i URL:en
   await expect(page.getByTestId('fran-ar')).toHaveValue('1998')
 })
 
+test('ett reviderat värde markeras med ↻ och tooltipen visar tidigare och nytt värde', async ({ page }) => {
+  // Revideringen läggs in i API-svaret. Själva versionshanteringen testas i backend (söm 1).
+  await page.route('**/api/ekonomi*', async (route) => {
+    const svar = await route.fetch()
+    const data = await svar.json()
+    for (const g of data.grupper)
+      for (const n of g.nyckeltal)
+        if (n.id === 'scb:BalansKnN:065') {
+          const p = n.serie.punkter.find((p: { period: string }) => p.period === '2024')
+          p.historik = [{ ...p, varde: p.varde - 12000, version: 1 }]
+          p.version = 2
+          p.reviderad = true
+          p.senast_andrad = '2026-11-01T02:15:00Z'
+        }
+    await route.fulfill({ response: svar, json: data })
+  })
+  await page.goto('/ekonomi')
+  const kort = page.locator('[data-matt="scb:BalansKnN:065"]')
+  await expect(kort.getByTestId('reviderad')).toHaveCount(1)
+
+  // Diagrammet: tooltip vid hover på 2024.
+  await kort.locator('rect.traffyta').nth(2).hover()
+  await expect(kort.getByRole('tooltip')).toContainText('2024')
+  await expect(kort.getByTestId('revisionstips')).toContainText('Reviderat. Tidigare')
+  await expect(kort.getByRole('tooltip')).toContainText('Ändrat 2026-11-01')
+
+  // Tabellen: ↻ vid värdet, tooltipen nås också med tangentbordet.
+  await kort.getByRole('button', { name: 'Tabell' }).click()
+  const markering = kort.getByRole('row', { name: /2024/ }).getByTestId('reviderad')
+  await markering.focus()
+  const tips = kort.getByTestId('revisionstips')
+  await expect(tips).toContainText('Tidigare:')
+  await expect(tips).toContainText('Nytt:')
+  await expect(tips).toContainText('Ändrat 2026-11-01')
+  await expect(tips).toContainText('SCB')
+  await expect(markering).toHaveAttribute('aria-label', /Tidigare .* mnkr, nu .* mnkr/)
+})
+
 // Analysverktyg (#10)
 
 test('period, jämförelse och vy speglas i URL:en och återställs vid omladdning och delad länk', async ({ page, browser }) => {

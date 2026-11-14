@@ -13,12 +13,29 @@ export interface Matt {
   datakalla: Datakalla
 }
 
-export interface Punkt {
-  period: string
+export interface Version {
   varde: number | null
   kallans_publicering: string | null
+  /** När plattformen hämtade den här versionen. */
   hamtad: string
   version: number
+}
+
+/** Ett värde för en period: aktuell version plus tidigare versioner (kravspec 11.5 och 12.3). */
+export interface Punkt extends Version {
+  period: string
+  senast_hamtad: string
+  senast_andrad: string
+  reviderad: boolean
+  /** Tidigare versioner, senaste först. */
+  historik: Version[]
+}
+
+/** Det som visas vid ↻: föregående värde (i visningsenheten), när det ändrades och av vilken källa. */
+export interface Revision {
+  tidigare: number | null
+  andrad: string
+  kalla: string
 }
 
 export interface Serie {
@@ -75,7 +92,7 @@ export async function hamtaSerie(mattId: string): Promise<Serie | null> {
 // Uppdateringsstatus (kravspec avsnitt 12)
 
 export type Kallstatus = 'lyckad' | 'inga_nya' | 'delvis_fel' | 'misslyckad'
-export type Korningsstatus = 'pagar' | 'lyckad' | 'delvis_fel' | 'misslyckad'
+export type Korningsstatus = 'pagar' | 'avbruten' | 'lyckad' | 'delvis_fel' | 'misslyckad'
 
 export interface Korning {
   id: number
@@ -133,6 +150,15 @@ async function hamta<T>(url: string): Promise<T> {
 export const hamtaStatus = () => hamta<GlobalStatus>('/api/status')
 export const hamtaDatakallor = () => hamta<Kallstatusrad[]>('/api/datakallor')
 export const hamtaKorningslogg = () => hamta<Korningslogg[]>('/api/insamlingar')
+
+/** Kör om insamlingen för en enskild datakälla (redaktör). Returnerar körningens status. */
+export async function korOmKalla(kalla: string): Promise<{ status: Korningsstatus }> {
+  const svar = await fetch(`/api/insamlingar?kalla=${encodeURIComponent(kalla)}`, { method: 'POST' })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 409) throw new Error('En insamling pågår redan. Försök igen när den är klar.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
 
 // Ekonomiska nyckeltal (kravspec 3.1 och 3.3)
 

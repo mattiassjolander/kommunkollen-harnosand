@@ -21,11 +21,19 @@ from fastapi.testclient import TestClient
 from app.auth import Inloggning, las_anvandare
 from app.main import create_app
 from app.recorded import InspeladTransport
+from app.robust import Robusthet
 
 INSPELNINGAR = Path(__file__).parent / "recordings"
 
 GOOGLE_CLIENT_ID = "test-klient.apps.googleusercontent.com"
 TILLATNA = "anna@example.se=redaktor+utgivare; Bo@Example.se=lasare"
+
+
+@pytest.fixture(autouse=True)
+def utan_anropsgrans(monkeypatch):
+    # Inspelade svar behöver ingen anropsgräns. Testerna av gränsen sätter den själva.
+    monkeypatch.setenv("KOLADA_ANROP_PER_SEKUND", "0")
+    monkeypatch.setenv("SCB_ANROP_PER_SEKUND", "0")
 
 
 @pytest.fixture(scope="session")
@@ -73,7 +81,7 @@ def google() -> FalskGoogle:
 
 
 def skapa_app(database_url: str, google: FalskGoogle, kallor=None, inspelningar: Path = INSPELNINGAR, schema=None,
-              **inloggning):
+              transport: httpx.BaseTransport | None = None, robusthet=None, **inloggning):
     standard = {
         "google_client_id": GOOGLE_CLIENT_ID,
         "google_client_secret": "hemligt",
@@ -85,7 +93,9 @@ def skapa_app(database_url: str, google: FalskGoogle, kallor=None, inspelningar:
         database_url=database_url,
         kallor=kallor,
         schema=schema,
-        transport=InspeladTransport(inspelningar),
+        transport=transport or InspeladTransport(inspelningar),
+        # Inga riktiga pauser i testerna.
+        robusthet=robusthet or Robusthet(sov=lambda s: None),
         inloggning=inst,
         auth_transport=httpx.MockTransport(google),
     )

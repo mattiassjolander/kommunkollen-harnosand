@@ -49,6 +49,8 @@ class Datakalla(Protocol):
     id: str
     titel: str
     url: str
+    # Högsta anropsfrekvens mot källan. None = ingen gräns. Insamlingen håller gränsen.
+    anrop_per_sekund: float | None
 
     def hamta(self, client: httpx.Client, sedan: datetime | None) -> Hamtning:
         """Hämta det som är nytt eller ändrat sedan `sedan` (allt om `sedan` är None)."""

@@ -84,7 +84,10 @@ class Scb:
     titel = "SCB"
     url = "https://www.statistikdatabasen.scb.se"
 
-    def __init__(self, matt: list[ScbMatt], differenser: list[Differens] | None = None, kommun: str = "2280") -> None:
+    def __init__(self, matt: list[ScbMatt], differenser: list[Differens] | None = None, kommun: str = "2280",
+                 anrop_per_sekund: float | None = 2.0) -> None:
+        # SCB tillåter högst 30 anrop per 10 sekunder och IP-adress.
+        self.anrop_per_sekund = anrop_per_sekund
         self.matt = matt
         self.differenser = differenser or []
         self.kommun = kommun

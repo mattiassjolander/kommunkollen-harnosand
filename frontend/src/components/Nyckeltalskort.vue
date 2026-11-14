@@ -4,6 +4,7 @@ import type { Nyckeltal } from '../api'
 import { csv, forandring, laddaNer, mandatperioder } from '../analys'
 import { procentforandring, siffra, tal, visningsskala } from '../format'
 import Kallrad from './Kallrad.vue'
+import Revisionsmarkering from './Revisionsmarkering.vue'
 import Stapeldiagram from './Stapeldiagram.vue'
 
 const props = defineProps<{
@@ -21,7 +22,17 @@ const skala = computed(() => visningsskala(serie.value?.matt.enhet ?? ''))
 const punkter = computed(() =>
   (serie.value?.punkter ?? [])
     .filter((p) => Number(p.period) >= props.franAr && Number(p.period) <= props.tillAr)
-    .map((p) => ({ period: p.period, varde: p.varde === null ? null : p.varde * skala.value.faktor })),
+    .map((p) => {
+      const skalad = (v: number | null) => (v === null ? null : v * skala.value.faktor)
+      const [tidigare] = p.historik
+      return {
+        period: p.period,
+        varde: skalad(p.varde),
+        revision: tidigare
+          ? { tidigare: skalad(tidigare.varde), andrad: p.senast_andrad, kalla: serie.value!.matt.datakalla.titel }
+          : undefined,
+      }
+    }),
 )
 const perioder = computed(() => mandatperioder(props.franAr, props.tillAr))
 
@@ -100,7 +111,10 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
         <tbody>
           <tr v-for="p in punkter" :key="p.period">
             <td class="tal">{{ p.period }}</td>
-            <td class="tal hoger" :class="{ saknas: p.varde === null }">{{ siffra(p.varde, skala.enhet) }}</td>
+            <td class="tal hoger vardecell" :class="{ saknas: p.varde === null }">
+              {{ siffra(p.varde, skala.enhet) }}
+              <Revisionsmarkering v-if="p.revision" :revision="p.revision" :nytt="p.varde" :enhet="skala.enhet" />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -218,6 +232,15 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
 }
 .hoger {
   text-align: right !important;
+}
+/* Plats för ↻ till höger om talet, så att talen står i linje oavsett markering. */
+.vardecell {
+  position: relative;
+  padding-right: 20px;
+}
+.vardecell :deep(.reviderad) {
+  position: absolute;
+  right: 2px;
 }
 .saknas {
   color: var(--ink-muted);

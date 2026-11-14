@@ -56,7 +56,11 @@ def test_andra_insamlingen_utan_andringar_ger_inga_nya_uppgifter(redaktor):
         assert kalla["antal_nya"] == 0
         assert kalla["antal_andrade"] == 0
 
-    assert api.get(f"/api/matt/{MATT}/serie").json() == forsta
+    andra = api.get(f"/api/matt/{MATT}/serie").json()
+    for fore, efter in zip(forsta["punkter"], andra["punkter"], strict=True):
+        # Bara tidpunkten för senaste hämtning flyttas fram. Ingen ny version, ingen ändring.
+        assert efter["senast_hamtad"] > fore["senast_hamtad"]
+        assert {k: v for k, v in efter.items() if k != "senast_hamtad"} ==             {k: v for k, v in fore.items() if k != "senast_hamtad"}
 
 
 def test_okant_matt_ger_404(redaktor):

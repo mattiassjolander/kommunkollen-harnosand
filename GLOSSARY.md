@@ -130,3 +130,10 @@ En datakälla där en del av uppgifterna gick att hämta men inte allt.
 
 **Fullständigt uppdaterad / delvis inaktuell**:
 Plattformen är fullständigt uppdaterad när den senaste insamlingskörningen kontrollerade alla datakällor utan fel. Annars är informationen delvis inaktuell.
+
+**Reviderad uppgift**:
+En uppgift som källan har publicerat på nytt med ett annat värde för samma period. Det nya värdet blir en ny version, och de tidigare versionerna finns kvar.
+_Avoid_: Revision (betyder kommunrevisionens granskning), uppdaterat värde
+
+**Avbruten körning**:
+En insamlingskörning som stoppades innan alla datakällor var kontrollerade, t.ex. vid en omstart. Nästa insamling återupptar den.
