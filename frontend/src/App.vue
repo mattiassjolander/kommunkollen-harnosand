@@ -6,6 +6,7 @@ import LoggaIn from './views/LoggaIn.vue'
 
 const vyer = [
   { till: '/ekonomi', namn: 'Ekonomi' },
+  { till: '/floden', namn: 'Ekonomiska flöden' },
   { till: '/datakallor', namn: 'Datakällor' },
 ]
 
@@ -29,6 +30,7 @@ function utloggad() {
   visaInloggning.value = true
 }
 provide('utloggad', utloggad)
+provide('jag', jag)
 
 async function loggaUtOchStanna() {
   await loggaUt()

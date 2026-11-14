@@ -11,10 +11,11 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, db, ekonomi, serier, status
+from . import auth, db, ekonomi, floden, serier, status
 from .auth import Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
+from .robust import Robusthet
 from .schema import SVERIGE, Schema
 from .sources.base import Datakalla
 from .sources.kolada import Kolada
@@ -24,10 +25,22 @@ KOMMUN = "2280"  # Härnösand
 FRAN_MILJO = object()  # create_app läser schemat från miljön om inget anges
 
 
+def _unika(matt: list) -> list:
+    return list({m.id: m for m in matt}.values())
+
+
+def _anropsgrans(namn: str, standard: float) -> float | None:
+    """Anrop per sekund från miljön, t.ex. SCB_ANROP_PER_SEKUND=2. 0 betyder ingen gräns."""
+    varde = float(os.environ.get(f"{namn}_ANROP_PER_SEKUND") or standard)
+    return varde or None
+
+
 def standardkallor() -> list[Datakalla]:
     return [
-        Kolada(nyckeltal=ekonomi.KOLADA, kommun=KOMMUN),
-        Scb(matt=ekonomi.SCB, differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN),
+        Kolada(nyckeltal=[*ekonomi.KOLADA, floden.INVANARE.split(":")[1]], kommun=KOMMUN,
+               anrop_per_sekund=_anropsgrans("KOLADA", 5)),
+        Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
+            anrop_per_sekund=_anropsgrans("SCB", 2)),
     ]
 
 
@@ -38,6 +51,7 @@ def create_app(
     inloggning: Inloggning | None = None,
     auth_transport: httpx.BaseTransport | None = None,
     schema: Schema | None | object = FRAN_MILJO,
+    robusthet: Robusthet | None = None,
 ) -> FastAPI:
     if schema is FRAN_MILJO:
         schema = Schema.fran_miljo()
@@ -72,10 +86,14 @@ def create_app(
         return {"status": "ok"}
 
     @app.post("/api/insamlingar", dependencies=[Depends(krav_roll("redaktor"))])
-    def starta_insamling() -> dict:
+    def starta_insamling(kalla: str | None = None) -> dict:
+        """Kör alla källor, eller bara `kalla` (omkörning av en enskild källa)."""
+        valda = kallor if kalla is None else [k for k in kallor if k.id == kalla]
+        if not valda:
+            raise HTTPException(404, f"Datakällan {kalla} finns inte")
         with db.connect(database_url) as conn, http_klient() as client:
             try:
-                res = kor_insamling(conn, kallor, client, utlosare="manuell")
+                res = kor_insamling(conn, valda, client, utlosare="manuell", robusthet=robusthet)
             except InsamlingPagar as e:
                 raise HTTPException(409, str(e)) from None
         return {
@@ -125,5 +143,37 @@ def create_app(
                     })
                 grupper.append({"id": g.id, "titel": g.titel, "nyckeltal": nyckeltal})
         return {"omrade": omrade, "grupper": grupper}
+
+    @app.get("/api/floden", dependencies=[Depends(krav_roll("lasare"))])
+    def ekonomiska_floden(
+        ar: str | None = None, jamfor: str | None = None, verksamhet: str | None = None, omrade: str = KOMMUN
+    ) -> dict:
+        """Sankey-modellen för ett år. Utan år: senaste år med fullständigt underlag.
+
+        `verksamhet` (t.ex. 490) ger fördjupningen i ett verksamhetsområdes kostnadsslag.
+        `jamfor` lägger till förändringen per flöde mot ett annat år.
+        """
+        if verksamhet is not None and verksamhet not in floden.OMRADESNAMN:
+            raise HTTPException(404, f"Verksamhetsområdet {verksamhet} finns inte")
+        with db.connect(database_url) as conn:
+            varden = floden.las_varden(conn, omrade)
+            titlar = {r["id"]: r["titel"] for r in conn.execute("SELECT id, titel FROM matt")}
+
+        def berakna(a: str) -> dict:
+            if verksamhet is None:
+                return floden.modell(varden, a, titlar)
+            return floden.fordjupning(varden, a, verksamhet, titlar)
+
+        ar_lista = [{"ar": a, "fullstandig": berakna(a)["fullstandig"]} for a in floden.tillgangliga_ar(varden)]
+        if ar is None:
+            fullstandiga = [a["ar"] for a in ar_lista if a["fullstandig"]]
+            ar = fullstandiga[-1] if fullstandiga else (ar_lista[-1]["ar"] if ar_lista else None)
+        if ar is None:
+            return {"ar": None, "tillgangliga_ar": [], "fullstandig": False, "saknas": [], "noder": [], "floden": [],
+                    "verksamhet": None}
+        resultat = berakna(ar)
+        if jamfor is not None and jamfor != ar:
+            resultat = floden.jamfor(resultat, berakna(jamfor))
+        return resultat | {"omrade": omrade, "tillgangliga_ar": ar_lista}
 
     return app

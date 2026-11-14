@@ -13,6 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
+from .robust import Robusthet, kallklient
 from .sources.base import Datakalla, Hamtning
 
 
@@ -117,35 +118,65 @@ def kor_insamling(
     client: httpx.Client,
     utlosare: str = "manuell",
     planerad_tid: datetime | None = None,
+    robusthet: Robusthet | None = None,
 ) -> Korningsresultat:
+    """Kör källorna i tur och ordning. Var och en sparas i en egen transaktion.
+
+    Har en tidigare körning avbrutits (status 'pagar' utan att någon insamling pågår) återupptas
+    den: källor som redan är klara i den hoppas över. Eftersom en källas uppgifter sparas
+    tillsammans med dess resultat, och oförändrade värden inte sparas igen, blir det inga dubbletter.
+    """
     if not conn.execute("SELECT pg_try_advisory_lock(%s) AS ok", (LASNYCKEL,)).fetchone()["ok"]:
         conn.rollback()
         raise InsamlingPagar("En insamling pågår redan. Försök igen när den är klar.")
     try:
-        return _kor(conn, kallor, client, utlosare, planerad_tid)
+        return _kor(conn, kallor, client, utlosare, planerad_tid, robusthet or Robusthet())
     finally:
         conn.rollback()
         conn.execute("SELECT pg_advisory_unlock(%s)", (LASNYCKEL,))
         conn.commit()
 
 
+def _avbruten_korning(conn: psycopg.Connection) -> int | None:
+    # Anropas med låset taget, så en körning som fortfarande står som pågående har avbrutits.
+    rad = conn.execute("SELECT id FROM insamlingskorning WHERE status = 'pagar' ORDER BY id DESC LIMIT 1").fetchone()
+    return rad["id"] if rad else None
+
+
 def _kor(
-    conn: psycopg.Connection, kallor: list[Datakalla], client: httpx.Client, utlosare: str, planerad_tid: datetime | None
+    conn: psycopg.Connection,
+    kallor: list[Datakalla],
+    client: httpx.Client,
+    utlosare: str,
+    planerad_tid: datetime | None,
+    robusthet: Robusthet,
 ) -> Korningsresultat:
-    korning_id = conn.execute(
-        "INSERT INTO insamlingskorning (utlosare, planerad_tid) VALUES (%s, %s) RETURNING id", (utlosare, planerad_tid)
-    ).fetchone()["id"]
+    korning_id = _avbruten_korning(conn)
+    klara: set[str] = set()
+    if korning_id is not None:
+        klara = {r["datakalla_id"] for r in conn.execute(
+            "SELECT datakalla_id FROM kallkorning WHERE korning_id = %s", (korning_id,))}
+        # Äldre avbrutna körningar (om flera) avslutas utan att återupptas.
+        conn.execute("UPDATE insamlingskorning SET status = 'avbruten', avslutad = now() "
+                     "WHERE status = 'pagar' AND id < %s", (korning_id,))
+    else:
+        korning_id = conn.execute(
+            "INSERT INTO insamlingskorning (utlosare, planerad_tid) VALUES (%s, %s) RETURNING id",
+            (utlosare, planerad_tid),
+        ).fetchone()["id"]
     conn.commit()
 
-    resultat: list[Kallresultat] = []
     for kalla in kallor:
+        if kalla.id in klara:
+            continue
         startad = datetime.now(timezone.utc)
         conn.execute(
             "INSERT INTO datakalla (id, titel, url) VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET titel = EXCLUDED.titel, url = EXCLUDED.url",
             (kalla.id, kalla.titel, kalla.url),
         )
         try:
-            hamtning = kalla.hamta(client, _senast_lyckad(conn, kalla.id))
+            with kallklient(client, robusthet, getattr(kalla, "anrop_per_sekund", None)) as kc:
+                hamtning = kalla.hamta(kc, _senast_lyckad(conn, kalla.id))
             res = _lagra(conn, kalla, hamtning, korning_id, startad)
         except Exception as e:  # ett fel i en källa får inte stoppa de andra
             conn.rollback()
@@ -164,8 +195,14 @@ def _kor(
              res.fel, res.senaste_publicering, startad),
         )
         conn.commit()
-        resultat.append(res)
 
+    resultat = [
+        Kallresultat(datakalla_id=r["datakalla_id"], status=r["status"], antal_nya=r["antal_nya"],
+                     antal_andrade=r["antal_andrade"], antal_oforandrade=r["antal_oforandrade"], fel=r["fel"],
+                     senaste_publicering=r["kallans_senaste_publicering"])
+        for r in conn.execute(
+            "SELECT * FROM kallkorning WHERE korning_id = %s ORDER BY startad", (korning_id,))
+    ]
     status = korningsstatus([r.status for r in resultat])
     conn.execute(
         "UPDATE insamlingskorning SET avslutad = now(), status = %s WHERE id = %s", (status, korning_id)

@@ -92,7 +92,7 @@ export async function hamtaSerie(mattId: string): Promise<Serie | null> {
 // Uppdateringsstatus (kravspec avsnitt 12)
 
 export type Kallstatus = 'lyckad' | 'inga_nya' | 'delvis_fel' | 'misslyckad'
-export type Korningsstatus = 'pagar' | 'lyckad' | 'delvis_fel' | 'misslyckad'
+export type Korningsstatus = 'pagar' | 'avbruten' | 'lyckad' | 'delvis_fel' | 'misslyckad'
 
 export interface Korning {
   id: number
@@ -151,6 +151,15 @@ export const hamtaStatus = () => hamta<GlobalStatus>('/api/status')
 export const hamtaDatakallor = () => hamta<Kallstatusrad[]>('/api/datakallor')
 export const hamtaKorningslogg = () => hamta<Korningslogg[]>('/api/insamlingar')
 
+/** Kör om insamlingen för en enskild datakälla (redaktör). Returnerar körningens status. */
+export async function korOmKalla(kalla: string): Promise<{ status: Korningsstatus }> {
+  const svar = await fetch(`/api/insamlingar?kalla=${encodeURIComponent(kalla)}`, { method: 'POST' })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 409) throw new Error('En insamling pågår redan. Försök igen när den är klar.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+
 // Ekonomiska nyckeltal (kravspec 3.1 och 3.3)
 
 export interface Nyckeltal {
@@ -167,3 +176,78 @@ export interface Nyckeltalsgrupp {
 }
 
 export const hamtaEkonomi = () => hamta<{ omrade: string; grupper: Nyckeltalsgrupp[] }>('/api/ekonomi')
+
+// Ekonomiska flöden – Sankey (kravspec 4)
+
+export interface Kallhanvisning {
+  titel: string
+  url: string
+}
+
+export interface Flodesnod {
+  id: string
+  titel: string
+  sida: 'in' | 'ut' | 'mitt'
+  /** tkr */
+  belopp: number
+  forklaring: string
+  kallor: Kallhanvisning[]
+}
+
+export interface Flode {
+  fran: string
+  till: string
+  /** tkr */
+  belopp: number
+  andel: number
+  kr_per_invanare: number | null
+  kallor: Kallhanvisning[]
+  /** Finns när ett jämförelseår är valt och båda åren har fullständigt underlag. */
+  jamforelse?: Jamforelse
+}
+
+export interface Jamforelse {
+  /** Beloppet jämförelseåret (tkr), null om flödet inte fanns då. */
+  belopp: number | null
+  titel: string | null
+  /** tkr */
+  forandring: number | null
+  /** Andel, t.ex. 0.05 för 5 %. null när jämförelsebeloppet är noll eller saknas. */
+  procent: number | null
+}
+
+export interface Verksamhet {
+  kod: string
+  id: string
+  titel: string
+}
+
+export interface Flodesmodell {
+  ar: string | null
+  tillgangliga_ar: { ar: string; fullstandig: boolean }[]
+  fullstandig: boolean
+  saknas: string[]
+  flodestyp: 'brutto' | 'netto'
+  indelning: string
+  prisniva: string
+  noder: Flodesnod[]
+  floden: Flode[]
+  totalt: number | null
+  invanare: number | null
+  /** null på kommunnivån, annars det verksamhetsområde som fördjupas. */
+  verksamhet: Verksamhet | null
+  jamforelse_ar?: string
+  jamforelse_fullstandig?: boolean
+  jamforelse_totalt?: number | null
+}
+
+export interface Flodesval {
+  ar?: string
+  jamfor?: string
+  verksamhet?: string
+}
+
+export function hamtaFloden(val: Flodesval = {}) {
+  const q = new URLSearchParams(Object.entries(val).filter(([, v]) => v) as [string, string][])
+  return hamta<Flodesmodell>(`/api/floden${q.size ? `?${q}` : ''}`)
+}

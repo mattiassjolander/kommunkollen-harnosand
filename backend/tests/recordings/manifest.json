@@ -1,4 +1,5 @@
 {
+  "api.kolada.se/v3/data/kpi/N01951/municipality/2280": "kolada/kpi_N01951_municipality_2280.json",
   "api.kolada.se/v3/data/kpi/N03002/municipality/2280": "kolada/kpi_N03002_municipality_2280.json",
   "api.kolada.se/v3/data/kpi/N03007/municipality/2280": "kolada/kpi_N03007_municipality_2280.json",
   "api.kolada.se/v3/data/kpi/N03009/municipality/2280": "kolada/kpi_N03009_municipality_2280.json",
@@ -14,6 +15,7 @@
   "api.kolada.se/v3/data/kpi/N03105/municipality/2280": "kolada/kpi_N03105_municipality_2280.json",
   "api.kolada.se/v3/data/kpi/N03106/municipality/2280": "kolada/kpi_N03106_municipality_2280.json",
   "api.kolada.se/v3/data/kpi/N03132/municipality/2280": "kolada/kpi_N03132_municipality_2280.json",
+  "api.kolada.se/v3/kpi/N01951": "kolada/v3_kpi_N01951.json",
   "api.kolada.se/v3/kpi/N03002": "kolada/v3_kpi_N03002.json",
   "api.kolada.se/v3/kpi/N03007": "kolada/v3_kpi_N03007.json",
   "api.kolada.se/v3/kpi/N03009": "kolada/v3_kpi_N03009.json",
@@ -31,5 +33,7 @@
   "api.kolada.se/v3/kpi/N03132": "kolada/v3_kpi_N03132.json",
   "api.scb.se/OV0104/v1/doris/sv/ssd/OE/OE0107/OE0107A/BalansKnN": "scb/OE_OE0107_OE0107A_BalansKnN.json",
   "api.scb.se/OV0104/v1/doris/sv/ssd/OE/OE0107/OE0107A/ResultKnN": "scb/OE_OE0107_OE0107A_ResultKnN.json",
-  "api.scb.se/OV0104/v1/doris/sv/ssd/OE/OE0107/OE0107A/SkatteIntKnN": "scb/OE_OE0107_OE0107A_SkatteIntKnN.json"
+  "api.scb.se/OV0104/v1/doris/sv/ssd/OE/OE0107/OE0107A/SkatteIntKnN": "scb/OE_OE0107_OE0107A_SkatteIntKnN.json",
+  "api.scb.se/OV0104/v1/doris/sv/ssd/OE/OE0107/OE0107A/VerksInt": "scb/OE_OE0107_OE0107A_VerksInt.json",
+  "api.scb.se/OV0104/v1/doris/sv/ssd/OE/OE0107/OE0107B/Driftredovisning": "scb/OE_OE0107_OE0107B_Driftredovisning.json"
 }

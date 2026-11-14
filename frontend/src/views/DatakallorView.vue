@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { inject, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import {
   EjInloggad,
   hamtaDatakallor,
   hamtaKorningslogg,
+  korOmKalla,
+  type Jag,
   type Kallstatusrad,
   type Korningslogg,
 } from '../api'
@@ -16,7 +18,10 @@ const laddar = ref(true)
 const fel = ref<string | null>(null)
 const utloggad = inject<() => void>('utloggad', () => {})
 
-onMounted(async () => {
+const jag = inject<Ref<Jag | null>>('jag', ref(null))
+const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
+
+async function ladda() {
   try {
     ;[kallor.value, logg.value] = await Promise.all([hamtaDatakallor(), hamtaKorningslogg()])
   } catch (e) {
@@ -25,7 +30,25 @@ onMounted(async () => {
   } finally {
     laddar.value = false
   }
-})
+}
+onMounted(ladda)
+
+// Omkörning av en enskild källa
+const korsOm = ref<string | null>(null)
+const omkorningsfel = ref<string | null>(null)
+async function korOm(id: string) {
+  korsOm.value = id
+  omkorningsfel.value = null
+  try {
+    await korOmKalla(id)
+    await ladda()
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    omkorningsfel.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    korsOm.value = null
+  }
+}
 
 const UTLOSARE = { manuell: 'Manuell', schema: 'Schemalagd' }
 </script>
@@ -52,6 +75,7 @@ const UTLOSARE = { manuell: 'Manuell', schema: 'Schemalagd' }
             <th scope="col">Senaste lyckade hämtning</th>
             <th scope="col">Senaste publicerade uppgift</th>
             <th scope="col">Status</th>
+            <th v-if="arRedaktor" scope="col"><span class="dold">Åtgärd</span></th>
           </tr>
         </thead>
         <tbody>
@@ -66,9 +90,21 @@ const UTLOSARE = { manuell: 'Manuell', schema: 'Schemalagd' }
               <StatusMarkering :status="k.status" />
               <p v-if="k.fel" class="feltext">{{ k.fel }}</p>
             </td>
+            <td v-if="arRedaktor">
+              <button
+                type="button"
+                class="knapp"
+                :disabled="korsOm !== null"
+                :data-testid="`kor-om-${k.id}`"
+                @click="korOm(k.id)"
+              >
+                {{ korsOm === k.id ? 'Kör…' : 'Kör om' }}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
+      <p v-if="omkorningsfel" class="fel" role="alert">{{ omkorningsfel }}</p>
     </section>
 
     <section class="kort">
@@ -167,5 +203,30 @@ const UTLOSARE = { manuell: 'Manuell', schema: 'Schemalagd' }
 }
 .fel {
   color: var(--status-critical);
+}
+.knapp {
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.knapp:hover:not(:disabled) {
+  background: var(--accent-wash);
+}
+.knapp:disabled {
+  cursor: default;
+  color: var(--ink-muted);
+}
+.dold {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 </style>
