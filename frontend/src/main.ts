@@ -7,11 +7,12 @@ import App from './App.vue'
 import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
 import FlodenView from './views/FlodenView.vue'
+import OversiktView from './views/OversiktView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/ekonomi' },
+    { path: '/', component: OversiktView, meta: { titel: 'Översikt' } },
     { path: '/ekonomi', component: EkonomiView, meta: { titel: 'Ekonomi' } },
     { path: '/floden', component: FlodenView, meta: { titel: 'Ekonomiska flöden' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },

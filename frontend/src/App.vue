@@ -5,6 +5,7 @@ import Statusindikator from './components/Statusindikator.vue'
 import LoggaIn from './views/LoggaIn.vue'
 
 const vyer = [
+  { till: '/', namn: 'Översikt' },
   { till: '/ekonomi', namn: 'Ekonomi' },
   { till: '/floden', namn: 'Ekonomiska flöden' },
   { till: '/datakallor', namn: 'Datakällor' },
