@@ -130,3 +130,75 @@ test('ett reviderat värde markeras med ↻ och tooltipen visar tidigare och nyt
   await expect(tips).toContainText('SCB')
   await expect(markering).toHaveAttribute('aria-label', /Tidigare .* mnkr, nu .* mnkr/)
 })
+
+// Analysverktyg (#10)
+
+test('period, jämförelse och vy speglas i URL:en och återställs vid omladdning och delad länk', async ({ page, browser }) => {
+  await page.goto('/ekonomi')
+  await page.getByTestId('fran-ar').selectOption('2015')
+  await page.getByTestId('till-ar').selectOption('2024')
+  await page.getByTestId('jamfor-fran').selectOption('2018')
+  await page.getByTestId('jamfor-till').selectOption('2024')
+  await page.getByTestId('vy').getByRole('button', { name: 'Tabell' }).click()
+  await expect(page).toHaveURL(/fran=2015/)
+  await expect(page).toHaveURL(/till=2024/)
+  await expect(page).toHaveURL(/jamfor=2018-2024/)
+  await expect(page).toHaveURL(/vy=tabell/)
+
+  const kontrollera = async (sida: typeof page) => {
+    await expect(sida.getByTestId('fran-ar')).toHaveValue('2015')
+    await expect(sida.getByTestId('till-ar')).toHaveValue('2024')
+    await expect(sida.getByTestId('jamfor-fran')).toHaveValue('2018')
+    await expect(sida.getByTestId('jamfor-till')).toHaveValue('2024')
+    await expect(sida.getByTestId('vy').getByRole('button', { name: 'Tabell' })).toHaveAttribute('aria-pressed', 'true')
+    const kort = sida.locator('[data-matt="scb:BalansKnN:065"]')
+    await expect(kort.getByTestId('stapel')).toHaveCount(0)
+    await expect(kort.getByRole('table').getByRole('row')).toHaveCount(1 + (2024 - 2015 + 1))
+    await expect(kort.getByTestId('jamforelse')).toContainText('2018–2024:')
+  }
+  await page.reload()
+  await kontrollera(page)
+
+  // En delad länk i ett nytt fönster visar samma sak.
+  const ny = await (await browser.newContext()).newPage()
+  await ny.goto(page.url())
+  await kontrollera(ny)
+  await ny.context().close()
+})
+
+test('förändringen mellan två år visas i kronor och procent och större förändringar markeras', async ({ page }) => {
+  await page.goto('/ekonomi?jamfor=2022-2025')
+  await expect(page.getByTestId('jamforelse-info')).toContainText('minst 10 %')
+  const likvida = page.locator('[data-matt="scb:BalansKnN:065"]').getByTestId('jamforelse')
+  await expect(likvida).toContainText(/2022–2025:\s*\+\d+,\d mnkr\s*\(\+\d+,\d %\)/)
+  await expect(likvida).toContainText('65,2 mnkr →')
+  await expect(likvida).toHaveAttribute('data-stor', 'ja')
+  await expect(likvida).toContainText('Större förändring')
+  // Nyckeltal i procent jämförs i procentenheter.
+  await expect(page.locator('[data-matt="kolada:N03106"]').getByTestId('jamforelse')).toContainText('procentenheter')
+})
+
+test('mandatperioderna syns som band i tidsdiagrammen', async ({ page }) => {
+  await page.goto('/ekonomi?fran=2011')
+  const band = page.locator('[data-matt="scb:BalansKnN:065"]').getByTestId('mandatperiod')
+  await expect(band).toHaveCount(4)
+  await expect(band.nth(0)).toHaveAttribute('data-period', '2010–2014')
+  await expect(band.nth(3)).toHaveAttribute('data-period', '2022–2026')
+})
+
+test('tabelldata kan exporteras som CSV med källa och period', async ({ page }) => {
+  await page.goto('/ekonomi?fran=2020&till=2023')
+  const kort = page.locator('[data-matt="scb:BalansKnN:065"]')
+  const [nedladdning] = await Promise.all([page.waitForEvent('download'), kort.getByTestId('csv').click()])
+  expect(nedladdning.suggestedFilename()).toBe('kommunkollen-scb-BalansKnN-065-2020-2023.csv')
+  const text = (await (await import('node:fs/promises')).readFile(await nedladdning.path(), 'utf-8')).replace(/^﻿/, '')
+  const rader = text.trim().split(/\r\n/)
+  expect(rader[0]).toBe(
+    'Nyckeltal;Mått-id;Period;Värde;Enhet;Prisnivå;Källa;Källans webbplats;Publicerad av källan;Hämtad;Version',
+  )
+  expect(rader.slice(1).map((r) => r.split(';')[2])).toEqual(['2020', '2021', '2022', '2023'])
+  expect(rader[1]).toMatch(/^Likvida medel;scb:BalansKnN:065;2020;\d+;tkr;löpande priser;SCB;https:\/\/[^;]+;\d{4}-\d{2}-\d{2};\d{4}-\d{2}-\d{2};1$/)
+
+  const [alla] = await Promise.all([page.waitForEvent('download'), page.getByTestId('exportera-alla').click()])
+  expect(alla.suggestedFilename()).toBe('kommunkollen-ekonomi-2020-2023.csv')
+})

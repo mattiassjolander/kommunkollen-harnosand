@@ -48,3 +48,19 @@ Kravet på absoluta värden och utveckling över tid uppfylls med tkr från SCB 
 ## Uppgift saknas
 
 Ett värde som källan inte har (SCB `..`, eller ett tomt värde i Kolada) lagras som saknat och visas som "Uppgift saknas", aldrig som noll. SCB:s `-` betyder att inget finns att redovisa och lagras som noll.
+
+## Analysverktyg i ekonomivyn
+
+Alla val speglas i URL:en, så att en länk visar exakt samma sak:
+
+| Parameter | Betydelse | Standard |
+|---|---|---|
+| `fran`, `till` | Visad period | 2022 till senaste året |
+| `jamfor=2018-2024` | Jämför två år | Ingen jämförelse |
+| `vy=tabell` | Visa alla nyckeltal som tabell | Diagram |
+
+**Större förändring.** En jämförelse markeras som *större förändring* när värdet har ändrats med minst **10 %** jämfört med det tidigare året (relativt beloppet, även när det är negativt). Nyckeltal som själva är procentsatser, t.ex. soliditet, jämförs i procentenheter och markeras vid minst **5 procentenheter**. Tröskeln är densamma för alla nyckeltal och ändras i `frontend/src/analys.ts` (`STOR_FORANDRING`). Jämförelsen görs i löpande priser, utan justering för inflation.
+
+**Mandatperioder.** Tidsdiagrammen har diskreta bakgrundsband för mandatperioderna, utan partifärg. En period skrivs valår–valår (t.ex. 2022–2026) och omfattar budgetåren efter valet (2023–2026), eftersom nya fullmäktige tillträder den 15 oktober valåret.
+
+**CSV-export.** Varje nyckeltal har en CSV-knapp, och *Ladda ner alla som CSV* exporterar alla nyckeltal för den visade perioden. Filen har semikolon som fältavgränsare och decimalkomma (svenskt Excel). Varje rad är ett värde i källans enhet, med nyckeltal, mått-id, period, prisnivå, källa, källans publiceringsdatum, hämtdatum och version. Ett saknat värde är en tom cell, aldrig 0.
