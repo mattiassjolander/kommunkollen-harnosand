@@ -78,7 +78,12 @@ def sidtexter(pdf: bytes) -> tuple[list[str], list[str]]:
 _DATUM = re.compile(r"(\d{4})-\s*(\d{2})-\s*(\d{2})")
 _TID = re.compile(r"(\d{1,2})[.:](\d{2})")
 _PARTI = re.compile(r"^(?P<namn>.+?)\s*\((?P<parti>[A-ZÅÄÖ]{1,4}|-)\)\s*$")
-_DIARIENUMMER = re.compile(r"\b([A-ZÅÄÖ]{2,6})\s?/\s?(\d{4})\s?[-:]\s?(\d+)\b")
+# Textlagret delar ibland förkortningen ("S AM/2026-131"), så ett mellanslag inuti tillåts.
+_DIARIENUMMER = re.compile(r"\b([A-ZÅÄÖ]{1,5} ?[A-ZÅÄÖ]{1,5})\s?/\s?(\d{4})\s?[-:]\s?(\d+)\b")
+
+
+def _diarienummer(text: str) -> list[str]:
+    return [f"{d[0].replace(' ', '')}/{d[1]}-{d[2]}" for d in _DIARIENUMMER.findall(text)]
 _SIGNERING = "Följande parter har signerat detta dokument"
 
 
@@ -512,7 +517,7 @@ def _behandlingar(t: Tolkning, lop: list[str]) -> None:
         if not m:
             continue
         rest = m[2].strip()
-        dnr = [f"{d[0]}/{d[1]}-{d[2]}" for d in _DIARIENUMMER.findall(rest)]
+        dnr = _diarienummer(rest)
         rest = _DIARIENUMMER.sub("", rest).strip(" ,")
         # "Dnr 80117": ett diarienummer i annan form.
         if m2 := re.fullmatch(r"Dnr\.?:?\s*(\S*\d\S*)(?:\s+[\d.]+)?", rest):
@@ -540,7 +545,7 @@ def _behandlingar(t: Tolkning, lop: list[str]) -> None:
             # Diarienumret kan stå på en egen rad direkt efter paragrafnumret.
             for r in kropp[:2]:
                 if _DIARIENUMMER.fullmatch(r.strip()):
-                    dnr = ["/".join(d[0:1] + (f"{d[1]}-{d[2]}",)) for d in _DIARIENUMMER.findall(r)]
+                    dnr = _diarienummer(r)
         if not rubrik:
             t.avvikelser.append(f"§ {nr}: rubriken hittades inte")
         if beslut is None and any(_beslutsrubrik(r) or _beslutar(r) for r in kropp):
@@ -598,6 +603,21 @@ def _kontrollera(t: Tolkning, lop: list[str], layout: list[str]) -> None:
             t.avvikelser.append(f"Paragraferna stämmer inte med protokollets paragrafintervall ({'; '.join(d for d in delar if d)})")
 
 
+def _forsta_sida(sida: str) -> bool:
+    """Ett protokolls första sida. Sidnumret är 1 när det finns: en andra sittning samma dag
+    kan ha egen 'Plats och tid' men fortsätter sidnumreringen."""
+    nummer = re.search(r"\b(\d+)\(\d+\)", sida)
+    return "Plats och tid" in sida and "Beslutande" in sida and (not nummer or nummer[1] == "1")
+
+
+def _protokollets_sidor(lop: list[str], layout: list[str]) -> tuple[list[str], list[str]]:
+    """Sidorna med själva protokollet. En kallelse före protokollet räknas inte, och inte heller
+    ett protokollsutdrag eller bilagor efter det (de börjar med en ny förstasida)."""
+    start = next((i for i, s in enumerate(lop[:3]) if _forsta_sida(s)), 0)
+    slut = next((i for i in range(start + 1, len(lop)) if _forsta_sida(lop[i])), len(lop))
+    return lop[start:slut], layout[start:slut]
+
+
 def tolka(pdf: bytes) -> Tolkning:
     """Samma innehåll ger alltid samma tolkning, så resultatet återanvänds inom processen."""
     return copy.deepcopy(_tolka(pdf))
@@ -611,9 +631,12 @@ def _tolka(pdf: bytes) -> Tolkning:
     except Exception as e:  # trasig eller krypterad PDF
         t.avvikelser.append(f"PDF:en kunde inte läsas ({type(e).__name__})")
         return t
-    if not any(s.strip() for s in lop):
+    if not lop or not lop[0].strip():
+        # Helt inskannad, eller inskannad med bara enstaka sidor som har text.
         t.avvikelser.append("PDF:en saknar text (inskannad?)")
         return t
+    alla_sidor = len(lop)
+    lop, layout = _protokollets_sidor(lop, layout)
     _sammantrade(t, lop, layout)
     if not _narvaro_forsta_sidan(t, layout[0] if layout else ""):
         t.narvaro = []
@@ -622,6 +645,11 @@ def _tolka(pdf: bytes) -> Tolkning:
     _behandlingar(t, lop)
     if not t.behandlingar:
         t.avvikelser.append("Inga behandlingar hittades")
+        # Ett protokollsutdrag har färre sidor än protokollet, men saknas alla behandlingar
+        # kan filen vara ofullständig.
+        angivna = re.search(r"\b1\((\d+)\)", lop[0])
+        if angivna and alla_sidor < int(angivna[1]):
+            t.avvikelser.append(f"PDF:en har {alla_sidor} av protokollets {angivna[1]} sidor")
     _kontrollera(t, lop, layout)
     return t
 

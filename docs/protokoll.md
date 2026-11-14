@@ -37,7 +37,15 @@ Tolkningen är reglerbaserad (ADR-0002) och gissar aldrig. Det som inte går att
 - **Behandlingar**: paragrafraden "§ N" med eventuellt diarienummer ("KS/2026-584" eller "Dnr 2026-000025"), rubriken och beslutet under "…s beslut" eller "… beslutar". Innehållsförteckningen räknas inte som behandlingar.
 - **Beslutande vid en paragraf** räknas fram ur närvaron: beslutande, minus jäv vid paragrafen, och ersättare som bara tjänstgjorde vid vissa paragrafer räknas bara där.
 
-Av de 274 protokoll som fanns i november 2026 tolkades 268. De övriga sex saknar text (inskannade), har ett annat sidhuvud eller saknar paragrafrubriker, och visas som ej tolkade.
+- **Protokollets sidor**: en kallelse före protokollet tolkas inte, och inte heller ett protokollsutdrag eller bilagor efter det. De börjar med en ny förstasida, med "Plats och tid", "Beslutande" och sidnummer 1. En andra sittning samma dag fortsätter sidnumreringen och hör till protokollet.
+- **Diarienummer** där textlagret delat förkortningen ("S AM/2026-131") läses som "SAM/2026-131".
+
+Av de 274 protokoll som fanns i november 2026 tolkas 271. Tre visas som ej tolkade:
+
+- Samhällsnämnden 2026-04-30 och 2026-05-28 är inskannade och saknar text. En PDF räknas som inskannad när första sidan saknar text, även om enstaka senare sidor har det.
+- Samhällsnämnden 2022-06-16: kommunens fil har bara första sidan av protokollets 58. Det står i avvikelserna ("PDF:en har 1 av protokollets 58 sidor").
+
+Ett protokoll tolkas när det är nytt eller ändrat. Efter en förbättrad tolkning tolkas de lagrade protokollen om med `python -m app.tolka_om` (docs/drift.md). Sammanträdena behåller sina id.
 
 ## Avvikelser
 
