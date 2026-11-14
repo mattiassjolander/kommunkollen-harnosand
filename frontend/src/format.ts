@@ -58,3 +58,22 @@ export function siffra(v: number | null, enhet: string): string {
   if (v === null) return 'Uppgift saknas'
   return decimaler(enhet).format(v)
 }
+
+const forandringsprocent = new Intl.NumberFormat('sv-SE', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+  signDisplay: 'exceptZero',
+})
+
+/** Förändring som andel, t.ex. 0.053 → "+5,3 %". */
+export function procentforandring(andel: number | null): string {
+  if (andel === null) return '–'
+  return `${forandringsprocent.format(andel * 100)} %`
+}
+
+/** Förändring med tecken i given enhet, t.ex. "+45,2 mnkr". */
+export function talforandring(v: number | null, enhet: string): string {
+  if (v === null) return 'Uppgift saknas'
+  const s = tal(v, enhet)
+  return v > 0 ? `+${s}` : s
+}
