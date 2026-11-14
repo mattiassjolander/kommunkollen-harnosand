@@ -19,6 +19,7 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
+from . import ledamoter
 from .protokolltolkning import Narvaro, Tolkning, beslutande_vid, tolka
 from .sources.base import Dokument
 from .sources.harnosand import ORGAN
@@ -115,6 +116,7 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
             """,
             [(sammantrade_id, i, b.paragraf, b.rubrik, b.diarienummer, b.beslut) for i, b in enumerate(t.behandlingar)],
         )
+    ledamoter.registrera(conn, (n.namn for n in t.narvaro if n.kategori != "ovrig"))
 
 
 # Läsning
@@ -214,8 +216,9 @@ def _narvaro(rader: list[dict]) -> list[Narvaro]:
                     paragrafer=r["paragrafer"], jav=r["jav"]) for r in rader]
 
 
-def _person(n: Narvaro) -> dict:
+def _person(n: Narvaro, personer: dict[str, int]) -> dict:
     return {
+        "ledamot_id": personer.get(n.namn) if n.kategori != "ovrig" else None,
         "namn": n.namn, "parti": n.parti, "roll": n.roll, "kategori": n.kategori,
         "tjanstgor_for": {"namn": n.tjanstgor_for, "parti": n.tjanstgor_for_parti} if n.tjanstgor_for else None,
         "paragrafer": n.paragrafer, "jav": n.jav,
@@ -237,8 +240,10 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
         return None
     behandlingar = conn.execute(
         "SELECT * FROM behandling WHERE sammantrade_id = %s ORDER BY ordning", (sammantrade_id,)).fetchall()
+    narvaro = _las_narvaro(conn, sammantrade_id)
+    personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
     return _sammantrade(rad) | {
-        "narvaro": [_person(n) for n in _las_narvaro(conn, sammantrade_id)],
+        "narvaro": [_person(n, personer) for n in narvaro],
         "behandlingar": [_behandling(b) for b in behandlingar],
     }
 
@@ -261,10 +266,11 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
         {"s": sammantrade_id, "p": paragraf},
     ).fetchone()
     narvaro = _las_narvaro(conn, sammantrade_id)
+    personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
     return _behandling(b) | {
         "sammantrade": _sammantrade(rad),
-        "beslutande": [_person(n) for n in beslutande_vid(narvaro, paragraf)],
-        "jav": [_person(n) for n in narvaro if paragraf in n.jav],
+        "beslutande": [_person(n, personer) for n in beslutande_vid(narvaro, paragraf)],
+        "jav": [_person(n, personer) for n in narvaro if paragraf in n.jav],
         "foregaende": grannar["foregaende"],
         "nasta": grannar["nasta"],
     }

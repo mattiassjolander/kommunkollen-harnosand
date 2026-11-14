@@ -70,11 +70,35 @@ Diagramfärgerna följer dataviz-metodens validerade referenspalett. Ordningen �
 Partifärger används **bara** för att märka ut ett parti: i voteringar, i ledamotslistor och vid jämförelse av partiernas budgetförslag. De används aldrig i ekonomivyer och aldrig i samma diagram som den kategoriska paletten.
 
 - Partiet visas **alltid med förkortning** (S, M, SD, C, V, KD, L, MP). Färgen är ett komplement och bär aldrig betydelse ensam.
-- Partifärgerna klarar **inte** färgblindhetskontrollen: M och L är nästan identiska och S och V ligger nära varandra. Därför är förkortningen obligatorisk, inte valfri.
+- Partifärgerna klarar **inte** färgblindhetskontrollen: S och V är båda röda och går inte att skilja åt (se Validering nedan). Därför är förkortningen obligatorisk, inte valfri.
 - Partifärg visas som en liten markering (prick eller kantlinje vid förkortningen), aldrig som stor fyllyta.
 - Lokala partier och partier utan etablerad färg visas i `--ink-muted` med förkortning.
 - Partilogotyper används inte (varumärken, se kravspec avsnitt 18).
-- Exakta partifärger fastställs i fas 2 och dokumenteras här med källa.
+- Markeringen är en prick på 8 px med en tunn ring i `--line-strong`. Ringen gör att ljusa färger (SD, MP) syns mot ljus yta och mörka (KD) mot mörk yta.
+- Partilös ("(-)" i protokollet) visas som texten *partilös* utan prick. Saknas parti visas *parti anges inte i protokollet* utan prick.
+
+| Parti | Förkortning | Token | Färg |
+|---|---|---|---|
+| Socialdemokraterna | S | `--parti-s` | `#e8112d` |
+| Moderaterna | M | `--parti-m` | `#52bdec` |
+| Sverigedemokraterna | SD | `--parti-sd` | `#dddd00` |
+| Centerpartiet | C | `--parti-c` | `#009933` |
+| Vänsterpartiet | V | `--parti-v` | `#da291c` |
+| Kristdemokraterna | KD | `--parti-kd` | `#000077` |
+| Liberalerna | L | `--parti-l` | `#006ab3` |
+| Miljöpartiet | MP | `--parti-mp` | `#83cf39` |
+
+Färgerna är närmevärden till partiernas etablerade profilfärger, så som de brukar återges i valrapportering. De är inte hämtade ur partiernas grafiska manualer och kan bytas mot exakta värden utan att något annat ändras. Samma värden används i ljust och mörkt läge.
+
+**Validering** (dataviz-metodens `validate_palette.js`, alla par, november 2026):
+
+| Kontroll | Ljust läge | Mörkt läge |
+|---|---|---|
+| Färgblindhet (deutan/protan) | Underkänd: S–V ΔE 1,8 | Underkänd: S–V ΔE 1,8 |
+| Normalt seende | Underkänd: S–V ΔE 3,3 | Underkänd: S–V ΔE 3,3 |
+| Kontrast mot yta | Under 3:1 för M, SD och MP | Under 3:1 för KD |
+
+Paletten klarar alltså inte kontrollerna, och det går inte att rätta utan att överge partiernas färger: S och V är båda röda. Därför bär färgen aldrig information. Förkortningen står alltid bredvid, och ringen ger pricken kontrast.
 
 ## Typografi
 

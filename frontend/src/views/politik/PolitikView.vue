@@ -12,6 +12,7 @@ import {
 } from '../../api'
 import { sammantradesdatum } from '../../format'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
+import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,6 +100,7 @@ const paragrafer = (s: Sammantradesrad) =>
       protokollet.
     </p>
   </header>
+  <PolitikFlikar />
 
   <div class="filter">
     <label>

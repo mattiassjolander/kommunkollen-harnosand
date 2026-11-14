@@ -27,6 +27,10 @@ _Avoid_: Utdrag (som begrepp)
 En förtroendevald som deltar i ett organs sammanträde, som ordinarie ledamot eller som tjänstgörande ersättare. Partitillhörigheten är den som protokollet anger för personen vid just det sammanträdet.
 _Avoid_: Politiker, representant
 
+**Namnvariant**:
+Ett av flera sätt som samma ledamot skrivs på i protokollen. En redaktör slår ihop namnvarianter till en person och kan dela upp dem igen.
+_Avoid_: Alias, dubblett
+
 ## Beslutsprocessen
 
 **Ärende**:

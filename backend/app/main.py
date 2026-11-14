@@ -11,8 +11,8 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, db, ekonomi, floden, protokoll, serier, status
-from .auth import Inloggning, krav_roll
+from . import auth, db, ekonomi, floden, ledamoter, protokoll, serier, status
+from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
 from .robust import Robusthet
@@ -213,6 +213,42 @@ def create_app(
         if resultat is None:
             raise HTTPException(404, f"§ {paragraf} finns inte i sammanträdet {sammantrade_id}")
         return resultat
+
+    @app.get("/api/ledamoter", dependencies=[Depends(krav_roll("lasare"))])
+    def lista_ledamoter(q: str | None = None, parti: str | None = None, organ: str | None = None) -> list[dict]:
+        """Registret över ledamöter och ersättare ur protokollens närvarolistor."""
+        with db.connect(database_url) as conn:
+            return ledamoter.lista(conn, q, parti, organ)
+
+    @app.get("/api/ledamoter/{ledamot_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def ledamot(ledamot_id: int) -> dict:
+        with db.connect(database_url) as conn:
+            resultat = ledamoter.las(conn, ledamot_id)
+        if resultat is None:
+            raise HTTPException(404, f"Ledamoten {ledamot_id} finns inte")
+        return resultat
+
+    @app.post("/api/ledamoter/{ledamot_id}/sammanslagningar")
+    def sla_ihop_ledamoter(ledamot_id: int, med: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Slår ihop personen `med` med `ledamot_id`, vars namn blir huvudnamn."""
+        with db.connect(database_url) as conn:
+            try:
+                return ledamoter.sla_ihop(conn, ledamot_id, med, anv.epost)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except ledamoter.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/ledamoter/{ledamot_id}/uppdelning")
+    def dela_upp_ledamot(ledamot_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Gör ett sammanslaget namn till en egen person igen."""
+        with db.connect(database_url) as conn:
+            try:
+                return ledamoter.dela_upp(conn, ledamot_id, anv.epost)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except ledamoter.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
 
     @app.get("/api/dokument/{dokument_id}", dependencies=[Depends(krav_roll("lasare"))])
     def dokument(dokument_id: int) -> Response:

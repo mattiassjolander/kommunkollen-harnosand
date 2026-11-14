@@ -18,6 +18,16 @@
   --status-warning: #fab219;
   --status-critical: #d03b3b;
 
+  /* Partifärger: bara som liten markering bredvid förkortningen (design.md, Partifärger). */
+  --parti-s: #e8112d;
+  --parti-m: #52bdec;
+  --parti-sd: #dddd00;
+  --parti-c: #009933;
+  --parti-v: #da291c;
+  --parti-kd: #000077;
+  --parti-l: #006ab3;
+  --parti-mp: #83cf39;
+
   --font: 'Inter', system-ui, 'Segoe UI', sans-serif;
   --radius: 6px;
   --radius-mark: 4px;

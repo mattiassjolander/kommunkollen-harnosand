@@ -9,6 +9,8 @@ import EkonomiView from './views/EkonomiView.vue'
 import FlodenView from './views/FlodenView.vue'
 import OversiktView from './views/OversiktView.vue'
 import BehandlingView from './views/politik/BehandlingView.vue'
+import LedamotView from './views/politik/LedamotView.vue'
+import LedamoterView from './views/politik/LedamoterView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
 import SammantradeView from './views/politik/SammantradeView.vue'
 
@@ -25,6 +27,8 @@ const router = createRouter({
       component: BehandlingView,
       meta: { titel: 'Behandling' },
     },
+    { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
+    { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
   ],
 })

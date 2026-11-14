@@ -3,6 +3,7 @@ import { computed, inject, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaSammantrade, Saknas, type Person, type Sammantrade } from '../../api'
 import { paragraftext, parti, sammantradesdatum } from '../../format'
+import Partimarkering from '../../components/Partimarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
@@ -116,8 +117,11 @@ const tid = computed(() =>
           </thead>
           <tbody>
             <tr v-for="p in g.personer" :key="p.namn + p.roll" data-testid="person">
-              <th scope="row">{{ p.namn }}</th>
-              <td :class="{ saknas: p.parti === null }">{{ parti(p.parti) }}</td>
+              <th scope="row">
+                <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
+                <template v-else>{{ p.namn }}</template>
+              </th>
+              <td><Partimarkering :parti="p.parti" /></td>
               <td>{{ p.roll ?? '–' }}</td>
               <td>{{ anteckning(p) }}</td>
             </tr>

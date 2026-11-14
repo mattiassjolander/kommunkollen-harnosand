@@ -101,7 +101,9 @@ def test_narvaro_med_en_rad_per_person_och_tjanstgorande_ersattare(api):
     assert not [p for p in s["narvaro"] if p["namn"] == "ordförande"]  # radbruten roll är ingen person
 
     s = sammantrade(api, "SKOL", "2022-02-24")
-    assert person(s, "Anna-Lena Olsson") == {
+    olsson = person(s, "Anna-Lena Olsson")
+    assert isinstance(olsson.pop("ledamot_id"), int)  # länk till ledamotsregistret
+    assert olsson == {
         "namn": "Anna-Lena Olsson", "parti": "S", "roll": "Ersättare", "kategori": "ej_tjanstgorande",
         "tjanstgor_for": None, "paragrafer": None, "jav": [],
     }
