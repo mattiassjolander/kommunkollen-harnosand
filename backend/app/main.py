@@ -8,10 +8,10 @@ import secrets
 from pathlib import Path
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, db, ekonomi, floden, serier, status
+from . import auth, db, ekonomi, floden, protokoll, serier, status
 from .auth import Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
@@ -19,6 +19,7 @@ from .robust import Robusthet
 from .schema import SVERIGE, Schema
 from .sources.base import Datakalla
 from .sources.kolada import Kolada
+from .sources.harnosand import ORGAN, Protokollkalla
 from .sources.scb import Scb
 
 KOMMUN = "2280"  # Härnösand
@@ -41,6 +42,7 @@ def standardkallor() -> list[Datakalla]:
                anrop_per_sekund=_anropsgrans("KOLADA", 5)),
         Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
             anrop_per_sekund=_anropsgrans("SCB", 2)),
+        *(Protokollkalla(organ, anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
     ]
 
 
@@ -175,5 +177,46 @@ def create_app(
         if jamfor is not None and jamfor != ar:
             resultat = floden.jamfor(resultat, berakna(jamfor))
         return resultat | {"omrade": omrade, "tillgangliga_ar": ar_lista}
+
+    # Politik och beslut: sammanträden och behandlingar ur protokollen (automatiskt tolkade uppgifter).
+
+    @app.get("/api/organ", dependencies=[Depends(krav_roll("lasare"))])
+    def organ() -> list[dict]:
+        return [{"id": o.id, "namn": o.namn} for o in ORGAN.values()]
+
+    @app.get("/api/sammantraden", dependencies=[Depends(krav_roll("lasare"))])
+    def sammantraden(organ: str | None = None) -> list[dict]:
+        with db.connect(database_url) as conn:
+            return protokoll.lista_sammantraden(conn, organ)
+
+    @app.get("/api/sammantraden/{sammantrade_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def sammantrade(sammantrade_id: int) -> dict:
+        with db.connect(database_url) as conn:
+            resultat = protokoll.las_sammantrade(conn, sammantrade_id)
+        if resultat is None:
+            raise HTTPException(404, f"Sammanträdet {sammantrade_id} finns inte")
+        return resultat
+
+    @app.get("/api/sammantraden/{sammantrade_id}/behandlingar/{paragraf}", dependencies=[Depends(krav_roll("lasare"))])
+    def behandling(sammantrade_id: int, paragraf: int) -> dict:
+        with db.connect(database_url) as conn:
+            resultat = protokoll.las_behandling(conn, sammantrade_id, paragraf)
+        if resultat is None:
+            raise HTTPException(404, f"§ {paragraf} finns inte i sammanträdet {sammantrade_id}")
+        return resultat
+
+    @app.get("/api/dokument/{dokument_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def dokument(dokument_id: int) -> Response:
+        """Plattformens kopia av ett hämtat dokument, så att källan finns kvar även om kommunen tar bort den."""
+        with db.connect(database_url) as conn:
+            d = protokoll.las_dokument(conn, dokument_id)
+        if d is None:
+            raise HTTPException(404, f"Dokumentet {dokument_id} finns inte")
+        filnamn = d["filnamn"].encode("ascii", "replace").decode().replace("?", "_").replace('"', "")
+        return Response(
+            bytes(d["innehall"]), media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filnamn}"', "ETag": f'"{d["sha256"]}"',
+                     "X-Content-SHA256": d["sha256"]},
+        )
 
     return app

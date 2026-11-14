@@ -36,10 +36,22 @@ class Uppgift:
     kallans_publicering: date | None
 
 
+@dataclass(frozen=True)
+class Dokument:
+    """Ett dokument som källan publicerar, t.ex. ett protokoll som PDF, med hela innehållet."""
+
+    url: str
+    filnamn: str
+    typ: str  # 'protokoll'
+    organ: str  # t.ex. 'KF'
+    innehall: bytes
+
+
 @dataclass
 class Hamtning:
     matt: list[Matt] = field(default_factory=list)
     uppgifter: list[Uppgift] = field(default_factory=list)
+    dokument: list[Dokument] = field(default_factory=list)
     # Delar av hämtningen som misslyckades medan resten gick bra. Ger status "delvis fel".
     # Om ingenting gick att hämta ska källan i stället kasta ett undantag.
     fel: list[str] = field(default_factory=list)

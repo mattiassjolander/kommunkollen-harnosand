@@ -1,8 +1,9 @@
 """Spelar in svar från de riktiga källorna till en inspelningskatalog (för tester och lokal utveckling).
 
-    uv run python -m app.spela_in tests/recordings
+    uv run python -m app.spela_in tests/recordings [källa ...]
 
-Kör alla standardkällor en gång mot nätet och sparar varje svar. Befintliga inspelningar
+Kör standardkällorna (alla, eller bara de angivna, t.ex. harnosand-protokoll-kf) en gång mot
+nätet och sparar varje svar. Befintliga inspelningar
 för samma adress skrivs över, övriga lämnas kvar.
 """
 
@@ -30,11 +31,20 @@ class InspelandeTransport(httpx.BaseTransport):
         nyckel = f"{request.url.host}{request.url.path}"
         if svar.status_code == 200:
             delar = [d for d in request.url.path.split("/") if d]
-            fil = f"{request.url.host.split('.')[-2]}/{re.sub(r'[^A-Za-z0-9]+', '_', '_'.join(delar[-4:]))}.json"
+            # Filändelsen behålls för annat än JSON (HTML-sidor, PDF:er), så att svarets typ går att återskapa.
+            andelse = Path(delar[-1]).suffix.lower() if delar else ""
+            if andelse not in (".pdf", ".html"):
+                andelse = ".json"
+            stam = "_".join(delar[-4:])
+            if stam.lower().endswith(andelse):
+                stam = stam[: -len(andelse)]
+            fil = f"{request.url.host.split('.')[-2]}/{re.sub(r'[^A-Za-z0-9]+', '_', stam)}{andelse}"
             (self.katalog / fil).parent.mkdir(parents=True, exist_ok=True)
             (self.katalog / fil).write_bytes(innehall)
             self.ny_manifest[nyckel] = fil
-        return httpx.Response(svar.status_code, headers=svar.headers, content=innehall, request=request)
+        # Innehållet är redan avkodat, så kodningshuvudena (t.ex. gzip) får inte följa med.
+        huvuden = {k: v for k, v in svar.headers.items() if k.lower() not in ("content-encoding", "content-length")}
+        return httpx.Response(svar.status_code, headers=huvuden, content=innehall, request=request)
 
 
 def main() -> None:
@@ -43,9 +53,13 @@ def main() -> None:
     manifest = json.loads(manifestfil.read_text(encoding="utf-8")) if manifestfil.exists() else {}
     transport = InspelandeTransport(katalog)
     with httpx.Client(transport=transport, timeout=60.0, headers={"User-Agent": "kommunkollen/0.1"}) as client:
+        valda = set(sys.argv[2:])
         for kalla in standardkallor():
+            if valda and kalla.id not in valda:
+                continue
             h = kalla.hamta(client, None)
-            print(f"{kalla.id}: {len(h.matt)} mått, {len(h.uppgifter)} uppgifter, fel: {h.fel or 'inga'}")
+            print(f"{kalla.id}: {len(h.matt)} mått, {len(h.uppgifter)} uppgifter, {len(h.dokument)} dokument, "
+                  f"fel: {h.fel or 'inga'}")
     manifest.update(transport.ny_manifest)
     manifestfil.write_text(json.dumps(dict(sorted(manifest.items())), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"{len(transport.ny_manifest)} svar inspelade i {katalog}")

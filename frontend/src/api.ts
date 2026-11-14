@@ -251,3 +251,89 @@ export function hamtaFloden(val: Flodesval = {}) {
   const q = new URLSearchParams(Object.entries(val).filter(([, v]) => v) as [string, string][])
   return hamta<Flodesmodell>(`/api/floden${q.size ? `?${q}` : ''}`)
 }
+
+// Politik och beslut: sammanträden och behandlingar ur protokollen (automatiskt tolkade uppgifter)
+
+export interface Organ {
+  id: string
+  namn: string
+}
+
+export interface Protokollkalla {
+  dokument_id: number
+  /** Originalet på kommunens webbplats. */
+  url: string
+  /** Plattformens egen kopia. */
+  kopia: string
+  filnamn: string
+  version: number
+  sha256: string
+  storlek: number
+  hamtad: string
+  tolkad: string
+  datakalla: { id: string; titel: string }
+}
+
+export interface Sammantradesrad {
+  id: number
+  organ: Organ
+  datum: string | null
+  starttid: string | null
+  sluttid: string | null
+  plats: string | null
+  tolkning: 'tolkad' | 'ej_tolkad'
+  avvikelser: string[]
+  antal_behandlingar: number
+  /** Första och sista paragrafen. */
+  paragrafer: [number, number] | null
+  protokoll: Protokollkalla
+}
+
+export interface Person {
+  namn: string
+  /** Som protokollet anger det. '-' är partilös, null betyder att protokollet inte anger parti. */
+  parti: string | null
+  roll: string | null
+  kategori: 'beslutande' | 'ej_tjanstgorande' | 'franvarande' | 'ovrig'
+  tjanstgor_for: { namn: string; parti: string | null } | null
+  /** Paragrafer personen var beslutande vid, om inte alla. */
+  paragrafer: number[] | null
+  jav: number[]
+}
+
+export interface Behandlingsrad {
+  paragraf: number
+  rubrik: string
+  diarienummer: string[]
+  beslut: string | null
+}
+
+export interface Sammantrade extends Sammantradesrad {
+  narvaro: Person[]
+  behandlingar: Behandlingsrad[]
+}
+
+export interface Behandling extends Behandlingsrad {
+  sammantrade: Sammantradesrad
+  beslutande: Person[]
+  jav: Person[]
+  foregaende: number | null
+  nasta: number | null
+}
+
+export class Saknas extends Error {}
+
+async function hamtaEllerSaknas<T>(url: string): Promise<T> {
+  const svar = await fetch(url)
+  if (svar.status === 404) throw new Saknas()
+  if (svar.status === 401) throw new EjInloggad()
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+
+export const hamtaOrgan = () => hamta<Organ[]>('/api/organ')
+export const hamtaSammantraden = (organ?: string) =>
+  hamta<Sammantradesrad[]>(`/api/sammantraden${organ ? `?organ=${encodeURIComponent(organ)}` : ''}`)
+export const hamtaSammantrade = (id: number | string) => hamtaEllerSaknas<Sammantrade>(`/api/sammantraden/${id}`)
+export const hamtaBehandling = (id: number | string, paragraf: number | string) =>
+  hamtaEllerSaknas<Behandling>(`/api/sammantraden/${id}/behandlingar/${paragraf}`)

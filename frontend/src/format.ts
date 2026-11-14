@@ -77,3 +77,37 @@ export function talforandring(v: number | null, enhet: string): string {
   const s = tal(v, enhet)
   return v > 0 ? `+${s}` : s
 }
+
+/** Partiet som protokollet anger det: förkortningen, "partilös" för (-), eller att det inte anges. */
+export function parti(p: string | null): string {
+  if (p === null) return 'parti anges inte i protokollet'
+  if (p === '-') return 'partilös'
+  return p
+}
+
+/** "Monica Fahlén (S)", "Carl-Fredrik Edgren (partilös)". */
+export function namnOchParti(namn: string, p: string | null): string {
+  return `${namn} (${parti(p)})`
+}
+
+/** [121, 122, 123, 125] → "§§ 121–123, 125". */
+export function paragraftext(nummer: number[]): string {
+  const delar: string[] = []
+  let start = nummer[0]
+  for (let i = 1; i <= nummer.length; i++) {
+    if (nummer[i] !== nummer[i - 1] + 1) {
+      const slut = nummer[i - 1]
+      delar.push(start === slut ? `${start}` : `${start}–${slut}`)
+      start = nummer[i]
+    }
+  }
+  return `${nummer.length > 1 ? '§§' : '§'} ${delar.join(', ')}`
+}
+
+const veckodagsdatum = new Intl.DateTimeFormat('sv-SE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TZ })
+
+/** "måndag 28 september 2026" för ett sammanträdesdatum (YYYY-MM-DD). */
+export function sammantradesdatum(iso: string | null): string {
+  if (!iso) return 'Datum okänt'
+  return veckodagsdatum.format(new Date(`${iso}T12:00:00Z`))
+}
