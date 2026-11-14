@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 // Status visas alltid med färg, ikon och text (docs/design.md). Färgen sitter bara på ikonen,
 // texten har vanlig textfärg så att den går att läsa även för gult.
-type Status = 'lyckad' | 'inga_nya' | 'delvis_fel' | 'misslyckad' | 'pagar' | 'aldrig'
+type Status = 'lyckad' | 'inga_nya' | 'delvis_fel' | 'misslyckad' | 'pagar' | 'avbruten' | 'aldrig'
 
 const props = defineProps<{ status: Status | null; text?: string }>()
 
@@ -13,6 +13,7 @@ const VISNING: Record<Status, { ikon: string; text: string }> = {
   delvis_fel: { ikon: '!', text: 'Delvis fel' },
   misslyckad: { ikon: '✕', text: 'Misslyckad' },
   pagar: { ikon: '…', text: 'Pågår' },
+  avbruten: { ikon: '!', text: 'Avbruten' },
   aldrig: { ikon: '–', text: 'Aldrig kontrollerad' },
 }
 
@@ -47,7 +48,8 @@ const s = computed<Status>(() => props.status ?? 'aldrig')
 .lyckad {
   background: var(--status-good);
 }
-.delvis_fel {
+.delvis_fel,
+.avbruten {
   background: var(--status-warning);
   color: #0b0b0b;
 }

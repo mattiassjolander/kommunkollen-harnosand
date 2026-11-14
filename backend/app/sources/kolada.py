@@ -30,7 +30,8 @@ class Kolada:
     titel = "Kolada"
     url = "https://www.kolada.se"
 
-    def __init__(self, nyckeltal: list[str], kommun: str = "2280") -> None:
+    def __init__(self, nyckeltal: list[str], kommun: str = "2280", anrop_per_sekund: float | None = 5.0) -> None:
+        self.anrop_per_sekund = anrop_per_sekund
         self.nyckeltal = nyckeltal
         self.kommun = kommun
 
