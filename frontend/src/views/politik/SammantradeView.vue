@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaSammantrade, Saknas, type Person, type Sammantrade } from '../../api'
 import { paragraftext, parti, sammantradesdatum } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
+import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
@@ -99,6 +100,9 @@ const tid = computed(() =>
             {{ b.antal_voteringar > 1 ? `${b.antal_voteringar} voteringar` : 'Votering' }}
           </span>
           <span v-if="b.antal_reservationer" class="etikett" data-testid="har-reservation">Reservation</span>
+          <span v-if="b.rattelser && Object.keys(b.rattelser).length" class="etikett" data-testid="har-rattelse">
+            Rättad av redaktionen
+          </span>
           <p v-if="b.beslut" class="beslut">{{ b.beslut }}</p>
         </li>
       </ol>
@@ -125,7 +129,10 @@ const tid = computed(() =>
                 <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
                 <template v-else>{{ p.namn }}</template>
               </th>
-              <td><Partimarkering :parti="p.parti" /></td>
+              <td>
+                <Partimarkering :parti="p.parti" />
+                <Rattelsemarkering v-if="p.rattelser?.parti" :rattelse="p.rattelser.parti" falt="parti" />
+              </td>
               <td>{{ p.roll ?? '–' }}</td>
               <td>{{ anteckning(p) }}</td>
             </tr>

@@ -85,8 +85,8 @@ def _anvandare(request: Request) -> Anvandare | None:
     return Anvandare(epost=data["epost"], namn=data["namn"], roller=frozenset(data["roller"]))
 
 
-def krav_roll(roll: str):
-    """Dependency: kräver inloggning med `roll`. Läsning kan öppnas med ANONYM_LASNING."""
+def krav_roll(roll: str, *andra: str):
+    """Dependency: kräver inloggning med `roll` (eller någon av `andra`). Läsning kan öppnas med ANONYM_LASNING."""
 
     def kontroll(request: Request) -> Anvandare | None:
         inst: Inloggning = request.app.state.inloggning
@@ -104,8 +104,8 @@ def krav_roll(roll: str):
                 request.session.clear()
                 raise HTTPException(401, "Kontot har inte längre åtkomst")
             anv = Anvandare(anv.epost, anv.namn, aktuella)
-        if roll not in anv.roller:
-            raise HTTPException(403, f"Kräver rollen {roll}")
+        if not anv.roller & {roll, *andra}:
+            raise HTTPException(403, f"Kräver rollen {' eller '.join((roll, *andra))}")
         return anv
 
     return kontroll
@@ -193,9 +193,10 @@ def router(http_klient) -> APIRouter:
         inst: Inloggning = request.app.state.inloggning
         if not inst.testenv:
             raise HTTPException(404)
-        if roll not in ROLLER:
+        valda = set(roll.split("+"))
+        if not valda <= set(ROLLER):
             raise HTTPException(400, "Okänd roll")
-        roller = sorted({"lasare", roll})
+        roller = sorted({"lasare", *valda})
         request.session["anvandare"] = {"epost": f"test-{roll}{TESTDOMAN}", "namn": f"Test ({roll})", "roller": roller}
         return {"ok": True, "roller": roller}
 

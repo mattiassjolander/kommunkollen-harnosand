@@ -27,6 +27,7 @@ from datetime import date, datetime, timezone
 
 import psycopg
 
+from .rattelser import Publicerade
 from .sources.harnosand import ORGAN
 
 # Beslutsnivå: nämnderna bereder åt kommunstyrelsen, som bereder åt kommunfullmäktige.
@@ -270,7 +271,8 @@ def las_arende(conn: psycopg.Connection, arende_id: int) -> dict | None:
         (arende_id,),
     ).fetchall()
     rader.sort(key=lambda r: (r["datum"] or date.max, NIVA.get(r["organ"], 0), r["paragraf"]))
-    behandlingar = [_beh(r) for r in rader]
+    pub = Publicerade(conn, list({r["sammantrade_id"] for r in rader}))
+    behandlingar = [pub.behandling(r["sammantrade_id"], _beh(r)) for r in rader]
     # Alla kopplingar som rör ärendets behandlingar, också förslag och avvisade kopplingar till andra ärenden.
     medlem = "IN (SELECT sammantrade_id, paragraf FROM arende_behandling WHERE arende_id = %(a)s)"
     kopplingar = _kopplingar(
