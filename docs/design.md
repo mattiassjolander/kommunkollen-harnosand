@@ -2,10 +2,12 @@
 
 Kommunkollen är partipolitiskt obunden (kravspec avsnitt 18). Profilen ska därför se ut som ett **sakligt, oberoende granskningsverktyg**: lugn, informationstät och utan färger eller former som associerar till något parti. Datan ska vara det som syns.
 
+Ramen runt datan (navigering, sidhuvud, accent och logotyp) använder **Härnösands platsvarumärke** "Härnösand Höga Kusten" (se *Platsvarumärket*). Platsvarumärket är fritt att använda för den som vill visa stolthet över platsen. Det är inte kommunens organisationslogotyp, och plattformen anger alltid att den är oberoende av kommunen.
+
 ## Principer
 
-1. **Neutral avsändare.** Ingen partifärg används som profilfärg, accent eller dekor. Partifärger förekommer bara där de märker ut ett parti (se *Partifärger*).
-2. **Data före dekor.** Inga gradienter, illustrationer eller stämningsbilder. Ytor är plana, linjer tunna, och färg används bara när den bär information.
+1. **Neutral avsändare.** Ingen partifärg används som profilfärg, accent eller dekor. Partifärger förekommer bara där de märker ut ett parti (se *Partifärger*). Accenten är platsvarumärkets blå, som ligger nära Liberalernas och Moderaternas färger. Därför står ett parti alltid med förkortning, och partifärg visas aldrig i samma roll som accenten (länk, knapp, vald flik).
+2. **Data före dekor.** Inga gradienter eller illustrationer. Ytor är plana, linjer tunna, och färg används bara när den bär information. Undantaget är en bild ur platsvarumärket som sidhuvud på Översikt, med fotokredit.
 3. **Källan syns alltid.** Varje värde, diagram och tabell har en synlig källrad (källa, avsedd period, hämtad). Källhänvisningen är en del av designen, inte en fotnot som göms.
 4. **Osäkerhet syns visuellt.** Det ska gå att se på ett ögonkast om något är belagt, uppskattat eller AI-analys (se *Säkerhetsmarkeringar*).
 5. **Desktop-first och informationstät**, men aldrig trång: tydlig hierarki, generösa marginaler runt sektioner och kompakt inuti tabeller.
@@ -18,18 +20,23 @@ Alla färger definieras som CSS-variabler (tokens) i `:root`, med egna värden f
 
 | Roll | Ljust | Mörkt | Användning |
 |---|---|---|---|
-| `--page` | `#f9f9f7` | `#0d0d0d` | Sidans bakgrund |
-| `--surface` | `#fcfcfb` | `#1a1a19` | Kort, paneler, diagramyta |
+| `--page` | `#f5f5f5` | `#0d0d0d` | Sidans bakgrund |
+| `--surface` | `#ffffff` | `#1a1a19` | Kort, paneler, diagramyta |
 | `--surface-raised` | `#ffffff` | `#242423` | Menyer, tooltips, dialoger |
 | `--ink` | `#0b0b0b` | `#f0efec` | Brödtext, rubriker, siffror |
 | `--ink-secondary` | `#52514e` | `#c3c2b7` | Underrubriker, etiketter |
 | `--ink-muted` | `#898781` | `#898781` | Axlar, källrader, metadata |
 | `--line` | `#e1e0d9` | `#2c2c2a` | Hårlinjer, rutnät, tabellrader |
 | `--line-strong` | `#c3c2b7` | `#383835` | Kantlinjer, baslinjer |
-| `--accent` | `#3d3480` | `#a99ff0` | Länkar, fokusring, vald flik, primärknapp |
-| `--accent-wash` | `#efedf8` | `#2a2640` | Markerad rad, vald yta |
+| `--accent` | `#0070b3` | `#6cb6ea` | Länkar, fokusring, vald flik, primärknapp, vyrubrik på Översikt |
+| `--accent-wash` | `#e6f1e0` | `#1e2c38` | Markerad rad, vald yta |
+| `--nav` | `#fce8ec` | `#2a1f22` | Navigeringens bakgrund |
+| `--sidhuvud` | `#0070b3` | `#005a8f` | Sidhuvudet med statusindikatorn |
+| `--sidhuvud-ink` | `#ffffff` | `#ffffff` | Text i sidhuvudet |
 
-**Accenten** är en dov indigoviolett. Den valdes för att ingen svensk riksdagspartis profilfärg ligger nära den (röda, blå, gula och gröna toner är upptagna). Den används sparsamt, bara för interaktion och markering, aldrig i diagram.
+**Accenten** är platsvarumärkets blå (#0070B3). I mörkt läge används en ljusare blå med samma kulör. Den används för interaktion och markering, aldrig i diagram. Den ljusrosa och den ljusgröna kommer också ur platsvarumärket. Platsvarumärkets gula (#F2B219) och korallröda (#F56365) används inte, eftersom de ligger nära SD:s respektive S:s och V:s färger och inte behövs för någon roll.
+
+Kontrast (WCAG): accenten mot vit yta 5,3:1, mot sidans bakgrund 4,9:1, mot markering och navigering 4,5:1. Vit text på sidhuvudet 5,3:1 (mörkt läge 7,3:1). Accenten i mörkt läge mot kort 7,9:1.
 
 ### Diagram
 
@@ -162,4 +169,14 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 
 ## Logotyp
 
-Ordmärke: **Kommunkollen** i Inter 600 i `--ink`, med **Härnösand** under i `--ink-secondary`. Inget symbolmärke tills vidare.
+Överst i navigeringen står platsvarumärkets primära logotyp "Härnösand Höga Kusten" (blå i ljust läge, vit i mörkt) och under den ordmärket **Kommunkollen** i Inter 600 i `--ink`. Längst ned i navigeringen står den runda sekundära logotypen och texten "Oberoende granskning. Inte en kanal för Härnösands kommun."
+
+## Platsvarumärket
+
+Härnösands platsvarumärke (grafisk profil, logotyper, ikoner, mönster och bilder) är fritt att använda för samprofilering. Plattformen använder:
+
+- den primära logotypen (blå och vit) och den runda sekundära logotypen (blå), beskurna och nedskalade, i `frontend/public/platsvarumarke/`,
+- färgerna blå #0070B3, ljusrosa #FCE8EC, ljusgrön #E6F1E0 och ljusgrå #F5F5F5 (se *Gränssnitt*),
+- bilden från Smitingen som sidhuvud på Översikt, med texten "Foto: Härnösands platsvarumärke".
+
+Platsvarumärkets egna regler gäller: logotyperna används som de är och görs aldrig om. Originalfilerna ligger i `platsvarumarke/` i projektmappen och checkas inte in, eftersom bilderna är stora.
