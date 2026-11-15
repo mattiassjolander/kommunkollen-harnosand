@@ -57,3 +57,46 @@ test('behandlingens typ visas och kan rättas av en redaktör', async ({ page })
   await formular.getByTestId('spara-rattelse').click()
   await expect(formular.getByTestId('rattelse-sparad')).toBeVisible()
 })
+
+test('typerna i statistiken går att välja och visar behandlingarna', async ({ page }) => {
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik/statistik')
+  await page.getByTestId('nyckeltal').locator('[data-typ="motion"]').click()
+  await expect(page).toHaveURL(/typ=motion/)
+  const lista = page.getByTestId('typlista')
+  await expect(lista).toContainText('Motion')
+  await expect(page.getByTestId('typbehandling').first()).toContainText(/motion/i)
+  await page.getByTestId('typbehandling').first().getByRole('link').click()
+  await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+\/paragraf\/\d+/)
+})
+
+test('motioner med väckt, motionär och länk till protokollet', async ({ page }) => {
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik/statistik?organ=KF')
+  const motioner = page.getByTestId('motioner')
+  await expect(motioner.getByTestId('vackta')).not.toHaveText('0')
+  const friskvard = page.getByTestId('motion').filter({ hasText: 'friskvårdsbidraget' })
+  await expect(friskvard).toContainText('Olle Löfgren (L)')
+  await expect(friskvard).toContainText('Obesvarad')
+  await friskvard.getByRole('link', { name: /2026/ }).click()
+  await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+\/paragraf\/\d+/)
+  await expect(page.locator('h1, h2').filter({ hasText: 'friskvårdsbidraget' }).first()).toBeVisible()
+})
+
+test('avvikelser i protokollen samlas på en sida', async ({ page }) => {
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik')
+  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Avvikelser' }).click()
+  await expect(page).toHaveURL(/\/politik\/avvikelser$/)
+  await expect(page.getByTestId('avvikelse-sammantrade').or(page.getByTestId('inga')).first()).toBeVisible()
+  if (await page.getByTestId('avvikelse-sammantrade').count()) {
+    const forsta = page.getByTestId('avvikelse-sammantrade').first()
+    await expect(forsta.getByRole('link', { name: 'Originalprotokollet' })).toHaveAttribute('href', /^http/)
+  }
+  await page.getByTestId('filter-kategori').selectOption('motsagelse')
+  await expect(page).toHaveURL(/kategori=motsagelse/)
+  for (const s of await page.getByTestId('avvikelse-sammantrade').all()) {
+    await expect(s.getByTestId('i-protokollet')).toBeVisible()
+  }
+  await expect(page.getByTestId('csv')).toHaveAttribute('download', /\.csv$/)
+})

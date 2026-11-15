@@ -66,3 +66,23 @@ def test_protokoll_som_inte_gick_att_tolka_redovisas(api, database_url):
         conn.execute("DELETE FROM behandling WHERE sammantrade_id = %s", (s,))
     underlag = api.get(URL).json()["underlag"]
     assert [x["id"] for x in underlag["ej_tolkade"]] == [s]
+
+
+def test_behandlingarna_bakom_en_siffra(api):
+    lista = api.get(f"{URL}/motion").json()
+    assert len(lista) == 12
+    assert all("motion" in b["rubrik"].lower() for b in lista)
+    assert lista[0]["sammantrade"]["datum"] >= lista[-1]["sammantrade"]["datum"]
+    assert api.get(f"{URL}/motion", params={"fran": 2024, "till": 2025}).json() == []
+    assert api.get(f"{URL}/okand").status_code == 200
+    assert api.get(f"{URL}/xyz").status_code == 422
+
+
+def test_avvikelser_i_protokollen(api):
+    a = api.get("/api/avvikelser").json()
+    assert a["granskade"] == 8
+    kategorier = {k["id"]: k for k in a["kategorier"]}
+    assert kategorier["motsagelse"]["i_protokollet"] and kategorier["motsagelse"]["antal"] == 1
+    assert all(s["avvikelser"] or s["rattelser"] for s in a["sammantraden"])
+    motsagelse = next(s for s in a["sammantraden"] if any(x["kategori"] == "motsagelse" for x in s["avvikelser"]))
+    assert motsagelse["i_protokollet"] and motsagelse["url"].startswith("http")
