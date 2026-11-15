@@ -303,8 +303,16 @@ export interface Person {
   /** Paragrafer personen var beslutande vid, om inte alla. */
   paragrafer: number[] | null
   jav: number[]
+  /** Satt när närvarolistan inte anger parti och partiet härletts ur samma eller ett annat protokoll. */
+  parti_harlett?: PartiHarlett | null
   /** Publicerade rättelser av partiet. */
   rattelser?: Rattelser
+}
+
+export interface PartiHarlett {
+  grund: 'samma_protokoll' | 'annat_protokoll'
+  /** Sammanträdet partiet hämtades från, när det är ett annat protokoll. */
+  sammantrade: { id: number; datum: string | null; organ: Organ } | null
 }
 
 export interface Behandlingsrad {
@@ -446,9 +454,13 @@ export interface Ledamot {
     sammantrade: { id: number; datum: string | null; starttid: string | null; organ: Organ; tolkning: string }
     namn: string
     parti: string | null
+    parti_harlett: PartiHarlett | null
+    rattelser: Rattelser | null
     roll: string | null
     kategori: 'beslutande' | 'ej_tjanstgorande' | 'franvarande'
     tjanstgor_for: { namn: string; parti: string | null } | null
+    /** Alla tjänstgöringar vid sammanträdet. En ersättare kan tjänstgöra för flera ledamöter. */
+    tjanstgoringar: { namn: string; parti: string | null; paragrafer: number[] | null }[]
     paragrafer: number[] | null
     jav: number[]
   }[]

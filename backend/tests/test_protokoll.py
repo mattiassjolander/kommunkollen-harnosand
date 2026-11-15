@@ -126,7 +126,10 @@ def test_sammantradet_med_narvaro_tjanstgoring_och_jav(api):
 
     # Partitillhörigheten är den protokollet anger: "(-)" är partilös, utan parentes anges inget parti.
     assert person(s, "Carl-Fredrik Edgren")["parti"] == "-"
-    assert person(s, "Hans Rosengren")["parti"] is None
+    # Saknat parti härleds ur samma eller ett annat protokoll och markeras.
+    rosengren = person(s, "Hans Rosengren")
+    assert rosengren["parti"] == "S" and rosengren["parti_harlett"]["grund"] in ("samma_protokoll", "annat_protokoll")
+    assert "parti_harlett" not in ordf
 
     assert person(s, "Knapp Britta Thyr")["jav"] == [129]
     ersattare = person(s, "Mohamed Abdulwahab Mohamed")

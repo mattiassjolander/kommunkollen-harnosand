@@ -29,11 +29,12 @@ Tolkningen är reglerbaserad (ADR-0002) och gissar aldrig. Det som inte går att
 
 - **Sammanträdet**: datum ur sidhuvudet, plats och tid ur "Plats och tid". Ett organ kan sammanträda två gånger samma dag, så sammanträdet identifieras av datum och starttid.
 - **Närvaro**, i någon av tre former:
-  - en lista på första sidan med kolumner: "Namn (Parti)  Roll  Tjänstgörande för …", "Jäv § N" eller "§§ N–M",
+  - en lista på första sidan med kolumner: "Namn (Parti)  Roll  Tjänstgörande för …", "Jäv § N" eller "§§ N–M". Namnkolumnen kan sakna parti och bära roll, paragrafer och ersättning, radbrutet över flera rader: "Glenn Sehlin, §§ 131-138, 140-143", "Hans Rosengren, ersätter Ann Kristine Elfvendal § 138 samt Monica Fällström § 139",
   - en lista på första sidan med en rad per person under rubrikerna "Ledamöter", "Tjänstgörande ersättare" och "Ersättare": "Namn (Parti), ordförande", "Namn (Parti) tjänstgörande ersättare för Annan (Parti)",
-  - tabellerna "Närvaro- och voteringslista" (ledamöter) och "Närvaro- och tjänstgöringslista" (ersättare), där namn och paragrafer kan vara radbrutna och kolumnrubrikerna avstavade.
+  - tabellerna "Närvaro- och voteringslista" (ledamöter) och "Närvaro- och tjänstgöringslista" (ersättare), där namn och paragrafer kan vara radbrutna och kolumnrubrikerna avstavade. Tabellen kan fortsätta på nästa sida utan rubrik.
+- Paragrafer vid namnet ("Andreas Sjölander §§ 57-61, 63-68, 70-76") är de paragrafer personen var beslutande vid. En ersättare som tjänstgjorde för flera ledamöter vid olika paragrafer får en post per tjänstgöring. Ledamotssidan slår ihop dem till en rad per sammanträde.
 - Övriga närvarande tas med när de står med parti eller i en egen kolumn med roll. Tjänstepersoner i löptext ("Namn, förvaltningschef, …") tas inte med.
-- **Partitillhörighet** är den protokollet anger vid sammanträdet (ADR-0004). "(-)" visas som partilös. Saknas parti, eller står det "()", visas "parti anges inte i protokollet".
+- **Partitillhörighet** är den protokollet anger vid sammanträdet (ADR-0004). "(-)" visas som partilös. Saknas parti, eller står det "()", härleds partiet och markeras "Härlett" med källan: i första hand samma protokoll (voteringslistan eller "för Namn (S)"), annars närvarolistan i det närmaste sammanträdet där personen har ett parti. Går det inte att härleda visas "parti anges inte i protokollet". En publicerad rättelse går före det härledda partiet.
 - **Behandlingar**: paragrafraden "§ N" med eventuellt diarienummer ("KS/2026-584" eller "Dnr 2026-000025"), rubriken och beslutet under "…s beslut" eller "… beslutar". Innehållsförteckningen räknas inte som behandlingar.
 - **Beslutande vid en paragraf** räknas fram ur närvaron: beslutande, minus jäv vid paragrafen, och ersättare som bara tjänstgjorde vid vissa paragrafer räknas bara där.
 
@@ -96,11 +97,11 @@ API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{p
 
 ## Rättelser
 
-En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut eller diarienummer, en röst i en votering, eller partiet för en person i närvarolistan. Formuläret finns längst ned på behandlingen. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
+En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut eller diarienummer, en röst i en votering, eller partiet för en person i närvarolistan. Formuläret finns längst ned på behandlingen. Partiet kan också rättas från sammanträdet, för alla i närvarolistan. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
 
 Statusflödet är utkast → granskad → publicerad (kravspec 18). En utgivare som inte skrev rättelsen granskar och publicerar den under fliken Rättelser. Det gäller också den som har båda rollerna. Redaktören kan ändra och ta bort sitt eget utkast. En ny publicerad rättelse av samma uppgift ersätter den tidigare, som får status ersatt.
 
-Rättelsen sparas bredvid tolkningen och läggs på när uppgiften läses. Därför bevaras den vid en ny insamling och vid omtolkning. Den pekar ut uppgiften med sammanträde och paragraf, och med namn och votering för en röst. Läsaren ser den rättade uppgiften på behandlingen, sammanträdet och ärendet, med markeringen "Rättad av redaktionen" och vad tolkningen sa. Röstsiffrorna per parti räknas med den rättade rösten. Ledamotssidorna, sökningen och kopplingen av ärenden använder tolkningen.
+Rättelsen sparas bredvid tolkningen och läggs på när uppgiften läses. Därför bevaras den vid en ny insamling och vid omtolkning. Den pekar ut uppgiften med sammanträde och paragraf, och med namn och votering för en röst. Läsaren ser den rättade uppgiften på behandlingen, sammanträdet och ärendet, med markeringen "Rättad av redaktionen" och vad tolkningen sa. Röstsiffrorna per parti räknas med den rättade rösten. Ledamotssidorna visar också rättade partier. Sökningen och kopplingen av ärenden använder tolkningen.
 
 API:t: `GET /api/rattelser?status=` (redaktör eller utgivare), `POST /api/rattelser`, `PATCH` och `DELETE /api/rattelser/{id}` (redaktören som skrev utkastet), `POST /api/rattelser/{id}/granskning` och `/publicering` (utgivare). Testinloggningen tar flera roller, t.ex. `/api/auth/test/redaktor+utgivare`.
 

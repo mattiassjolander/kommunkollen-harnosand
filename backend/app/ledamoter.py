@@ -15,6 +15,8 @@ from collections.abc import Iterable
 
 import psycopg
 
+from . import partier
+from .rattelser import Publicerade
 from .sources.harnosand import ORGAN
 
 KATEGORIER = ("beslutande", "ej_tjanstgorande", "franvarande")
@@ -99,6 +101,25 @@ def lista(conn: psycopg.Connection, q: str | None = None, parti: str | None = No
     return sorted(ut, key=lambda p: _sorteringsnyckel(p["namn"]))
 
 
+def _per_sammantrade(forekomster: list[dict]) -> list[dict]:
+    """En post per sammanträde. En ersättare som tjänstgjorde för flera ledamöter har en rad per
+    tjänstgöring i närvarolistan. De slås ihop, med alla tjänstgöringar och paragrafer."""
+    ut: dict[int, dict] = {}
+    for f in forekomster:
+        tjanstgoring = ({"namn": f["tjanstgor_for"], "parti": f["tjanstgor_for_parti"], "paragrafer": f["paragrafer"]}
+                        if f["tjanstgor_for"] else None)
+        if (tidigare := ut.get(f["sammantrade_id"])) is None:
+            ut[f["sammantrade_id"]] = dict(f) | {"tjanstgoringar": [tjanstgoring] if tjanstgoring else []}
+            continue
+        if tjanstgoring:
+            tidigare["tjanstgoringar"].append(tjanstgoring)
+        if tidigare["paragrafer"] is not None:
+            tidigare["paragrafer"] = None if f["paragrafer"] is None else sorted({*tidigare["paragrafer"], *f["paragrafer"]})
+        if tidigare["kategori"] != "beslutande" and f["kategori"] == "beslutande":
+            tidigare["kategori"] = "beslutande"
+    return list(ut.values())
+
+
 def _perioder(forekomster: list[dict]) -> list[dict]:
     """Partitillhörighet över tid: följd av sammanträden med samma parti, äldst först."""
     perioder: list[dict] = []
@@ -133,6 +154,13 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
     ).fetchall()
     if not forekomster and rad["huvud_id"] is None and not [n for n in namn if n["huvud_id"]]:
         return None  # namnet finns inte längre i någon närvarolista
+    forekomster = _per_sammantrade(forekomster)
+    # Publicerade partirättelser läggs på. Saknat parti härleds ur samma eller närmaste protokoll.
+    pub = Publicerade(conn, [f["sammantrade_id"] for f in forekomster])
+    for f in forekomster:
+        pub.person(f["sammantrade_id"], f)
+        if f["parti"] is None:
+            partier.fyll_i(conn, f["sammantrade_id"], [f])
 
     per_organ: dict[str, dict] = {}
     for f in forekomster:
@@ -161,9 +189,12 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
             {
                 "sammantrade": {"id": f["sammantrade_id"], "datum": f["datum"], "starttid": f["starttid"],
                                 "organ": _organ(f["organ"]), "tolkning": f["tolkning"]},
-                "namn": f["namn"], "parti": f["parti"], "roll": f["roll"], "kategori": f["kategori"],
+                "namn": f["namn"], "parti": f["parti"], "parti_harlett": f.get("parti_harlett"),
+                "rattelser": f.get("rattelser"),
+                "roll": f["roll"], "kategori": f["kategori"],
                 "tjanstgor_for": {"namn": f["tjanstgor_for"], "parti": f["tjanstgor_for_parti"]}
                 if f["tjanstgor_for"] else None,
+                "tjanstgoringar": f["tjanstgoringar"],
                 "paragrafer": f["paragrafer"], "jav": f["jav"],
             }
             for f in reversed(forekomster)

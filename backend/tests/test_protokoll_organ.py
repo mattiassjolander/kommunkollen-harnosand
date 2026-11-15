@@ -97,7 +97,9 @@ def test_narvaro_med_en_rad_per_person_och_tjanstgorande_ersattare(api):
 
     s = sammantrade(api, "KS", "2025-01-21")
     assert person(s, "Göran Kejerhag Östlund")["tjanstgor_for"] == {"namn": "Eva-Clara Viklund", "parti": "M"}
-    assert person(s, "Baran Hosseini")["parti"] is None  # "()" i protokollet: parti anges inte
+    # "()" i protokollet: parti anges inte, och partiet härleds ur ett annat protokoll.
+    baran = person(s, "Baran Hosseini")
+    assert baran["parti_harlett"]["grund"] in ("samma_protokoll", "annat_protokoll")
     assert not [p for p in s["narvaro"] if p["namn"] == "ordförande"]  # radbruten roll är ingen person
 
     s = sammantrade(api, "SKOL", "2022-02-24")
