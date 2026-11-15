@@ -1,0 +1,59 @@
+import { expect, test } from '@playwright/test'
+import { API_PORT } from '../playwright.config'
+
+test.beforeAll(async ({ request }) => {
+  test.setTimeout(180_000)
+  const api = `http://127.0.0.1:${API_PORT}`
+  expect((await request.post(`${api}/api/auth/test/redaktor`)).ok()).toBeTruthy()
+  expect((await request.post(`${api}/api/insamlingar`)).ok()).toBeTruthy()
+})
+
+test('statistik över behandlingar per år, organ och typ, med filter i URL:en', async ({ page }) => {
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik')
+  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Statistik' }).click()
+  await expect(page).toHaveURL(/\/politik\/statistik$/)
+  await expect(page.getByTestId('automatiskt-tolkad')).toBeVisible()
+  await expect(page.getByTestId('nyckeltal')).toContainText('Motion')
+  await expect(page.getByTestId('teckenforklaring')).toContainText('Informationsärende')
+  await expect(page.getByTestId('segment').first()).toBeVisible()
+  await expect(page.getByTestId('statistikrad').first()).toBeVisible()
+  await expect(page.getByTestId('csv')).toHaveAttribute('download', /\.csv$/)
+
+  // Organ och årsintervall speglas i URL:en, och vyn går att öppna direkt från länken.
+  const ar = await page.getByTestId('filter-fran').locator('option').allTextContents()
+  const sista = ar[ar.length - 1]
+  await page.getByTestId('filter-organ').selectOption('KF')
+  await page.getByTestId('filter-fran').selectOption(sista)
+  await page.getByTestId('filter-till').selectOption(sista)
+  await expect(page).toHaveURL(new RegExp(`organ=KF.*fran=${sista}.*till=${sista}|fran=${sista}.*till=${sista}`))
+  await page.reload()
+  const rader = page.getByTestId('statistikrad')
+  await expect(rader.first()).toHaveAttribute('data-organ', 'KF')
+  for (const r of await rader.all()) {
+    await expect(r).toHaveAttribute('data-ar', sista)
+    await expect(r).toHaveAttribute('data-organ', 'KF')
+  }
+
+  // Ett omvänt intervall avvisas.
+  if (ar.length > 1) {
+    await page.getByTestId('filter-fran').selectOption(sista)
+    await page.getByTestId('filter-till').selectOption(ar[0])
+    await expect(page.getByTestId('omvant')).toBeVisible()
+  }
+})
+
+test('behandlingens typ visas och kan rättas av en redaktör', async ({ page }) => {
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik?organ=KF')
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('link').click()
+  await page.getByTestId('behandling').first().getByRole('link').click()
+  await expect(page.getByTestId('typ')).toContainText('Typ:')
+  const nu = (await page.getByTestId('typ').textContent()) ?? ''
+  const formular = page.getByTestId('rattelseformular')
+  await formular.getByTestId('rattelse-uppgift').selectOption('typ')
+  await formular.getByTestId('rattelse-varde').selectOption(nu.includes('Formalia') ? 'information' : 'formalia')
+  await formular.getByTestId('rattelse-motivering').fill('Prov av typrättelse.')
+  await formular.getByTestId('spara-rattelse').click()
+  await expect(formular.getByTestId('rattelse-sparad')).toBeVisible()
+})

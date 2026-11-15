@@ -8,7 +8,7 @@ bevarar rättelsen.
 
 Rättningsbara uppgifter:
 
-- en behandlings rubrik, beslut och diarienummer,
+- en behandlings rubrik, beslut, diarienummer och typ (behandlingstyper.py),
 - en röst i en votering (rösten och partiet),
 - partiet för en person i närvarolistan.
 """
@@ -22,7 +22,9 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
-FALT = {"behandling": ("rubrik", "beslut", "diarienummer"), "rost": ("rost", "parti"), "narvaro": ("parti",)}
+from .behandlingstyper import TYPER, klassa
+
+FALT = {"behandling": ("rubrik", "beslut", "diarienummer", "typ"), "rost": ("rost", "parti"), "narvaro": ("parti",)}
 ROSTER = ("ja", "nej", "avstar", "franvarande")
 _PARTI = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
 _DNR = re.compile(r"[\w/ .:-]{2,40}")
@@ -50,6 +52,8 @@ def _ursprungligt(conn: psycopg.Connection, m: dict) -> Any:
         ).fetchone()
         if rad is None:
             raise LookupError(f"§ {m['paragraf']} finns inte i sammanträdet {m['sammantrade_id']}")
+        if m["falt"] == "typ":
+            return klassa(rad["rubrik"], rad["beslut"])
         return rad[m["falt"]]
     if m["objekt"] == "rost":
         rad = conn.execute(
@@ -104,6 +108,10 @@ def _nytt(falt: str, varde: Any) -> Any:
         if not isinstance(varde, list) or not all(isinstance(d, str) and _DNR.fullmatch(d.strip()) for d in varde):
             raise Ogiltig("Diarienummer ska vara en lista med nummer")
         return [d.strip() for d in varde]
+    if falt == "typ":
+        if varde is not None and varde not in TYPER:
+            raise Ogiltig(f"Typen ska vara {', '.join(TYPER)}, eller tom om den inte går att avgöra")
+        return varde
     if falt == "rost":
         if varde not in ROSTER:
             raise Ogiltig(f"Rösten ska vara {', '.join(ROSTER)}")
@@ -268,8 +276,12 @@ class Publicerade:
         mal[ut_falt] = r["nytt"]
 
     def behandling(self, sammantrade_id: int, b: dict) -> dict:
-        for falt in FALT["behandling"]:
-            self._lagg_pa(b, (sammantrade_id, "behandling", b["paragraf"], None, ""), falt)
+        nyckel = (sammantrade_id, "behandling", b["paragraf"], None, "")
+        for falt in ("rubrik", "beslut", "diarienummer"):
+            self._lagg_pa(b, nyckel, falt)
+        # Typen räknas fram ur den (ev. rättade) rubriken och beslutet, och kan själv vara rättad.
+        b["typ"] = klassa(b.get("rubrik"), b.get("beslut"))
+        self._lagg_pa(b, nyckel, "typ")
         return b
 
     def rost(self, sammantrade_id: int, paragraf: int, votering: int, r: dict) -> dict:

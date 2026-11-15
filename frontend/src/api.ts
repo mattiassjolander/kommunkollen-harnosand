@@ -312,11 +312,56 @@ export interface Behandlingsrad {
   rubrik: string
   diarienummer: string[]
   beslut: string | null
+  /** Behandlingstyp, automatiskt klassad ur rubrik och beslut (eller rättad). null = kunde inte klassas. */
+  typ?: Behandlingstyp | null
   /** Saknas när behandlingen saknar voteringar respektive reservationer. */
   antal_voteringar?: number
   antal_reservationer?: number
-  /** Publicerade rättelser av rubrik, beslut och diarienummer. */
+  /** Publicerade rättelser av rubrik, beslut, diarienummer och typ. */
   rattelser?: Rattelser
+}
+
+export type Behandlingstyp =
+  | 'beslut'
+  | 'forslag'
+  | 'motion'
+  | 'medborgarforslag'
+  | 'interpellation'
+  | 'information'
+  | 'formalia'
+
+/** Behandlingstyperna i visningsordning. Ordningen avgör också färgen i diagram (design.md). */
+export const BEHANDLINGSTYPER: { id: Behandlingstyp; namn: string }[] = [
+  { id: 'beslut', namn: 'Beslut' },
+  { id: 'forslag', namn: 'Förslag till annat organ' },
+  { id: 'motion', namn: 'Motion' },
+  { id: 'medborgarforslag', namn: 'Medborgarförslag' },
+  { id: 'interpellation', namn: 'Interpellation eller fråga' },
+  { id: 'information', namn: 'Informationsärende' },
+  { id: 'formalia', namn: 'Formalia' },
+]
+
+export interface Kortsammantrade {
+  id: number
+  datum: string | null
+  organ: Organ
+}
+
+export interface Behandlingsstatistik {
+  fran: number
+  till: number
+  organ: Organ | null
+  typer: { id: Behandlingstyp | 'okand'; namn: string }[]
+  rader: {
+    ar: number
+    organ: Organ
+    sammantraden: number
+    behandlingar: number
+    antal: Record<Behandlingstyp | 'okand', number>
+  }[]
+  summa: { sammantraden: number; behandlingar: number; antal: Record<Behandlingstyp | 'okand', number> }
+  underlag: { ej_tolkade: Kortsammantrade[]; paragrafprotokoll: Kortsammantrade[]; utan_datum: number }
+  tillgangliga_ar: number[]
 }
 
 export interface Namngiven {
@@ -405,6 +450,13 @@ export const sokBehandlingar = (q: string, organ?: string, ar?: string) => {
   if (organ) p.set('organ', organ)
   if (ar) p.set('ar', ar)
   return hamta<Sokresultat>(`/api/behandlingar?${p}`)
+}
+export const hamtaBehandlingsstatistik = (fran?: string, till?: string, organ?: string) => {
+  const p = new URLSearchParams()
+  if (fran) p.set('fran', fran)
+  if (till) p.set('till', till)
+  if (organ) p.set('organ', organ)
+  return hamta<Behandlingsstatistik>(`/api/statistik/behandlingar?${p}`)
 }
 export const hamtaSammantrade = (id: number | string) => hamtaEllerSaknas<Sammantrade>(`/api/sammantraden/${id}`)
 export const hamtaBehandling = (id: number | string, paragraf: number | string) =>
@@ -558,7 +610,7 @@ export interface NyRattelse {
   paragraf?: number
   votering?: number
   namn?: string
-  falt: 'rubrik' | 'beslut' | 'diarienummer' | 'rost' | 'parti'
+  falt: 'rubrik' | 'beslut' | 'diarienummer' | 'typ' | 'rost' | 'parti'
   nytt: unknown
   motivering: string
 }

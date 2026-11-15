@@ -12,6 +12,7 @@ import {
   type Rattelse,
   type Rattelsestatus,
 } from '../../api'
+import { BEHANDLINGSTYPER } from '../../api'
 import { datum, parti, rosttext } from '../../format'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
@@ -59,12 +60,17 @@ async function steg(r: Rattelse, gor: (id: number) => Promise<unknown>) {
 }
 
 const egen = (r: Rattelse) => r.redaktor === jag.value?.epost
-const FALT: Record<string, string> = { rubrik: 'Rubrik', beslut: 'Beslut', diarienummer: 'Diarienummer', rost: 'Röst', parti: 'Parti' }
+const FALT: Record<string, string> = {
+  rubrik: 'Rubrik', beslut: 'Beslut', diarienummer: 'Diarienummer', typ: 'Typ', rost: 'Röst', parti: 'Parti',
+}
 
 function visa(r: Rattelse, v: unknown): string {
-  if (v === null || v === undefined || (Array.isArray(v) && !v.length)) return r.falt === 'parti' ? 'inget parti' : 'inget'
+  if (v === null || v === undefined || (Array.isArray(v) && !v.length)) {
+    return r.falt === 'parti' ? 'inget parti' : r.falt === 'typ' ? 'kunde inte klassas' : 'inget'
+  }
   if (r.falt === 'parti') return parti(v as string)
   if (r.falt === 'rost') return rosttext(v as 'ja')
+  if (r.falt === 'typ') return BEHANDLINGSTYPER.find((t) => t.id === v)?.namn ?? String(v)
   return Array.isArray(v) ? v.join(', ') : String(v)
 }
 function uppgift(r: Rattelse): string {

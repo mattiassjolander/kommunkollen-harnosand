@@ -12,6 +12,7 @@ const arUtgivare = computed(() => jag.value?.roller.includes('utgivare') ?? fals
   <nav class="flikar" aria-label="Politik och beslut">
     <RouterLink to="/politik" exact-active-class="aktiv">Sammanträden</RouterLink>
     <RouterLink to="/politik/ledamoter" exact-active-class="aktiv">Ledamöter</RouterLink>
+    <RouterLink to="/politik/statistik" exact-active-class="aktiv">Statistik</RouterLink>
     <RouterLink v-if="arRedaktor" to="/politik/kopplingar" exact-active-class="aktiv">Kopplingsförslag</RouterLink>
     <RouterLink v-if="arRedaktor || arUtgivare" to="/politik/rattelser" exact-active-class="aktiv">Rättelser</RouterLink>
   </nav>
