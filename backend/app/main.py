@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, auth, db, ekonomi, floden, ledamoter, protokoll, serier, status
+from . import arenden, auth, db, rattelser, ekonomi, floden, ledamoter, protokoll, serier, status
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
@@ -243,6 +243,49 @@ def create_app(
     @app.post("/api/kopplingar/{koppling_id}/avvisning")
     def avvisa_koppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
         return _besluta(koppling_id, "avvisad", anv)
+
+    # Redaktionella rättelser (#33): redaktören skriver, en annan person med rollen utgivare granskar och publicerar.
+
+    def _rattelse(steg, *args):
+        with db.connect(database_url) as conn:
+            try:
+                return steg(conn, *args)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except rattelser.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
+            except rattelser.EjTillatet as e:
+                raise HTTPException(403, str(e)) from e
+            except rattelser.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/rattelser", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def lista_rattelser(
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt)$"),
+    ) -> list[dict]:
+        return _rattelse(rattelser.lista, status)
+
+    @app.post("/api/rattelser", status_code=201)
+    def skapa_rattelse(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """En rättelse som utkast: {sammantrade_id, objekt, paragraf, votering, namn, falt, nytt, motivering}."""
+        return _rattelse(rattelser.skapa, data, anv.epost)
+
+    @app.patch("/api/rattelser/{rattelse_id}")
+    def andra_rattelse(rattelse_id: int, data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _rattelse(rattelser.andra, rattelse_id, data, anv.epost)
+
+    @app.delete("/api/rattelser/{rattelse_id}", status_code=204)
+    def ta_bort_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> Response:
+        _rattelse(rattelser.ta_bort, rattelse_id, anv.epost)
+        return Response(status_code=204)
+
+    @app.post("/api/rattelser/{rattelse_id}/granskning")
+    def granska_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _rattelse(rattelser.granska, rattelse_id, anv.epost)
+
+    @app.post("/api/rattelser/{rattelse_id}/publicering")
+    def publicera_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _rattelse(rattelser.publicera, rattelse_id, anv.epost)
 
     @app.get("/api/ledamoter", dependencies=[Depends(krav_roll("lasare"))])
     def lista_ledamoter(q: str | None = None, parti: str | None = None, organ: str | None = None) -> list[dict]:

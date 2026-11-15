@@ -14,6 +14,7 @@ import KopplingarView from './views/politik/KopplingarView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
 import LedamoterView from './views/politik/LedamoterView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
+import RattelserView from './views/politik/RattelserView.vue'
 import SammantradeView from './views/politik/SammantradeView.vue'
 
 const router = createRouter({
@@ -31,6 +32,7 @@ const router = createRouter({
     },
     { path: '/politik/arenden/:id', component: ArendeView, meta: { titel: 'Ärende' } },
     { path: '/politik/kopplingar', component: KopplingarView, meta: { titel: 'Kopplingsförslag' } },
+    { path: '/politik/rattelser', component: RattelserView, meta: { titel: 'Rättelser' } },
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },

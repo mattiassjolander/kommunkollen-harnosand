@@ -94,6 +94,16 @@ Slutligt beslut är det senaste beslutet i ärendet, om det inte föreslår komm
 
 API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{paragraf}` (`arende`), `/api/kopplingar?status=forslag` samt `POST /api/kopplingar/{id}/bekraftelse` och `/avvisning` (redaktör).
 
+## Rättelser
+
+En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut eller diarienummer, en röst i en votering, eller partiet för en person i närvarolistan. Formuläret finns längst ned på behandlingen. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
+
+Statusflödet är utkast → granskad → publicerad (kravspec 18). En utgivare som inte skrev rättelsen granskar och publicerar den under fliken Rättelser. Det gäller också den som har båda rollerna. Redaktören kan ändra och ta bort sitt eget utkast. En ny publicerad rättelse av samma uppgift ersätter den tidigare, som får status ersatt.
+
+Rättelsen sparas bredvid tolkningen och läggs på när uppgiften läses. Därför bevaras den vid en ny insamling och vid omtolkning. Den pekar ut uppgiften med sammanträde och paragraf, och med namn och votering för en röst. Läsaren ser den rättade uppgiften på behandlingen, sammanträdet och ärendet, med markeringen "Rättad av redaktionen" och vad tolkningen sa. Röstsiffrorna per parti räknas med den rättade rösten. Ledamotssidorna, sökningen och kopplingen av ärenden använder tolkningen.
+
+API:t: `GET /api/rattelser?status=` (redaktör eller utgivare), `POST /api/rattelser`, `PATCH` och `DELETE /api/rattelser/{id}` (redaktören som skrev utkastet), `POST /api/rattelser/{id}/granskning` och `/publicering` (utgivare). Testinloggningen tar flera roller, t.ex. `/api/auth/test/redaktor+utgivare`.
+
 ## Filter och sökning
 
 Vyn Politik och beslut filtrerar sammanträdena på organ och år och söker bland behandlingarna på rubrik eller diarienummer. Allt speglas i adressen, så en vy går att dela. API:t: `/api/sammantraden?organ=&ar=` och `/api/behandlingar?q=&organ=&ar=` (högst 200 träffar, senaste först).

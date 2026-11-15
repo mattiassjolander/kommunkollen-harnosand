@@ -303,6 +303,8 @@ export interface Person {
   /** Paragrafer personen var beslutande vid, om inte alla. */
   paragrafer: number[] | null
   jav: number[]
+  /** Publicerade rättelser av partiet. */
+  rattelser?: Rattelser
 }
 
 export interface Behandlingsrad {
@@ -313,6 +315,8 @@ export interface Behandlingsrad {
   /** Saknas när behandlingen saknar voteringar respektive reservationer. */
   antal_voteringar?: number
   antal_reservationer?: number
+  /** Publicerade rättelser av rubrik, beslut och diarienummer. */
+  rattelser?: Rattelser
 }
 
 export interface Namngiven {
@@ -348,6 +352,7 @@ export interface Votering {
     rost: Rostval
     ledamot_id: number | null
     ersatt: Namngiven | null
+    rattelser: Rattelser | null
   }[]
   per_parti: { parti: string | null; ja: number; nej: number; avstar: number; franvarande: number }[]
 }
@@ -532,3 +537,71 @@ async function beslutaKoppling(id: number, beslut: 'bekraftelse' | 'avvisning'):
 }
 export const bekraftaKoppling = (id: number) => beslutaKoppling(id, 'bekraftelse')
 export const avvisaKoppling = (id: number) => beslutaKoppling(id, 'avvisning')
+
+// Redaktionella rättelser (#33)
+
+/** En publicerad rättelse av en uppgift. Värdet i fältet är det rättade, `ursprungligt` vad tolkningen sa. */
+export interface Rattelsemarkering {
+  id: number
+  ursprungligt: unknown
+  nytt: unknown
+  motivering: string
+  publicerad: string
+}
+export type Rattelser = Partial<Record<string, Rattelsemarkering>>
+
+export type Rattelsestatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt'
+
+export interface NyRattelse {
+  sammantrade_id: number
+  objekt: 'behandling' | 'rost' | 'narvaro'
+  paragraf?: number
+  votering?: number
+  namn?: string
+  falt: 'rubrik' | 'beslut' | 'diarienummer' | 'rost' | 'parti'
+  nytt: unknown
+  motivering: string
+}
+
+export interface Rattelse extends Omit<NyRattelse, 'paragraf' | 'votering' | 'namn'> {
+  id: number
+  sammantrade: { id: number; datum: string | null; organ: Organ }
+  paragraf: number | null
+  votering: number | null
+  namn: string | null
+  /** Behandlingens rubrik enligt tolkningen. */
+  rubrik: string | null
+  ursprungligt: unknown
+  status: Rattelsestatus
+  redaktor: string
+  skapad: string
+  granskad_av: string | null
+  granskad: string | null
+  publicerad_av: string | null
+  publicerad: string | null
+}
+
+async function skrivRattelse(url: string, metod: string, data?: unknown): Promise<Rattelse | null> {
+  const svar = await fetch(url, {
+    method: metod,
+    headers: data === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: data === undefined ? undefined : JSON.stringify(data),
+  })
+  if (svar.status === 401) throw new EjInloggad()
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.status === 204 ? null : svar.json()
+}
+
+export async function hamtaRattelser(status?: Rattelsestatus): Promise<Rattelse[]> {
+  const svar = await fetch(`/api/rattelser${status ? `?status=${status}` : ''}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör eller utgivare.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+export const skapaRattelse = (r: NyRattelse) => skrivRattelse('/api/rattelser', 'POST', r) as Promise<Rattelse>
+export const granskaRattelse = (id: number) =>
+  skrivRattelse(`/api/rattelser/${id}/granskning`, 'POST') as Promise<Rattelse>
+export const publiceraRattelse = (id: number) =>
+  skrivRattelse(`/api/rattelser/${id}/publicering`, 'POST') as Promise<Rattelse>
+export const taBortRattelse = (id: number) => skrivRattelse(`/api/rattelser/${id}`, 'DELETE')

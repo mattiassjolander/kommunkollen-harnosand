@@ -1,10 +1,11 @@
 <script setup lang="ts">
-// Undernavigering i Politik och beslut. Kön med kopplingsförslag visas för redaktörer.
+// Undernavigering i Politik och beslut. Kopplingsförslag och rättelser visas för redaktörer och utgivare.
 import { computed, inject, ref, type Ref } from 'vue'
 import type { Jag } from '../api'
 
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
 const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
+const arUtgivare = computed(() => jag.value?.roller.includes('utgivare') ?? false)
 </script>
 
 <template>
@@ -12,6 +13,7 @@ const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? fals
     <RouterLink to="/politik" exact-active-class="aktiv">Sammanträden</RouterLink>
     <RouterLink to="/politik/ledamoter" exact-active-class="aktiv">Ledamöter</RouterLink>
     <RouterLink v-if="arRedaktor" to="/politik/kopplingar" exact-active-class="aktiv">Kopplingsförslag</RouterLink>
+    <RouterLink v-if="arRedaktor || arUtgivare" to="/politik/rattelser" exact-active-class="aktiv">Rättelser</RouterLink>
   </nav>
 </template>
 

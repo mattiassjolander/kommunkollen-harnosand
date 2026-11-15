@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { EjInloggad, hamtaBehandling, Saknas, type Behandling, type Votering } from '../../api'
+import { EjInloggad, hamtaBehandling, Saknas, type Behandling, type Jag, type Votering } from '../../api'
 import { namnOchParti, rosttext, sammantradesdatum } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
+import Rattelseformular from '../../components/Rattelseformular.vue'
+import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
+const jag = inject<Ref<Jag | null>>('jag', ref(null))
+const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
 
 const b = ref<Behandling | null>(null)
 const laddar = ref(true)
@@ -71,8 +75,12 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
         <span class="forsta-versal">{{ sammantradesdatum(b.sammantrade.datum) }}</span>
       </p>
       <h1>{{ b.rubrik || 'Rubrik saknas' }}</h1>
-      <p v-if="b.diarienummer.length" class="ingress" data-testid="diarienummer">
-        Diarienummer {{ b.diarienummer.join(', ') }}
+      <p v-if="b.rattelser?.rubrik" class="rattelserad">
+        <Rattelsemarkering :rattelse="b.rattelser.rubrik" falt="rubrik" />
+      </p>
+      <p v-if="b.diarienummer.length || b.rattelser?.diarienummer" class="ingress" data-testid="diarienummer">
+        Diarienummer {{ b.diarienummer.join(', ') || 'saknas' }}
+        <Rattelsemarkering v-if="b.rattelser?.diarienummer" :rattelse="b.rattelser.diarienummer" falt="diarienummer" />
       </p>
       <p class="markering"><Tolkningsmarkering /></p>
       <Protokollkalla :protokoll="b.sammantrade.protokoll" :paragraf="b.paragraf" />
@@ -82,6 +90,9 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
       <h2 id="beslut-rubrik">Beslut</h2>
       <p v-if="b.beslut" class="beslut" data-testid="beslut">{{ b.beslut }}</p>
       <p v-else class="saknas" data-testid="beslut">Protokollet anger inget beslut för paragrafen.</p>
+      <p v-if="b.rattelser?.beslut" class="rattelserad">
+        <Rattelsemarkering :rattelse="b.rattelser.beslut" falt="beslut" />
+      </p>
     </section>
 
     <section v-if="b.arende" class="kort" aria-labelledby="arende-rubrik" data-testid="arende">
@@ -191,7 +202,10 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
                 </span>
               </th>
               <td><Partimarkering :parti="r.parti" /></td>
-              <td>{{ rosttext(r.rost) }}</td>
+              <td>
+                {{ rosttext(r.rost) }}
+                <Rattelsemarkering v-if="r.rattelser?.rost" :rattelse="r.rattelser.rost" falt="rost" />
+              </td>
             </tr>
           </tbody>
         </table>
@@ -226,6 +240,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
           <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
           <template v-else>{{ p.namn }}</template>
           <Partimarkering :parti="p.parti" />
+          <Rattelsemarkering v-if="p.rattelser?.parti" :rattelse="p.rattelser.parti" falt="parti" />
           <span v-if="p.tjanstgor_for" class="anteckning">
             tjänstgör för {{ namnOchParti(p.tjanstgor_for.namn, p.tjanstgor_for.parti) }}
           </span>
@@ -241,6 +256,15 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
           </li>
         </ul>
       </template>
+    </section>
+
+    <section v-if="arRedaktor" class="kort" aria-labelledby="ratt-rubrik" data-testid="ratta">
+      <h2 id="ratt-rubrik">Rätta en uppgift</h2>
+      <p class="ingress">
+        Rättelsen sparas som utkast. Den visas för läsarna först när en annan person med rollen utgivare har granskat
+        och publicerat den. Tolkningen ändras inte och visas tillsammans med rättelsen.
+      </p>
+      <Rattelseformular :behandling="b" @utloggad="utloggad" />
     </section>
 
     <nav class="blader" aria-label="Paragrafer">
@@ -300,6 +324,9 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
 .antal {
   color: var(--ink-muted);
   font-weight: 400;
+}
+.rattelserad {
+  margin: 8px 0 0;
 }
 .arendetext {
   margin: 0 0 8px;
