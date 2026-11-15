@@ -59,12 +59,17 @@ onMounted(kontrollera)
     <div v-else class="ram">
       <aside class="nav">
         <div class="ordmarke">
+          <img class="platslogotyp ljus" src="/platsvarumarke/logotyp-bla.png" alt="Härnösand Höga Kusten" />
+          <img class="platslogotyp morkt" src="/platsvarumarke/logotyp-vit.png" alt="Härnösand Höga Kusten" />
           <span class="namn">Kommunkollen</span>
-          <span class="ort">Härnösand</span>
         </div>
         <nav aria-label="Huvudvyer">
           <RouterLink v-for="v in vyer" :key="v.till" :to="v.till" class="navlank">{{ v.namn }}</RouterLink>
         </nav>
+        <div class="avsandare">
+          <img class="rundlogotyp" src="/platsvarumarke/logotyp-rund-bla.png" alt="" />
+          <p>Oberoende granskning. Inte en kanal för Härnösands kommun.</p>
+        </div>
         <div class="anvandare" data-testid="anvandare">
           <template v-if="jag">
             <span class="anvnamn">{{ jag.namn }}</span>
@@ -95,21 +100,44 @@ onMounted(kontrollera)
 .nav {
   border-right: 1px solid var(--line);
   padding: 24px 16px;
-  background: var(--surface);
+  background: var(--nav);
   display: flex;
   flex-direction: column;
 }
 .ordmarke {
   display: flex;
   flex-direction: column;
-  margin-bottom: 32px;
+  gap: 8px;
+  margin-bottom: 28px;
+  padding: 0 4px;
+}
+.platslogotyp {
+  width: 160px;
+  height: auto;
+}
+.platslogotyp.ljus {
+  display: var(--logotyp-ljus);
+}
+.platslogotyp.morkt {
+  display: var(--logotyp-morkt);
 }
 .namn {
   font-weight: 600;
-  font-size: 18px;
+  font-size: 16px;
 }
-.ort {
+.avsandare {
+  margin-top: auto;
+  padding: 0 4px 12px;
+  font-size: 12px;
   color: var(--ink-secondary);
+}
+.avsandare p {
+  margin: 8px 0 0;
+}
+.rundlogotyp {
+  width: 72px;
+  height: auto;
+  display: block;
 }
 .navlank {
   display: block;
@@ -128,7 +156,6 @@ onMounted(kontrollera)
   font-weight: 600;
 }
 .anvandare {
-  margin-top: auto;
   border-top: 1px solid var(--line);
   padding-top: 12px;
   display: flex;
@@ -159,8 +186,13 @@ onMounted(kontrollera)
   min-width: 0;
 }
 .sidhuvud {
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  /* Blått sidhuvud ur platsvarumärket. Texten i statusindikatorn blir vit. */
+  --ink: var(--sidhuvud-ink);
+  --ink-secondary: var(--sidhuvud-ink);
+  --ink-muted: var(--sidhuvud-ink);
+  --accent: var(--sidhuvud-ink);
+  background: var(--sidhuvud);
+  color: var(--sidhuvud-ink);
   padding: 12px 48px;
 }
 .innehall {

@@ -73,6 +73,10 @@ const medFel = computed(() => (status.value ? status.value.kallor_kontrollerade 
 </script>
 
 <template>
+  <figure class="platsbild">
+    <img src="/platsvarumarke/smitingen.jpg" alt="Strandkant vid Smitingen" />
+    <figcaption>Foto: Härnösands platsvarumärke</figcaption>
+  </figure>
   <header class="vyhuvud">
     <h1>Översikt</h1>
     <p class="ingress">
@@ -140,8 +144,32 @@ const medFel = computed(() => (status.value ? status.value.kallor_kontrollerade 
 </template>
 
 <style scoped>
+/* Bild ur platsvarumärket, kant i kant med innehållsytan (design.md, Platsvarumärket). */
+.platsbild {
+  position: relative;
+  margin: -32px -48px 24px;
+  height: 200px;
+  overflow: hidden;
+}
+.platsbild img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.platsbild figcaption {
+  position: absolute;
+  right: 12px;
+  bottom: 6px;
+  color: #ffffff;
+  font-size: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
 .vyhuvud {
   margin-bottom: 24px;
+}
+.vyhuvud h1 {
+  color: var(--accent);
 }
 .ingress {
   color: var(--ink-secondary);

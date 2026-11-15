@@ -24,3 +24,6 @@ __pycache__/
 test-results/
 playwright-report/
 .kaka
+
+# Härnösands platsvarumärke, original (stora bilder). Nedskalade kopior finns i frontend/public/platsvarumarke.
+/platsvarumarke/
