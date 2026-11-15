@@ -54,12 +54,22 @@ Läses per behandling ur avsnitten "Yrkanden", "Propositionsordning" och "Reserv
 - **Yrkanden**: en mening per yrkande, med de personer som står med parti ("Namn (SD) yrkar …").
 - **Reservationer**: personer med parti, och partier som reserverar sig ("Sverigedemokraterna reserverar sig" → SD).
 - **Voteringar**, i protokollets ordning: ja- och nejförslaget ur propositionen ("Ja för X och nej för Y", "Ja = X. Nej = Y.", "den som vill att X röstar ja"), siffrorna som texten anger och ordförandens konstaterande ("finner att …").
-- **Voteringslistan** ger varje röst. Den läses i tre former: kryss under Ja/Nej/Avstår med parti och tjänstgörande ersättare i egna kolumner, en tabell med "Ledamot/tjänstgörande ersättare" och paragrafkolumner, och en numrerad lista "Namn och parti, Röst" med "X ersatt av Y". Listor efter paragrafen eller i en bilaga knyts till paragrafen genom "§ N" i tabellhuvudet.
-- Den som röstade är den tjänstgörande ersättaren när en sådan står för paragrafen ("Tom stol §§ 1–4" och paragrafintervall avgör). En ersättare som tjänstgjorde på en vakant plats visas utan ersatt ledamot.
+- **Voteringslistan** ger varje röst. Den läses i fyra former:
+  - kryss under Ja/Nej/Avstår med parti och tjänstgörande ersättare i egna kolumner, ibland med flera voteringar bredvid varandra i närvaro- och voteringslistan ("Vot § 96", "Vot § 98"),
+  - en tabell med "Ledamot/tjänstgörande ersättare" och paragrafkolumner,
+  - en numrerad lista "Namn och parti, Röst" med "X ersatt av Y",
+  - en lista "Namn, Röst" med JA och NEJ och "tjänstgörande ersättare för Y".
+
+  Listor efter paragrafen eller i en bilaga knyts till paragrafen genom "§ N" i tabellhuvudet.
+- **Kolumnerna** läses ur kryssen, inte ur rubrikerna. Rubrikerna kan stå flera tecken vid sidan av kryssen, vara avstavade ("Part"/"i", "När"/"var"/"o") eller stå på flera rader. Kryssen samlas i klungor som tilldelas kolumnerna i ordning. På en ny sida kan indragningen vara en annan, så klungorna räknas ur raderna på tabellens vanligaste indragning.
+- Den som röstade är den tjänstgörande ersättaren när en sådan står för paragrafen ("Tom stol §§ 1–4" och paragrafintervall avgör). En ruta kan ha flera ersättare vid olika paragrafer ("Brendan Mc Carthy §§ 57-61", "Hans Rosengren § 66"). En ersättare som tjänstgjorde på en vakant plats visas utan ersatt ledamot. En ersättare från ett annat parti står med sitt eget parti ("Keith Bryant (V)" på en plats för S).
+- En tom stol är **frånvarande**, även om listan har ett kryss på raden: protokollets text räknar platsen som tom. "Ej röstat" är frånvarande.
 - Ett streck utan kryss är **avstår** i en lista utan Avstår-kolumn och **frånvarande** i en lista med Avstår-kolumn.
 - **Vinnaren** (`ja`/`nej`) läses ur ordförandens konstaterande genom att jämföra det med förslagen. Den räknas aldrig fram ur siffrorna: en minoritet kan begära återremiss och vinna med färre röster. Går den inte att avgöra visas konstaterandet.
 - Röster per parti summeras ur listan och visas med förkortning och siffror, aldrig bara med färg.
-- När listan och texten anger olika siffror visas listan som den står, och skillnaden står i avvikelserna: "§ 112, votering 1: voteringslistan har 20 ja, 18 nej, 0 avstår, protokollets text 21 ja, 18 nej, 0 avstår".
+- När listan och texten anger olika siffror visas listan som den står, och skillnaden står i avvikelserna: "§ 112, votering 1: voteringslistan har 20 ja, 18 nej, protokollets text 21 ja, 18 nej". Avstår och frånvarande jämförs bara när texten anger dem.
+
+I hela arkivet (november 2026, 116 voteringar) stämmer listan med texten i 104. I sex anger protokollet olika siffror i texten och listan, eller har kryss under både Ja och Nej för samma ledamot. Sex saknar lista i protokollet: en sluten omröstning, ett digitalt sammanträde där bara utfallet antecknades, och listor som inte finns i PDF:ens textlager.
 
 Rösterna knyts till ledamotsregistret på namn. Namn som bara förekommer i voteringslistor, eller stavas annorlunda där än i närvarolistan, länkas inte.
 
