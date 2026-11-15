@@ -3,6 +3,7 @@ import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaBehandling, Saknas, type Behandling, type Jag, type Votering } from '../../api'
 import { namnOchParti, rosttext, sammantradesdatum } from '../../format'
+import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Rattelseformular from '../../components/Rattelseformular.vue'
@@ -240,6 +241,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
           <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
           <template v-else>{{ p.namn }}</template>
           <Partimarkering :parti="p.parti" />
+          <Harledningsmarkering v-if="p.parti_harlett" :kalla="p.parti_harlett" />
           <Rattelsemarkering v-if="p.rattelser?.parti" :rattelse="p.rattelser.parti" falt="parti" />
           <span v-if="p.tjanstgor_for" class="anteckning">
             tjänstgör för {{ namnOchParti(p.tjanstgor_for.namn, p.tjanstgor_for.parti) }}
@@ -253,6 +255,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
             <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
             <template v-else>{{ p.namn }}</template>
             <Partimarkering :parti="p.parti" />
+            <Harledningsmarkering v-if="p.parti_harlett" :kalla="p.parti_harlett" />
           </li>
         </ul>
       </template>

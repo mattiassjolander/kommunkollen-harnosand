@@ -13,7 +13,9 @@ import {
   type Ledamotsrad,
 } from '../../api'
 import { namnOchParti, paragraftext, rosttext, sammantradesdatum } from '../../format'
+import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
+import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
@@ -210,14 +212,27 @@ const delaUpp = (namn: { id: number; namn: string }) =>
               </RouterLink>
             </th>
             <td>{{ s.sammantrade.organ.namn }}</td>
-            <td><Partimarkering :parti="s.parti" /></td>
+            <td>
+              <Partimarkering :parti="s.parti" />
+              <Harledningsmarkering v-if="s.parti_harlett" :kalla="s.parti_harlett" />
+              <Rattelsemarkering v-if="s.rattelser?.parti" :rattelse="s.rattelser.parti" falt="parti" />
+            </td>
             <td>{{ s.roll ?? '–' }}</td>
             <td>
               {{ KATEGORI[s.kategori] }}
-              <span v-if="s.tjanstgor_for" class="anteckning">
-                · tjänstgör för {{ s.tjanstgor_for.namn }}
+              <span v-if="s.tjanstgoringar.length > 1" class="anteckning" data-testid="tjanstgoringar">
+                · tjänstgör för
+                <template v-for="(t, i) in s.tjanstgoringar" :key="i"
+                  ><template v-if="i">, </template>{{ t.namn
+                  }}<template v-if="t.paragrafer"> {{ paragraftext(t.paragrafer) }}</template></template
+                >
               </span>
-              <span v-if="s.paragrafer" class="anteckning"> · vid {{ paragraftext(s.paragrafer) }}</span>
+              <template v-else>
+                <span v-if="s.tjanstgor_for" class="anteckning">
+                  · tjänstgör för {{ s.tjanstgor_for.namn }}
+                </span>
+                <span v-if="s.paragrafer" class="anteckning"> · vid {{ paragraftext(s.paragrafer) }}</span>
+              </template>
               <span v-if="s.jav.length" class="anteckning"> · jäv {{ paragraftext(s.jav) }}</span>
             </td>
           </tr>

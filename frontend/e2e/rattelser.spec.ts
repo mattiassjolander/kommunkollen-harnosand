@@ -73,3 +73,21 @@ test('en redaktör som också är utgivare kan inte godkänna sin egen rättelse
   await expect(egen).toHaveCount(0)
   await page.request.post('/api/auth/logga-ut')
 })
+
+test('en redaktör rättar partiet i närvarolistan från sammanträdet', async ({ page }) => {
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik?organ=KF')
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('link').click()
+  await expect(page.getByTestId('narvaro')).toBeVisible()
+  await expect(page.getByTestId('rattelseformular')).toHaveCount(0)
+
+  await page.request.post('/api/auth/test/redaktor')
+  await page.reload()
+  const formular = page.getByTestId('rattelseformular')
+  const forsta = await formular.getByTestId('rattelse-uppgift').locator('option').first().getAttribute('value')
+  expect(forsta).toMatch(/^parti:/)
+  await formular.getByTestId('rattelse-varde').fill('-')
+  await formular.getByTestId('rattelse-motivering').fill('Närvarolistan på sidan 2.')
+  await formular.getByTestId('spara-rattelse').click()
+  await expect(formular.getByTestId('rattelse-sparad')).toBeVisible()
+})

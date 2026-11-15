@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { EjInloggad, hamtaSammantrade, Saknas, type Person, type Sammantrade } from '../../api'
+import { EjInloggad, hamtaSammantrade, Saknas, type Jag, type Person, type Sammantrade } from '../../api'
 import { paragraftext, parti, sammantradesdatum } from '../../format'
+import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
+import Rattelseformular from '../../components/Rattelseformular.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
+const jag = inject<Ref<Jag | null>>('jag', ref(null))
+const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
 
 const s = ref<Sammantrade | null>(null)
 const laddar = ref(true)
@@ -131,6 +135,7 @@ const tid = computed(() =>
               </th>
               <td>
                 <Partimarkering :parti="p.parti" />
+                <Harledningsmarkering v-if="p.parti_harlett" :kalla="p.parti_harlett" />
                 <Rattelsemarkering v-if="p.rattelser?.parti" :rattelse="p.rattelser.parti" falt="parti" />
               </td>
               <td>{{ p.roll ?? '–' }}</td>
@@ -139,6 +144,18 @@ const tid = computed(() =>
           </tbody>
         </table>
       </div>
+    </section>
+
+    <section v-if="arRedaktor && s.narvaro.length" class="kort" aria-labelledby="ratta-rubrik">
+      <h2 id="ratta-rubrik">Rätta parti i närvarolistan</h2>
+      <p class="ingress">
+        Rättelsen sparas som utkast. Den visas för läsarna när en annan person med rollen utgivare har granskat och
+        publicerat den. Ett härlett parti kan bekräftas på samma sätt.
+      </p>
+      <Rattelseformular
+        :narvaro="{ sammantrade_id: s.id, personer: s.narvaro.filter((p) => p.kategori !== 'ovrig') }"
+        @utloggad="utloggad"
+      />
     </section>
   </template>
 </template>

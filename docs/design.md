@@ -157,6 +157,7 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 | Uppskattad kostnad | Diagonal skraffering (45°) i samma färg, och texten "uppskattad" |
 | Automatiskt tolkad uppgift (ur protokoll, ej granskad) | Prickad kantlinje, ikonen ⚙ och texten "Automatiskt tolkad, ej granskad". Ett protokoll som inte gick att tolka får varningsikonen ! och texten "Kunde inte tolkas automatiskt" |
 | Rättad av redaktionen | Ikonen ✎ och texten "Rättad av redaktionen" vid uppgiften. Den fälls ut och visar vad tolkningen sa, motiveringen och när rättelsen publicerades |
+| Härlett parti (närvarolistan anger inget) | Ikonen ≈ och texten "Härlett" med prickad kantlinje vid partiet. Den fälls ut och visar källan: samma protokoll, eller vilket sammanträde partiet hämtades från |
 | Koppling mellan behandlingar i ett ärende | Ikonen ⚙ och "Automatisk koppling", ? och "Förslag, inte bekräftat", ✓ och "Bekräftad av redaktör" eller × och "Avvisad av redaktör", alltid med grunden (diarienumret eller hänvisningen) |
 | AI-analys (ej bekräftad) | Streckad kantlinje och etiketten **Analys**, aldrig samma stil som fakta |
 | Ofullständigt underlag | Grå skraffering och texten "Ofullständigt underlag" |
