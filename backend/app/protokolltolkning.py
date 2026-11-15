@@ -109,6 +109,18 @@ class Behandling:
     propositionsordning: str | None = None
     voteringar: list[Votering] = field(default_factory=list)
     reservationer: list[Reservation] = field(default_factory=list)
+    hanvisningar: list[Hanvisning] = field(default_factory=list)
+
+
+@dataclass
+class Hanvisning:
+    """En hänvisning i beslutsunderlaget till ett protokollsutdrag: "Protokollsutdrag
+    samhällsnämnden 2026-05-21 § 61". `organ` är None när hänvisningen inte anger organet."""
+
+    organ: str | None
+    datum: date
+    paragraf: int
+    text: str
 
 
 @dataclass
@@ -629,6 +641,7 @@ def _behandlingar(t: Tolkning, lop: list[str]) -> None:
             yrkanden=[y for s in sektioner.get("yrkande", []) for y in _yrkanden(_lopande(s))],
             propositionsordning="\n\n".join(prop) or None,
             reservationer=[r for s in sektioner.get("reservation", []) for r in _reservationer(_lopande(s))],
+            hanvisningar=[h for s in sektioner.get("beslutsunderlag", []) for h in hanvisningar("\n".join(s))],
         ))
 
 
@@ -674,6 +687,59 @@ _ORD = r"[A-ZÅÄÖÉ][\wåäöéüÅÄÖ'’-]*"
 _NAMN_PARTI = re.compile(rf"(?P<namn>{_ORD}(?: {_ORD}){{1,3}}) \((?P<parti>[A-ZÅÄÖ]{{1,4}}|-)\)")
 
 
+# Hänvisningar till protokollsutdrag i beslutsunderlaget
+
+_HANV_ORGAN = (
+    ("KF", r"kommunfullmäktige|KF"),
+    ("KS", r"kommunstyrelsen|kommunstyrelse|KS"),
+    ("SAM", r"samhällsnämnden|samhällsnämnd"),
+    ("SOC", r"socialnämnden|socialnämnd"),
+    ("SKOL", r"skolnämnden|skolnämnd"),
+)
+_HANV_GENITIV = {"kommunfullmäktiges": "KF", "kommunstyrelsens": "KS", "samhällsnämndens": "SAM",
+                 "socialnämndens": "SOC", "skolnämndens": "SKOL"}
+_HANV_DATUM = r"(?P<{0}ar>20\d\d)(?:\s?-\s?(?P<{0}man>\d\d)\s?-\s?(?P<{0}dag>\d\d)|(?P<{0}man2>\d\d)(?P<{0}dag2>\d\d))"
+_HANV_PAR = r"§§?\s?(?P<{0}par>\d+)"
+_HANV_STALLE = (
+    rf"(?:{_HANV_DATUM.format('a')}[,:]?\s*{_HANV_PAR.format('a')}"
+    rf"|{_HANV_PAR.format('b')}[,:]?\s*{_HANV_DATUM.format('b')})(?!\d)"
+)
+_HANVISNING = re.compile(
+    r"(?:(?P<genitiv>" + "|".join(_HANV_GENITIV) + r")\s+)?protokollsutdrag(?:\s+med\s+bilagor?)?[,:]?\s+"
+    r"(?:(?P<organ>" + "|".join(rf"(?P<o{k}>{p})" for k, p in _HANV_ORGAN) + r")(?:\s+Härnösand)?[,:]?\s+)?"
+    + _HANV_STALLE,
+    re.I,
+)
+
+
+def hanvisningar(text: str) -> list[Hanvisning]:
+    """Hänvisningarna till protokollsutdrag i ett beslutsunderlag.
+
+    Organet anges efter ordet ("Protokollsutdrag kommunstyrelsen 2026-02-24 § 31") eller i genitiv
+    före ("Socialnämndens protokollsutdrag, 2023-01-26 § 5"). Utan organ räknas hänvisningen bara
+    när den inleder en punkt i underlaget, så att "Kommunfullmäktige Kramfors kommun protokollsutdrag
+    …" inte blir en hänvisning till Härnösand. Andra kommuner, utskott och beredningar tas inte med.
+    """
+    ut: list[Hanvisning] = []
+    for m in _HANVISNING.finditer(text):
+        if m["organ"]:
+            organ = next(k for k, _ in _HANV_ORGAN if m[f"o{k}"])
+        elif m["genitiv"]:
+            organ = _HANV_GENITIV[m["genitiv"].lower()]
+        else:
+            fore = text[: m.start()].rsplit("\n", 1)[-1]
+            if not re.fullmatch(r"[\s•\-–*\d.]*", fore):
+                continue
+            organ = None
+        s = "a" if m["aar"] else "b"
+        try:
+            datum = date(int(m[f"{s}ar"]), int(m[f"{s}man"] or m[f"{s}man2"]), int(m[f"{s}dag"] or m[f"{s}dag2"]))
+        except ValueError:
+            continue
+        ut.append(Hanvisning(organ=organ, datum=datum, paragraf=int(m[f"{s}par"]), text=" ".join(m[0].split())))
+    return ut
+
+
 def _sektioner(kropp: list[str]) -> dict[str, list[list[str]]]:
     """Raderna under rubrikerna Yrkande, Propositionsordning och Reservation, ett avsnitt per rubrik."""
     ut: dict[str, list[list[str]]] = {}
@@ -683,7 +749,8 @@ def _sektioner(kropp: list[str]) -> dict[str, list[list[str]]]:
             break
         if _ar_rubrik(r):
             nyckel = ("yrkande" if r.startswith("Yrkande") else "reservation" if r.startswith("Reservation")
-                      else "propositionsordning" if r.startswith("Propositionsordning") else None)
+                      else "propositionsordning" if r.startswith("Propositionsordning")
+                      else "beslutsunderlag" if r == "Beslutsunderlag" else None)
             aktuell = None if nyckel is None else []
             if nyckel:
                 ut.setdefault(nyckel, []).append(aktuell)

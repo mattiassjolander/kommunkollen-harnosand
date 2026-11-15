@@ -361,6 +361,8 @@ export interface Behandling extends Behandlingsrad {
   sammantrade: Sammantradesrad
   beslutande: Person[]
   jav: Person[]
+  /** Ärendet behandlingen hör till (ADR-0003). */
+  arende: { id: number; antal_behandlingar: number } | null
   foregaende: number | null
   nasta: number | null
   yrkanden: { text: string; personer: Namngiven[] }[]
@@ -476,3 +478,57 @@ async function skrivLedamot(url: string): Promise<Ledamot> {
 export const slaIhopLedamoter = (huvud: number, med: number) =>
   skrivLedamot(`/api/ledamoter/${huvud}/sammanslagningar?med=${med}`)
 export const delaUppLedamot = (namnId: number) => skrivLedamot(`/api/ledamoter/${namnId}/uppdelning`)
+
+// Ärendespårning (#32, ADR-0003)
+
+export type Kopplingsstatus = 'automatisk' | 'forslag' | 'bekraftad' | 'avvisad'
+
+export interface Behandlingsref {
+  sammantrade: { id: number; datum: string | null; organ: Organ }
+  paragraf: number
+  rubrik: string
+}
+
+export interface Koppling {
+  id: number
+  /** Den tidigare behandlingen. */
+  fran: Behandlingsref
+  till: Behandlingsref
+  grund: 'diarienummer' | 'hanvisning'
+  /** Diarienumret, eller hänvisningen som den står i beslutsunderlaget. */
+  underlag: string
+  status: Kopplingsstatus
+  redaktor: string | null
+  beslutad: string | null
+}
+
+export interface Arende {
+  id: number
+  rubrik: string | null
+  diarienummer: string[]
+  /** I tidsordning. */
+  behandlingar: (Behandlingsref & { diarienummer: string[]; beslut: string | null })[]
+  kopplingar: Koppling[]
+  /** Det senaste beslutet, om det inte är ett förslag till ett annat organ. */
+  slutligt_beslut: { sammantrade_id: number; paragraf: number; organ: Organ; datum: string | null; beslut: string } | null
+}
+
+export const hamtaArende = (id: number | string) => hamtaEllerSaknas<Arende>(`/api/arenden/${id}`)
+
+export async function hamtaKopplingar(status: Kopplingsstatus = 'forslag'): Promise<Koppling[]> {
+  const svar = await fetch(`/api/kopplingar?status=${status}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+
+async function beslutaKoppling(id: number, beslut: 'bekraftelse' | 'avvisning'): Promise<Koppling> {
+  const svar = await fetch(`/api/kopplingar/${id}/${beslut}`, { method: 'POST' })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
+export const bekraftaKoppling = (id: number) => beslutaKoppling(id, 'bekraftelse')
+export const avvisaKoppling = (id: number) => beslutaKoppling(id, 'avvisning')

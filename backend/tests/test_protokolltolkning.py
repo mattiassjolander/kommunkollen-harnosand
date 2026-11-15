@@ -78,3 +78,24 @@ def test_omtolkning_av_lagrade_protokoll_behaller_sammantradenas_id(database_url
     assert efter["behandlingar"] == fore["behandlingar"]
     assert efter["narvaro"] == fore["narvaro"]
     assert len(api.get("/api/sammantraden").json()) == antal_sammantraden
+
+
+def test_hanvisningar_till_protokollsutdrag_i_beslutsunderlaget():
+    from app.protokolltolkning import hanvisningar
+
+    text = "\n".join([
+        "• Tjänsteskrivelse 2026-05-10",
+        "• Protokollsutdrag samhällsnämnden 20260521 §61",
+        "• Socialnämndens protokollsutdrag, 2023-01-26 § 5",
+        "• Protokollsutdrag KS 2024- 06- 04 § 112",
+        "• Protokollsutdrag 2023 -05-22 § 7",
+        "Kommunfullmäktige Kramfors kommun protokollsutdrag 2026-03-30 § 12",
+        "• Protokollsutdrag kommunstyrelsen 2026-02-30 § 3",
+    ])
+    assert [(h.organ, h.datum.isoformat(), h.paragraf) for h in hanvisningar(text)] == [
+        ("SAM", "2026-05-21", 61),
+        ("SOC", "2023-01-26", 5),
+        ("KS", "2024-06-04", 112),
+        (None, "2023-05-22", 7),  # utan organ, men inleder en punkt
+    ]
+    assert hanvisningar(text)[0].text == "Protokollsutdrag samhällsnämnden 20260521 §61"

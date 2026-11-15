@@ -59,6 +59,19 @@ _Avoid_: Politiskt beslut, utslag
 **Slutligt beslut**:
 Det beslut i ett ärende som inte längre är ett förslag till ett annat organ.
 
+**Hänvisning**:
+En uppgift i ett beslutsunderlag om ett protokollsutdrag från en tidigare behandling, till exempel "Protokollsutdrag samhällsnämnden 2026-05-21 § 61".
+
+**Koppling**:
+Att två behandlingar hör till samma ärende, på grund av samma diarienummer eller en hänvisning. En koppling är automatisk, ett förslag, bekräftad eller avvisad.
+_Avoid_: Länk, relation
+
+**Kopplingsförslag**:
+En koppling som plattformen inte kunnat göra säkert. Den ingår inte i ärendet förrän en redaktör har bekräftat den.
+
+**Samlingspunkt**:
+En behandling som samlar många ärenden eller återkommer vid varje sammanträde, till exempel delegationsbeslut, meddelanden eller val av justerare. Den kopplas inte till något ärende.
+
 **Yrkande**:
 Ett förslag till beslut som en ledamot eller ett parti lägger fram vid en behandling.
 

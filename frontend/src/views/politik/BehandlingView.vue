@@ -84,6 +84,15 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
       <p v-else class="saknas" data-testid="beslut">Protokollet anger inget beslut för paragrafen.</p>
     </section>
 
+    <section v-if="b.arende" class="kort" aria-labelledby="arende-rubrik" data-testid="arende">
+      <h2 id="arende-rubrik">Ärende</h2>
+      <p v-if="b.arende.antal_behandlingar > 1" class="arendetext">
+        Behandlingen ingår i ett ärende med {{ b.arende.antal_behandlingar }} behandlingar.
+      </p>
+      <p v-else class="arendetext">Ingen annan behandling är kopplad till ärendet än.</p>
+      <RouterLink :to="`/politik/arenden/${b.arende.id}`" data-testid="arendelank">Ärendets väg ›</RouterLink>
+    </section>
+
     <section v-if="b.yrkanden.length" class="kort" aria-labelledby="yrk-rubrik" data-testid="yrkanden">
       <h2 id="yrk-rubrik">Yrkanden</h2>
       <ul class="yrkanden">
@@ -291,6 +300,9 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
 .antal {
   color: var(--ink-muted);
   font-weight: 400;
+}
+.arendetext {
+  margin: 0 0 8px;
 }
 .beslut {
   white-space: pre-line;
