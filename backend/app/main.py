@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, db, ekonomi, floden, ledamoter, protokoll, serier, status
+from . import arenden, auth, db, ekonomi, floden, ledamoter, protokoll, serier, status
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
@@ -213,6 +213,36 @@ def create_app(
         if resultat is None:
             raise HTTPException(404, f"§ {paragraf} finns inte i sammanträdet {sammantrade_id}")
         return resultat
+
+    @app.get("/api/arenden/{arende_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def arende(arende_id: int) -> dict:
+        """Ärendets väg genom organen: behandlingarna i tidsordning och kopplingarna mellan dem."""
+        with db.connect(database_url) as conn:
+            resultat = arenden.las_arende(conn, arende_id)
+        if resultat is None:
+            raise HTTPException(404, f"Ärendet {arende_id} finns inte")
+        return resultat
+
+    @app.get("/api/kopplingar", dependencies=[Depends(krav_roll("redaktor"))])
+    def kopplingar(status: str = Query("forslag", pattern="^(automatisk|forslag|bekraftad|avvisad)$")) -> list[dict]:
+        """Kön med förslag på kopplingar, eller kopplingarna med en annan status."""
+        with db.connect(database_url) as conn:
+            return arenden.lista_kopplingar(conn, status)
+
+    def _besluta(koppling_id: int, status: str, anv: Anvandare) -> dict:
+        with db.connect(database_url) as conn:
+            try:
+                return arenden.besluta(conn, koppling_id, status, anv.epost)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+
+    @app.post("/api/kopplingar/{koppling_id}/bekraftelse")
+    def bekrafta_koppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _besluta(koppling_id, "bekraftad", anv)
+
+    @app.post("/api/kopplingar/{koppling_id}/avvisning")
+    def avvisa_koppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _besluta(koppling_id, "avvisad", anv)
 
     @app.get("/api/ledamoter", dependencies=[Depends(krav_roll("lasare"))])
     def lista_ledamoter(q: str | None = None, parti: str | None = None, organ: str | None = None) -> list[dict]:

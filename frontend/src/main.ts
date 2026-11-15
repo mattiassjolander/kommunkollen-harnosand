@@ -8,7 +8,9 @@ import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
 import FlodenView from './views/FlodenView.vue'
 import OversiktView from './views/OversiktView.vue'
+import ArendeView from './views/politik/ArendeView.vue'
 import BehandlingView from './views/politik/BehandlingView.vue'
+import KopplingarView from './views/politik/KopplingarView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
 import LedamoterView from './views/politik/LedamoterView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
@@ -27,6 +29,8 @@ const router = createRouter({
       component: BehandlingView,
       meta: { titel: 'Behandling' },
     },
+    { path: '/politik/arenden/:id', component: ArendeView, meta: { titel: 'Ärende' } },
+    { path: '/politik/kopplingar', component: KopplingarView, meta: { titel: 'Kopplingsförslag' } },
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },

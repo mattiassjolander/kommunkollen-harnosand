@@ -13,6 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
+from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
 from .sources.base import Datakalla, Hamtning
@@ -94,8 +95,10 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         else:
             res.antal_andrade += 1
     fel = list(hamtning.fel)
+    dokument_andrade = False
     for d in hamtning.dokument:
         utfall, dokumentfel = lagra_dokument(conn, kalla.id, d, korning_id, hamtad)
+        dokument_andrade |= utfall != "oforandrad"
         if utfall == "ny":
             res.antal_nya += 1
         elif utfall == "andrad":
@@ -104,6 +107,8 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
             res.antal_oforandrade += 1
         if dokumentfel:
             fel.append(dokumentfel)
+    if dokument_andrade:
+        koppla(conn)
     publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
                                  *(u.kallans_publicering for u in hamtning.uppgifter)) if d]
     res.senaste_publicering = max(publiceringar, default=None)

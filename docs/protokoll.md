@@ -79,6 +79,21 @@ Det som inte stämmer med protokollets egna uppgifter visas på sammanträdet, t
 
 En paragraf utan beslut (t.ex. en informationspunkt) är ingen avvikelse.
 
+## Ärenden
+
+Behandlingar i olika organ kopplas till samma ärende (ADR-0003). Ärendet är plattformens egen entitet, och diarienumren är egenskaper hos det. Reglerna är framtagna ur hela arkivet:
+
+- **Diarienummer.** Samma diarienummer i samma diarieserie kopplar automatiskt. Serien är prefixet (`KS/2026-113`), och utan prefix organets egen serie. Kommunfullmäktige använder kommunstyrelsens serie. Ett diarienummer som återkommer vid sex eller fler sammanträden i ett organ är stående och kopplar ingenting.
+- **Hänvisning i beslutsunderlaget** ("Protokollsutdrag kommunstyrelsen 2026-02-24 § 31"). En hänvisning uppåt, från KS till en nämnd eller från KF till KS, kopplar automatiskt när rubrikerna liknar varandra. Annars blir den ett förslag.
+- **Övriga hänvisningar**, till samma nivå, nedåt eller utan organ, blir förslag.
+- **Samlingspunkter och fasta punkter** (delegationsbeslut, meddelanden, ärenden för kännedom, val av justerare, valärenden, frågestund …) kopplas aldrig.
+
+Förslagen ligger i en kö (`/politik/kopplingar`), där en redaktör bekräftar eller avvisar dem (ADR-0002). Kopplingarna och ärendena räknas om efter varje insamling som gav nya eller ändrade protokoll, och efter `python -m app.tolka_om`. Redaktörens beslut står kvar, och ett ärende behåller sitt id. Kopplingarna pekar ut behandlingen med sammanträde och paragraf, eftersom behandlingarna skapas om vid omtolkning.
+
+Slutligt beslut är det senaste beslutet i ärendet, om det inte föreslår kommunfullmäktige eller kommunstyrelsen något.
+
+API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{paragraf}` (`arende`), `/api/kopplingar?status=forslag` samt `POST /api/kopplingar/{id}/bekraftelse` och `/avvisning` (redaktör).
+
 ## Filter och sökning
 
 Vyn Politik och beslut filtrerar sammanträdena på organ och år och söker bland behandlingarna på rubrik eller diarienummer. Allt speglas i adressen, så en vy går att dela. API:t: `/api/sammantraden?organ=&ar=` och `/api/behandlingar?q=&organ=&ar=` (högst 200 träffar, senaste först).

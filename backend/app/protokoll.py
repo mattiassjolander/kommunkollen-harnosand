@@ -19,7 +19,7 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import ledamoter
+from . import arenden, ledamoter
 from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_vid, tolka
 from .sources.base import Dokument
 from .sources.harnosand import ORGAN
@@ -167,6 +167,10 @@ def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: in
             "INSERT INTO reservation (behandling_id, ordning, text, personer, partier) VALUES (%s, %s, %s, %s, %s)",
             [(behandling_id, i, r.text, Jsonb([{"namn": n, "parti": p} for n, p in r.personer]), r.partier)
              for i, r in enumerate(b.reservationer)],
+        )
+        cur.executemany(
+            "INSERT INTO hanvisning (behandling_id, ordning, organ, datum, paragraf, text) VALUES (%s, %s, %s, %s, %s, %s)",
+            [(behandling_id, i, h.organ, h.datum, h.paragraf, h.text) for i, h in enumerate(b.hanvisningar)],
         )
     for i, v in enumerate(b.voteringar):
         votering_id = conn.execute(
@@ -350,6 +354,7 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
         "sammantrade": _sammantrade(rad),
         "beslutande": [_person(n, personer) for n in beslutande_vid(narvaro, paragraf)],
         "jav": [_person(n, personer) for n in narvaro if paragraf in n.jav],
+        "arende": arenden.arende_for(conn, sammantrade_id, paragraf),
         "foregaende": grannar["foregaende"],
         "nasta": grannar["nasta"],
     }
