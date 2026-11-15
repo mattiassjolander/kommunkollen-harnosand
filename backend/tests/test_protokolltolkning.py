@@ -99,3 +99,27 @@ def test_hanvisningar_till_protokollsutdrag_i_beslutsunderlaget():
         (None, "2023-05-22", 7),  # utan organ, men inleder en punkt
     ]
     assert hanvisningar(text)[0].text == "Protokollsutdrag samhällsnämnden 20260521 §61"
+
+
+def test_paragrafer_i_namnkolumnen_ar_paragraferna_personen_deltog_i():
+    # KF 2024-05-27: "Andreas Sjölander §§ 57-61, 63-68, 70-76". Han var inte med vid § 62 och § 69.
+    t = tolkning("kf-2024-05-27-urval.pdf")
+    andreas = [n for n in t.narvaro if n.namn == "Andreas Sjölander"]
+    assert len(andreas) == 1
+    assert andreas[0].kategori == "beslutande"
+    assert 62 not in andreas[0].paragrafer and 69 not in andreas[0].paragrafer
+    assert andreas[0].paragrafer[:5] == [57, 58, 59, 60, 61]
+    assert not any("§" in n.namn for n in t.narvaro)
+
+
+def test_namnfalt_med_roll_paragrafer_och_radbrutna_ersattningar():
+    # KS 2026-09-29: en kolumn utan parti, där "Namn, ersätter Annan §§ …" bryts över flera rader.
+    t = tolkning("ks-2026-09-29-forsta-sidan.pdf")
+    poster = {(n.namn, n.tjanstgor_for): n for n in t.narvaro}
+    assert ("Britta Thyr", None) in poster and poster[("Britta Thyr", None)].roll == "1:e vice ordförande"
+    assert 139 not in poster[("Glenn Sehlin", None)].paragrafer
+    assert poster[("Monica Fällström", "Magnus Oskarsson")].paragrafer[-1] == 143
+    assert poster[("Hans Rosengren", "Ann Kristine Elfvendal")].paragrafer == [138]
+    assert poster[("Hans Rosengren", "Monica Fällström")].paragrafer == [139]
+    assert poster[("Ulrika Jonsson", "Glenn Sehlin")].paragrafer == [139]
+    assert not any("§" in n.namn or "," in n.namn or "ersätter" in n.namn for n in t.narvaro)

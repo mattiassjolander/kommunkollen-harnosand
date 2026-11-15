@@ -19,7 +19,7 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import arenden, ledamoter
+from . import arenden, ledamoter, partier
 from .rattelser import Publicerade
 from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_vid, tolka
 from .sources.base import Dokument
@@ -328,7 +328,7 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
     personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
     pub = Publicerade(conn, [sammantrade_id])
     return _sammantrade(rad) | {
-        "narvaro": [pub.person(sammantrade_id, _person(n, personer)) for n in narvaro],
+        "narvaro": partier.fyll_i(conn, sammantrade_id, [pub.person(sammantrade_id, _person(n, personer)) for n in narvaro]),
         "behandlingar": [pub.behandling(sammantrade_id, _behandling(b)) for b in behandlingar],
     }
 
@@ -356,8 +356,10 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
     pub = Publicerade(conn, [sammantrade_id])
     return pub.behandling(sammantrade_id, _behandling(b)) | _yrkanden_och_voteringar(conn, b, pub) | {
         "sammantrade": _sammantrade(rad),
-        "beslutande": [pub.person(sammantrade_id, _person(n, personer)) for n in beslutande_vid(narvaro, paragraf)],
-        "jav": [pub.person(sammantrade_id, _person(n, personer)) for n in narvaro if paragraf in n.jav],
+        "beslutande": partier.fyll_i(conn, sammantrade_id, [pub.person(sammantrade_id, _person(n, personer))
+                                                            for n in beslutande_vid(narvaro, paragraf)]),
+        "jav": partier.fyll_i(conn, sammantrade_id, [pub.person(sammantrade_id, _person(n, personer))
+                                                     for n in narvaro if paragraf in n.jav]),
         "arende": arenden.arende_for(conn, sammantrade_id, paragraf),
         "foregaende": grannar["foregaende"],
         "nasta": grannar["nasta"],

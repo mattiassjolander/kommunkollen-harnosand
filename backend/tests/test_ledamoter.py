@@ -49,13 +49,14 @@ def test_registret_listar_alla_i_narvarolistorna_med_parti_enligt_protokollen(ap
 def test_ledamotssidan_visar_partibyte_roller_och_narvaro(api):
     s = api.get(f"/api/ledamoter/{ledamot(api, 'Carl-Fredrik Edgren')['id']}").json()
     assert s["namn"] == "Carl-Fredrik Edgren"
-    # Partiet som protokollet anger, sammanträde för sammanträde. I juni anges inget parti.
+    # Partiet som protokollet anger, sammanträde för sammanträde. I juni anger närvarolistan inget
+    # parti, och partiet härleds (partier.py).
     assert s["partier_over_tid"] == [
         {"parti": "V", "fran": "2026-02-23", "till": "2026-02-23", "antal": 1},
-        {"parti": "-", "fran": "2026-03-23", "till": "2026-05-25", "antal": 2},
-        {"parti": None, "fran": "2026-06-15", "till": "2026-06-15", "antal": 1},
-        {"parti": "-", "fran": "2026-09-28", "till": "2026-09-28", "antal": 1},
+        {"parti": "-", "fran": "2026-03-23", "till": "2026-09-28", "antal": 4},
     ]
+    [juni] = [r for r in s["sammantraden"] if r["sammantrade"]["datum"] == "2026-06-15"]
+    assert juni["parti"] == "-" and juni["parti_harlett"]["grund"] in ("samma_protokoll", "annat_protokoll")
     [kf_] = s["organ"]
     assert kf_["roller"] == ["Ledamot"]
     assert (kf_["antal"], kf_["beslutande"], kf_["franvarande"]) == (5, 5, 0)

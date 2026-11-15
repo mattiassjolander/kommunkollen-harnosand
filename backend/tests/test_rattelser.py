@@ -166,3 +166,27 @@ def test_rost_och_parti_ratts_och_bevaras_vid_ny_tolkning(api, database_url):
     assert b["voteringar"][1]["lista"]["avstar"] == 1
     logga_in(api, "utgivare")
     assert len(api.get("/api/rattelser", params={"status": "ersatt"}).json()) == 1
+
+
+def test_saknat_parti_harleds_och_rattelsen_gar_fore(api):
+    # Närvarolistan för KF 2026-06-15 anger inget parti för Glenn Sehlin. Voteringslistan gör det.
+    s = sammantrade_id(api, "2026-06-15")
+    narvaro = api.get(f"/api/sammantraden/{s}").json()["narvaro"]
+    glenn = next(p for p in narvaro if p["namn"] == "Glenn Sehlin")
+    assert glenn["parti"] == "SD"
+    assert glenn["parti_harlett"] == {"grund": "samma_protokoll", "sammantrade": None}
+    [person] = [p for p in behandling(api, "2026-06-15", 109)["beslutande"] if p["namn"] == "Glenn Sehlin"]
+    assert person["parti_harlett"]["grund"] == "samma_protokoll"
+
+    ledamot = api.get(f"/api/ledamoter/{glenn['ledamot_id']}").json()
+    [rad] = [r for r in ledamot["sammantraden"] if r["sammantrade"]["id"] == s]
+    assert (rad["parti"], rad["parti_harlett"]["grund"]) == ("SD", "samma_protokoll")
+
+    # En publicerad rättelse går före det härledda partiet, också på ledamotssidan.
+    publicerad(api, sammantrade_id=s, objekt="narvaro", namn="Glenn Sehlin", falt="parti", nytt="-",
+               motivering="Prov.")
+    glenn = next(p for p in api.get(f"/api/sammantraden/{s}").json()["narvaro"] if p["namn"] == "Glenn Sehlin")
+    assert (glenn["parti"], glenn.get("parti_harlett")) == ("-", None)
+    ledamot = api.get(f"/api/ledamoter/{glenn['ledamot_id']}").json()
+    [rad] = [r for r in ledamot["sammantraden"] if r["sammantrade"]["id"] == s]
+    assert (rad["parti"], rad["parti_harlett"], rad["rattelser"]["parti"]["nytt"]) == ("-", None, "-")

@@ -1,11 +1,15 @@
 <script setup lang="ts">
-// Redaktörens formulär för att rätta en automatiskt tolkad uppgift i en behandling (#33).
+// Redaktörens formulär för att rätta en automatiskt tolkad uppgift i en behandling (#33), eller
+// partiet för en person i ett sammanträdes närvarolista.
 // Rättelsen sparas som utkast och publiceras först när en annan person med rollen utgivare
 // har granskat och publicerat den.
 import { computed, ref, watch } from 'vue'
-import { BEHANDLINGSTYPER, EjInloggad, skapaRattelse, type Behandling, type NyRattelse } from '../api'
+import { BEHANDLINGSTYPER, EjInloggad, skapaRattelse, type Behandling, type NyRattelse, type Person } from '../api'
 
-const props = defineProps<{ behandling: Behandling }>()
+const props = defineProps<{
+  behandling?: Behandling
+  narvaro?: { sammantrade_id: number; personer: Person[] }
+}>()
 const emit = defineEmits<{ utloggad: [] }>()
 
 interface Val {
@@ -16,8 +20,19 @@ interface Val {
   nuvarande: unknown
 }
 
+function partival(s: number, personer: Person[]): Val[] {
+  // Ett härlett parti räknas som saknat: rättelsen gäller det närvarolistan anger.
+  return personer.map((p) => ({
+    nyckel: `parti:${p.namn}`, grupp: 'Parti i närvarolistan', text: p.namn,
+    nuvarande: p.rattelser?.parti ? p.parti : p.parti_harlett ? null : p.parti,
+    mal: { sammantrade_id: s, objekt: 'narvaro', namn: p.namn, falt: 'parti' },
+  }))
+}
+
 const val = computed<Val[]>(() => {
+  if (props.narvaro) return partival(props.narvaro.sammantrade_id, props.narvaro.personer)
   const b = props.behandling
+  if (!b) return []
   const s = b.sammantrade.id
   const ut: Val[] = [
     { nyckel: 'rubrik', grupp: 'Behandlingen', text: 'Rubrik', nuvarande: b.rubrik,
@@ -37,15 +52,11 @@ const val = computed<Val[]>(() => {
         mal: { sammantrade_id: s, objekt: 'rost', paragraf: b.paragraf, votering: v.nummer, namn: r.namn, falt: 'rost' } })
     }
   }
-  for (const p of b.beslutande) {
-    ut.push({ nyckel: `parti:${p.namn}`, grupp: 'Parti i närvarolistan', text: p.namn, nuvarande: p.parti,
-      mal: { sammantrade_id: s, objekt: 'narvaro', namn: p.namn, falt: 'parti' } })
-  }
-  return ut
+  return [...ut, ...partival(s, b.beslutande)]
 })
 const grupper = computed(() => [...new Set(val.value.map((v) => v.grupp))])
 
-const valt = ref('beslut')
+const valt = ref(props.narvaro ? (val.value[0]?.nyckel ?? '') : 'beslut')
 const nytt = ref('')
 const motivering = ref('')
 const sparar = ref(false)
@@ -54,13 +65,18 @@ const sparat = ref<number | null>(null)
 
 const aktuellt = computed(() => val.value.find((v) => v.nyckel === valt.value))
 const falt = computed(() => aktuellt.value?.mal.falt)
+const personer = computed(() => props.narvaro?.personer ?? props.behandling?.beslutande ?? [])
+const harlett = computed(() => {
+  const p = personer.value.find((x) => `parti:${x.namn}` === valt.value)
+  return p?.parti_harlett ? p.parti : null
+})
 
 function somText(v: unknown): string {
   if (v === null || v === undefined) return ''
   return Array.isArray(v) ? v.join(', ') : String(v)
 }
 watch(valt, () => {
-  nytt.value = somText(aktuellt.value?.nuvarande)
+  nytt.value = somText(aktuellt.value?.nuvarande ?? harlett.value)
 }, { immediate: true })
 
 function varde(): unknown {
@@ -113,6 +129,9 @@ async function spara() {
       <input v-else v-model="nytt" type="text" data-testid="rattelse-varde" />
       <span v-if="falt === 'diarienummer'" class="hjalp">Flera nummer skiljs med komma.</span>
       <span v-if="falt === 'parti'" class="hjalp">Förkortning, t.ex. S. Ett streck för partilös, tomt om inget parti.</span>
+      <span v-if="falt === 'parti' && harlett" class="hjalp" data-testid="harlett-forslag">
+        Närvarolistan anger inget parti. Härlett: {{ harlett }}.
+      </span>
     </label>
     <label>
       Motivering
