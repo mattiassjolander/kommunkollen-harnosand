@@ -69,6 +69,25 @@ _Avoid_: Länk, relation
 **Kopplingsförslag**:
 En koppling som plattformen inte kunnat göra säkert. Den ingår inte i ärendet förrän en redaktör har bekräftat den.
 
+**Behandlingstyp**:
+Vad en behandling är: ett beslut, ett förslag till ett annat organ, en motion, ett medborgarförslag, en interpellation eller fråga, ett informationsärende eller formalia.
+
+**Motion**:
+Ett förslag från en eller flera ledamöter i kommunfullmäktige. Motionen väcks i fullmäktige, bereds och besvaras sedan med ett beslut i fullmäktige.
+
+**Medborgarförslag**:
+Ett förslag från en invånare. I Härnösand lämnas medborgarförslag som e-förslag och besvaras av en nämnd eller kommunstyrelsen.
+_Avoid_: Medborgarmotion
+
+**Interpellation**:
+En skriftlig fråga från en ledamot i kommunfullmäktige till ett kommunalråd eller en ordförande, som besvaras i fullmäktige.
+
+**Informationsärende**:
+En behandling där organet tar emot information utan att fatta något beslut i sak, till exempel ärenden för kännedom, anmälda delegationsbeslut eller rapporter.
+
+**Formalia**:
+Behandlingar som hör till själva sammanträdet, till exempel val av justerare och fastställande av dagordning.
+
 **Samlingspunkt**:
 En behandling som samlar många ärenden eller återkommer vid varje sammanträde, till exempel delegationsbeslut, meddelanden eller val av justerare. Den kopplas inte till något ärende.
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import date, datetime
 import secrets
 from pathlib import Path
 
@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, auth, db, rattelser, ekonomi, floden, ledamoter, protokoll, serier, status
+from . import arenden, auth, db, rattelser, ekonomi, floden, ledamoter, protokoll, serier, statistik, status
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
@@ -197,6 +197,19 @@ def create_app(
             raise HTTPException(422, "Söktexten behöver vara minst två tecken")
         with db.connect(database_url) as conn:
             return protokoll.sok_behandlingar(conn, q, organ, ar)
+
+    @app.get("/api/statistik/behandlingar", dependencies=[Depends(krav_roll("lasare"))])
+    def statistik_behandlingar(fran: int | None = None, till: int | None = None, organ: str | None = None) -> dict:
+        """Behandlingar per år, organ och behandlingstyp för åren fran–till (båda inräknade)."""
+        if organ is not None and organ not in ORGAN:
+            raise HTTPException(422, f"Organet {organ} finns inte")
+        with db.connect(database_url) as conn:
+            ar = statistik.tillgangliga_ar(conn)
+            fran = fran if fran is not None else (ar[0] if ar else date.today().year)
+            till = till if till is not None else (ar[-1] if ar else fran)
+            if fran > till:
+                raise HTTPException(422, "Startåret kan inte vara efter slutåret")
+            return statistik.behandlingar(conn, fran, till, organ)
 
     @app.get("/api/sammantraden/{sammantrade_id}", dependencies=[Depends(krav_roll("lasare"))])
     def sammantrade(sammantrade_id: int) -> dict:

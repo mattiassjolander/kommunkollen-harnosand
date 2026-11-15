@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { EjInloggad, hamtaBehandling, Saknas, type Behandling, type Jag, type Votering } from '../../api'
+import {
+  BEHANDLINGSTYPER, EjInloggad, hamtaBehandling, Saknas, type Behandling, type Jag, type Votering } from '../../api'
 import { namnOchParti, rosttext, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
@@ -82,6 +83,10 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
       <p v-if="b.diarienummer.length || b.rattelser?.diarienummer" class="ingress" data-testid="diarienummer">
         Diarienummer {{ b.diarienummer.join(', ') || 'saknas' }}
         <Rattelsemarkering v-if="b.rattelser?.diarienummer" :rattelse="b.rattelser.diarienummer" falt="diarienummer" />
+      </p>
+      <p class="ingress" data-testid="typ">
+        Typ: {{ BEHANDLINGSTYPER.find((t) => t.id === b?.typ)?.namn ?? 'kunde inte klassas' }}
+        <Rattelsemarkering v-if="b.rattelser?.typ" :rattelse="b.rattelser.typ" falt="typ" />
       </p>
       <p class="markering"><Tolkningsmarkering /></p>
       <Protokollkalla :protokoll="b.sammantrade.protokoll" :paragraf="b.paragraf" />

@@ -97,13 +97,34 @@ API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{p
 
 ## Rättelser
 
-En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut eller diarienummer, en röst i en votering, eller partiet för en person i närvarolistan. Formuläret finns längst ned på behandlingen. Partiet kan också rättas från sammanträdet, för alla i närvarolistan. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
+En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut, diarienummer eller typ, en röst i en votering, eller partiet för en person i närvarolistan. Formuläret finns längst ned på behandlingen. Partiet kan också rättas från sammanträdet, för alla i närvarolistan. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
 
 Statusflödet är utkast → granskad → publicerad (kravspec 18). En utgivare som inte skrev rättelsen granskar och publicerar den under fliken Rättelser. Det gäller också den som har båda rollerna. Redaktören kan ändra och ta bort sitt eget utkast. En ny publicerad rättelse av samma uppgift ersätter den tidigare, som får status ersatt.
 
 Rättelsen sparas bredvid tolkningen och läggs på när uppgiften läses. Därför bevaras den vid en ny insamling och vid omtolkning. Den pekar ut uppgiften med sammanträde och paragraf, och med namn och votering för en röst. Läsaren ser den rättade uppgiften på behandlingen, sammanträdet och ärendet, med markeringen "Rättad av redaktionen" och vad tolkningen sa. Röstsiffrorna per parti räknas med den rättade rösten. Ledamotssidorna visar också rättade partier. Sökningen och kopplingen av ärenden använder tolkningen.
 
 API:t: `GET /api/rattelser?status=` (redaktör eller utgivare), `POST /api/rattelser`, `PATCH` och `DELETE /api/rattelser/{id}` (redaktören som skrev utkastet), `POST /api/rattelser/{id}/granskning` och `/publicering` (utgivare). Testinloggningen tar flera roller, t.ex. `/api/auth/test/redaktor+utgivare`.
+
+## Statistik
+
+Fliken Statistik visar hur många behandlingar protokollen innehåller per år, organ och behandlingstyp, för ett valt organ och årsintervall (till exempel 2024–2025 eller 2025–2025). Organ och år speglas i adressen. Diagrammet staplar typerna per år, tabellen visar år och organ, och tabellen går att ladda ned som CSV.
+
+Typen läses ut med regler ur rubrik och beslut (`behandlingstyper.py`), i den här ordningen:
+
+| Typ | Regel |
+|---|---|
+| Motion | Rubriken börjar med "Motion", "Svar på motion" eller "Svar på remiss angående motion" |
+| Medborgarförslag | Rubriken börjar med "E-förslag" eller "Medborgarförslag". I Härnösand heter medborgarförslag e-förslag |
+| Formalia | Val av justerare, dagordning, föredragningslista, "Eventuellt tillkommande ärende", "Tillkommande motioner, interpellationer och frågor", "Övrigt" |
+| Interpellation eller fråga | Interpellationer, "Korta frågor", allmänhetens frågestund, inkomna frågor |
+| Informationsärende | Informationsärenden, ärenden för kännedom, anmälda delegationsbeslut, delgivningar, meddelanden, "… rapporterar", eller ett beslut som bara lägger något till handlingarna |
+| Förslag till annat organ | Beslutet börjar med att organet föreslår ett annat organ ("Kommunstyrelsen föreslår kommunfullmäktige besluta") |
+| Beslut | Annars, när beslutstexten säger att organet beslutar |
+| Kunde inte klassas | Ingen regel passar och beslutstext saknas |
+
+Typen räknas fram när behandlingen läses, ur rubrik och beslut efter eventuella rättelser, och kan själv rättas. Underlaget redovisas bredvid siffrorna: antalet sammanträden, protokoll som inte gick att tolka (deras behandlingar saknas), sammanträden som bara finns som paragrafprotokoll och protokoll utan datum. Finns sådana visas "Ofullständigt underlag".
+
+API:t: `/api/statistik/behandlingar?fran=&till=&organ=`. Utan år gäller hela arkivet. Startår efter slutår ger 422.
 
 ## Filter och sökning
 

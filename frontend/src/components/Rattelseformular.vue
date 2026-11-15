@@ -4,7 +4,7 @@
 // Rättelsen sparas som utkast och publiceras först när en annan person med rollen utgivare
 // har granskat och publicerat den.
 import { computed, ref, watch } from 'vue'
-import { EjInloggad, skapaRattelse, type Behandling, type NyRattelse, type Person } from '../api'
+import { BEHANDLINGSTYPER, EjInloggad, skapaRattelse, type Behandling, type NyRattelse, type Person } from '../api'
 
 const props = defineProps<{
   behandling?: Behandling
@@ -41,6 +41,8 @@ const val = computed<Val[]>(() => {
       mal: { sammantrade_id: s, objekt: 'behandling', paragraf: b.paragraf, falt: 'beslut' } },
     { nyckel: 'diarienummer', grupp: 'Behandlingen', text: 'Diarienummer', nuvarande: b.diarienummer,
       mal: { sammantrade_id: s, objekt: 'behandling', paragraf: b.paragraf, falt: 'diarienummer' } },
+    { nyckel: 'typ', grupp: 'Behandlingen', text: 'Typ', nuvarande: b.typ ?? null,
+      mal: { sammantrade_id: s, objekt: 'behandling', paragraf: b.paragraf, falt: 'typ' } },
   ]
   for (const v of b.voteringar) {
     for (const r of v.roster) {
@@ -79,7 +81,7 @@ watch(valt, () => {
 
 function varde(): unknown {
   if (falt.value === 'diarienummer') return nytt.value.split(',').map((d) => d.trim()).filter(Boolean)
-  if (falt.value === 'parti') return nytt.value.trim() || null
+  if (falt.value === 'parti' || falt.value === 'typ') return nytt.value.trim() || null
   return nytt.value
 }
 
@@ -118,6 +120,10 @@ async function spara() {
         <option value="nej">Nej</option>
         <option value="avstar">Avstår</option>
         <option value="franvarande">Frånvarande</option>
+      </select>
+      <select v-else-if="falt === 'typ'" v-model="nytt" data-testid="rattelse-varde">
+        <option v-for="t in BEHANDLINGSTYPER" :key="t.id" :value="t.id">{{ t.namn }}</option>
+        <option value="">Kunde inte klassas</option>
       </select>
       <textarea v-else-if="falt === 'beslut'" v-model="nytt" rows="5" data-testid="rattelse-varde" />
       <input v-else v-model="nytt" type="text" data-testid="rattelse-varde" />
