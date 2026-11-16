@@ -100,3 +100,17 @@ test('avvikelser i protokollen samlas på en sida', async ({ page }) => {
   }
   await expect(page.getByTestId('csv')).toHaveAttribute('download', /\.csv$/)
 })
+
+test('återkommande ärenden listas och går att öppna', async ({ page }) => {
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik/statistik')
+  const sektion = page.getByTestId('aterkommande')
+  await expect(sektion).toBeVisible()
+  const arenden = page.getByTestId('aterkommande-arende')
+  if (await arenden.count()) {
+    await arenden.first().getByRole('link').first().click()
+    await expect(page).toHaveURL(/\/politik\/arenden\/\d+/)
+  } else {
+    await expect(sektion).toContainText('Inga återkommande ärenden')
+  }
+})

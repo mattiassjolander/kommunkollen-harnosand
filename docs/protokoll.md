@@ -153,6 +153,12 @@ Väckta räknas på året de väcktes och besvarade på året de besvarades. Ett
 
 API:t: `/api/statistik/motioner?fran=&till=&organ=`.
 
+### Återkommande ärenden
+
+Ett ärende är återkommande när minst två av dess behandlingar, vid olika sammanträden, ligger inom urvalet (år och organ). Samlingspunkter räknas inte. Ärendena sorteras efter antal behandlingar. Återremisser ("återremittera") och bordläggningar ("bordlägga", "bordläggs") läses ur besluten och räknas per ärende. Kopplingar som bara är föreslagna ingår inte i ärendet, men antalet visas med ≈ (`aterkommande.py`).
+
+API:t: `/api/statistik/aterkommande?fran=&till=&organ=`.
+
 ## Filter och sökning
 
 Vyn Politik och beslut filtrerar sammanträdena på organ och år och söker bland behandlingarna på rubrik eller diarienummer. Allt speglas i adressen, så en vy går att dela. API:t: `/api/sammantraden?organ=&ar=` och `/api/behandlingar?q=&organ=&ar=` (högst 200 träffar, senaste först).

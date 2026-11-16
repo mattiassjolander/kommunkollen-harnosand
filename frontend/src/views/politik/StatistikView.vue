@@ -5,16 +5,19 @@ import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   EjInloggad,
+  hamtaAterkommande,
   hamtaBehandlingarAvTyp,
   hamtaBehandlingsstatistik,
   hamtaMotionsstatistik,
   hamtaOrgan,
+  type Aterkommande,
   type Behandlingsstatistik,
   type Motionsstatistik,
   type Organ,
   type Statistikbehandling,
 } from '../../api'
 import { sammantradesdatum, tal } from '../../format'
+import AterkommandeArenden from '../../components/AterkommandeArenden.vue'
 import MotionerOchForslag from '../../components/MotionerOchForslag.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
@@ -37,6 +40,7 @@ const valdTyp = fraga('typ')
 const organ = ref<Organ[]>([])
 const s = ref<Behandlingsstatistik | null>(null)
 const m = ref<Motionsstatistik | null>(null)
+const aterkommande = ref<Aterkommande | null>(null)
 const lista = ref<Statistikbehandling[] | null>(null)
 const listaLaddar = ref(false)
 const laddar = ref(true)
@@ -48,9 +52,10 @@ async function ladda() {
   laddar.value = true
   fel.value = null
   try {
-    ;[s.value, m.value] = await Promise.all([
+    ;[s.value, m.value, aterkommande.value] = await Promise.all([
       hamtaBehandlingsstatistik(fran.value, till.value, valtOrgan.value || undefined),
       hamtaMotionsstatistik(fran.value, till.value, valtOrgan.value || undefined),
+      hamtaAterkommande(fran.value, till.value, valtOrgan.value || undefined),
     ])
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
@@ -334,6 +339,7 @@ const ofullstandigt = computed(
     </section>
 
     <MotionerOchForslag v-if="m" :m="m" />
+    <AterkommandeArenden v-if="aterkommande" :a="aterkommande" />
 
     <section class="kort" aria-labelledby="underlag-rubrik" data-testid="underlag">
       <h2 id="underlag-rubrik">Underlag</h2>

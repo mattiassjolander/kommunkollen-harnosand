@@ -426,6 +426,29 @@ export interface Motionsstatistik {
   medborgarforslag: { lista: Forlopp[] }
 }
 
+export interface Aterkommande {
+  fran: number
+  till: number
+  organ: Organ | null
+  arenden: {
+    id: number
+    rubrik: string
+    antal_behandlingar: number
+    aterremisser: number
+    bordlaggningar: number
+    foreslagna_kopplingar: number
+    forsta: string
+    senaste: string
+    behandlingar: {
+      sammantrade: Kortsammantrade
+      paragraf: number
+      rubrik: string
+      handelse: 'aterremiss' | 'bordlaggning' | null
+    }[]
+  }[]
+  summa: { arenden: number; aterremisser: number; bordlaggningar: number }
+}
+
 export type Avvikelsekategori = 'motsagelse' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
 
 export interface Avvikelser {
@@ -548,6 +571,8 @@ export const hamtaBehandlingarAvTyp = (typ: string, fran?: string, till?: string
   hamta<Statistikbehandling[]>(`/api/statistik/behandlingar/${typ}?${intervallparametrar(fran, till, organ)}`)
 export const hamtaMotionsstatistik = (fran?: string, till?: string, organ?: string) =>
   hamta<Motionsstatistik>(`/api/statistik/motioner?${intervallparametrar(fran, till, organ)}`)
+export const hamtaAterkommande = (fran?: string, till?: string, organ?: string) =>
+  hamta<Aterkommande>(`/api/statistik/aterkommande?${intervallparametrar(fran, till, organ)}`)
 export const hamtaAvvikelser = (fran?: string, till?: string, organ?: string) =>
   hamta<Avvikelser>(`/api/avvikelser?${intervallparametrar(fran, till, organ)}`)
 export const hamtaSammantrade = (id: number | string) => hamtaEllerSaknas<Sammantrade>(`/api/sammantraden/${id}`)

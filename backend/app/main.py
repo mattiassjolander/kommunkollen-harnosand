@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, auth, avvikelser, db, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, db, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -233,6 +233,13 @@ def create_app(
         with db.connect(database_url) as conn:
             fran, till = intervall(conn, fran, till, organ)
             return motioner.motioner_och_forslag(conn, fran, till, organ)
+
+    @app.get("/api/statistik/aterkommande", dependencies=[Depends(krav_roll("lasare"))])
+    def statistik_aterkommande(fran: int | None = None, till: int | None = None, organ: str | None = None) -> dict:
+        """Ärenden som behandlats vid flera sammanträden, med återremisser och bordläggningar (#46)."""
+        with db.connect(database_url) as conn:
+            fran, till = intervall(conn, fran, till, organ)
+            return aterkommande.aterkommande(conn, fran, till, organ)
 
     @app.get("/api/avvikelser", dependencies=[Depends(krav_roll("lasare"))])
     def protokollens_avvikelser(fran: int | None = None, till: int | None = None, organ: str | None = None) -> dict:
