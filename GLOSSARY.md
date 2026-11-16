@@ -181,6 +181,9 @@ _Avoid_: Granskare, godkännare
 En uppgift som plattformen har läst ut ur ett protokoll utan att någon redaktör har granskat den. Den visas för läsare med en markering om att den inte är granskad.
 _Avoid_: Ogranskad uppgift, maskinuppgift
 
+**Läst med OCR**:
+En uppgift som plattformen har läst med textigenkänning ur ett protokoll som bara innehåller bilder. Den kan innehålla läsfel utöver dem som tolkningen kan ge.
+
 **Rättelse**:
 En redaktörs ändring av en automatiskt tolkad uppgift, med en motivering. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad rättelse visas med markering, och läsaren kan se vad tolkningen sa. Tolkningen ändras inte.
 _Avoid_: Korrigering, redigering

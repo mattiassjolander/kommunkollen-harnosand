@@ -285,6 +285,8 @@ export interface Sammantradesrad {
   plats: string | null
   tolkning: 'tolkad' | 'ej_tolkad'
   avvikelser: string[]
+  /** Protokollet är en PDF med bara bilder och har lästs med OCR (#52). */
+  ocr: boolean
   antal_behandlingar: number
   /** Första och sista paragrafen. */
   paragrafer: [number, number] | null

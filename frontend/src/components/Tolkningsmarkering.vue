@@ -1,13 +1,24 @@
 <script setup lang="ts">
 // Säkerhetsmarkering för automatiskt tolkade uppgifter (docs/design.md): plattformen har läst ut
-// uppgiften ur protokollet, men ingen redaktör har granskat den.
-defineProps<{ ejTolkad?: boolean }>()
+// uppgiften ur protokollet, men ingen redaktör har granskat den. Ett protokoll som bara innehåller
+// bilder läses med OCR (#52), och då kan även texten innehålla läsfel.
+defineProps<{ ejTolkad?: boolean; ocr?: boolean }>()
 </script>
 
 <template>
   <span v-if="ejTolkad" class="markering ej" data-testid="ej-tolkad" role="note">
     <span class="ikon" aria-hidden="true">!</span>
     Kunde inte tolkas automatiskt. Läs protokollet.
+  </span>
+  <span
+    v-else-if="ocr"
+    class="markering"
+    data-testid="last-med-ocr"
+    role="note"
+    title="Protokollet är publicerat som bilder utan text. Texten är läst med OCR (textigenkänning) och kan innehålla läsfel. Kontrollera mot protokollet."
+  >
+    <span class="ikon" aria-hidden="true">⚙</span>
+    Läst med OCR, ej granskad
   </span>
   <span
     v-else

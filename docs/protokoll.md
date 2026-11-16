@@ -74,6 +74,16 @@ I hela arkivet (november 2026, 116 voteringar) stämmer listan med texten i 104.
 
 Rösterna knyts till ledamotsregistret på namn. Namn som bara förekommer i voteringslistor, eller stavas annorlunda där än i närvarolistan, länkas inte.
 
+## Protokoll som bara innehåller bilder (OCR)
+
+Vissa protokoll publiceras som en PDF där varje sida är en bild, utan text (inskannade, eller digitala protokoll som plattats till bilder). Då renderas sidorna i 400 dpi och läses med Tesseract och svensk språkdata (`ocr.py`). Ur ordens placering byggs samma löptext och layouttext som ur en vanlig PDF, och resten av tolkningen är densamma.
+
+Vanliga läsfel rättas bara i OCR-text: paragraftecknet läses som 8, 5, 3, & eller $ ("(SD) 8 45", "$8 43 — 60"). En paragrafrubrik på egen rad ("843", "5849 SAM/2026-116") rättas bara när protokollets paragrafintervall är känt från första sidan, och numret blir den del av siffrorna som ligger inom intervallet.
+
+Sammanträdet märks "Läst med OCR, ej granskad". Avvikelsen "PDF:en saknar text och har lästs med OCR" står kvar på avvikelsesidan, så att kommunen kan ombes publicera en PDF med text. Finns inte Tesseract blir protokollet ej tolkat, som tidigare.
+
+Lokalt: installera Tesseract (Windows: `winget install UB-Mannheim.TesseractOCR`) och lägg `swe.traineddata` från tessdata_best i en mapp som `TESSDATA_PREFIX` pekar på. Imagen och CI hämtar samma fil, låst med kontrollsumma.
+
 ## Avvikelser
 
 Det som inte stämmer med protokollets egna uppgifter visas på sammanträdet, t.ex. när paragraferna inte stämmer med protokollets paragrafintervall. Ett protokoll utan sammanträdesdatum eller behandlingar räknas som ej tolkat: det visas med länk till protokollet, och kontrollen för organet får status Delvis fel.

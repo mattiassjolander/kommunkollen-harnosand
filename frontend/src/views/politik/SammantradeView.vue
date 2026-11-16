@@ -78,7 +78,7 @@ const tid = computed(() =>
           · {{ s.paragrafer[0] === s.paragrafer[1] ? `§ ${s.paragrafer[0]}` : `§§ ${s.paragrafer[0]}–${s.paragrafer[1]}` }}
         </template>
       </p>
-      <p class="markering"><Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" /></p>
+      <p class="markering"><Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" /></p>
       <Protokollkalla :protokoll="s.protokoll" />
     </header>
 

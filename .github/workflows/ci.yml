@@ -27,12 +27,22 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      TESSDATA_PREFIX: /opt/tessdata
+      KRAV_OCR: "1"
     defaults:
       run:
         working-directory: backend
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
+      # OCR för protokoll med bara bilder (#52): Tesseract och svensk språkdata, samma som i imagen.
+      - name: Tesseract med svenska
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr
+          sudo mkdir -p /opt/tessdata
+          sudo curl -sSL -o /opt/tessdata/swe.traineddata https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/e12c65a915945e4c28e237a9b52bc4a8f39a0cec/swe.traineddata
+          echo "360303308aa5d4a912ac3b3637691152b7532d9bd6e960639db1affb83db7ea9  /opt/tessdata/swe.traineddata" | sha256sum -c
+          tesseract --list-langs | grep -x swe
       - run: uv sync --locked
       - run: uv run pytest -q
 
