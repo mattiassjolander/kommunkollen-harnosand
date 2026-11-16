@@ -168,6 +168,22 @@ _Avoid_: Majoritetens budget
 Ett partis eller en partigrupps eget förslag till budget, lagt till kommunfullmäktiges budgetbehandling. Det är ett yrkande som ställs i en eller flera voteringar.
 _Avoid_: Skuggbudget, alternativbudget
 
+**Budgetår**:
+Det år en budget gäller för. Förslagen till ett budgetår läggs och behandlas året före.
+
+**Planår**:
+Ett av åren efter budgetåret som en budget eller ett budgetförslag också anger siffror för.
+
+**Ram**:
+De skattemedel en budget eller ett budgetförslag tilldelar ett organ för ett år.
+_Avoid_: Anslag, budgetram (som eget begrepp)
+
+**Utgångsläge**:
+Det ett budgetförslag räknar sina förändringar från, oftast kommunens planförutsättningar för budgetåret.
+
+**Differens**:
+Skillnaden mellan ett budgetförslags siffra och den antagna budgetens för samma år, i mnkr och procent.
+
 ## Redaktionellt arbete
 
 **Redaktör**:

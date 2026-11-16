@@ -780,3 +780,95 @@ export const granskaRattelse = (id: number) =>
 export const publiceraRattelse = (id: number) =>
   skrivRattelse(`/api/rattelser/${id}/publicering`, 'POST') as Promise<Rattelse>
 export const taBortRattelse = (id: number) => skrivRattelse(`/api/rattelser/${id}`, 'DELETE')
+
+// Partiernas budgetförslag (#48)
+
+export interface Skattesats {
+  procent?: number
+  /** Procentenheter, t.ex. −0,10 för "10 öre lägre". */
+  forandring?: number
+  /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
+  sida?: number
+}
+export interface Budgetresultat {
+  ar: number
+  mnkr?: number
+  /** Andel av skatteintäkter, generella statsbidrag och utjämning. */
+  procent?: number
+  /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
+  sida?: number
+}
+export interface Budgetram {
+  organ: string
+  ar: number
+  mnkr?: number
+  forandring?: number
+  /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
+  sida?: number
+}
+export interface Budgetuppgifter {
+  skattesats: Skattesats | null
+  resultat: Budgetresultat[]
+  ramar: Budgetram[]
+  utgangslage: string | null
+}
+export interface Differens {
+  mnkr: number
+  procent: number | null
+}
+export type Budgetstatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt'
+export interface Budgetforslag {
+  id: number
+  budgetar: number
+  nyckel: string
+  partier: string[]
+  titel: string
+  typ: 'budget' | 'tillagg'
+  antagen: boolean
+  filnamn: string
+  anmarkning: string
+  status: Budgetstatus
+  uppgifter: Budgetuppgifter
+  /** Länk till originaldokumentet. Lägg till `#page=N` för en sida. */
+  original: string
+  publicerad: string | null
+  differens?: {
+    skattesats: number | null
+    resultat: (Differens & { ar: number })[]
+    ramar: (Differens & { organ: string; ar: number })[]
+  } | null
+}
+export interface Budgetutkast extends Budgetforslag {
+  redaktorer: string[]
+  granskad_av: string | null
+  granskad: string | null
+  publicerad_av: string | null
+  andrad: string
+  inlast: Budgetuppgifter
+}
+export interface Budgetjamforelse {
+  budgetar: number
+  ar: number[]
+  organ: string[]
+  antagen: number | null
+  forslag: Budgetforslag[]
+}
+
+export const hamtaBudgetar = () =>
+  hamta<{ budgetar: number; forslag: number; antagen: boolean }[]>('/api/budget')
+export const hamtaBudget = (ar: number) => hamta<Budgetjamforelse>(`/api/budget/${ar}`)
+export async function hamtaBudgetutkast(status?: Budgetstatus): Promise<Budgetutkast[]> {
+  const svar = await fetch(`/api/budgetforslag${status ? `?status=${status}` : ''}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör eller utgivare.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+export const andraBudgetforslag = (
+  id: number,
+  data: Partial<Pick<Budgetforslag, 'uppgifter' | 'partier' | 'titel' | 'antagen' | 'anmarkning'>>,
+) => skrivRattelse(`/api/budgetforslag/${id}`, 'PATCH', data) as unknown as Promise<Budgetutkast>
+export const granskaBudgetforslag = (id: number) =>
+  skrivRattelse(`/api/budgetforslag/${id}/granskning`, 'POST') as unknown as Promise<Budgetutkast>
+export const publiceraBudgetforslag = (id: number) =>
+  skrivRattelse(`/api/budgetforslag/${id}/publicering`, 'POST') as unknown as Promise<Budgetutkast>

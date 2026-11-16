@@ -1,0 +1,51 @@
+{
+  "forslag": {
+    "majoritet.pdf": {
+      "partier": ["S", "MP", "KD"],
+      "titel": "Årsplan 2027",
+      "antagen": true,
+      "skattesats": {"procent": 23.34, "sida": 3},
+      "resultat": [
+        {"ar": 2027, "mnkr": 50.3, "procent": 2.3, "sida": 3},
+        {"ar": 2028, "mnkr": 50.3, "sida": 3},
+        {"ar": 2029, "mnkr": 50.3, "sida": 3}
+      ],
+      "ramar": [
+        {"organ": "Kommunstyrelsen", "ar": 2027, "mnkr": 191.3, "sida": 4},
+        {"organ": "Kommungemensam verksamhet", "ar": 2027, "mnkr": 138.9, "sida": 4},
+        {"organ": "Kommunfullmäktige", "ar": 2027, "mnkr": 13.4, "sida": 4},
+        {"organ": "Samhällsnämnden", "ar": 2027, "mnkr": 243.5, "sida": 4},
+        {"organ": "Skolnämnden", "ar": 2027, "mnkr": 664.4, "sida": 4},
+        {"organ": "Socialnämnden", "ar": 2027, "mnkr": 893.1, "sida": 4},
+        {"organ": "Kommunstyrelsen", "ar": 2028, "mnkr": 197.5, "sida": 4},
+        {"organ": "Socialnämnden", "ar": 2028, "mnkr": 921.7, "sida": 4}
+      ]
+    },
+    "L.pdf": {
+      "titel": "Liberalernas budgetförslag 2027",
+      "utgangslage": "Planförutsättningar 2027",
+      "resultat": [{"ar": 2027, "mnkr": 80, "sida": 1}],
+      "ramar": [
+        {"organ": "Kommunstyrelsen", "ar": 2027, "mnkr": 150, "forandring": -37, "sida": 1},
+        {"organ": "Kommungemensam verksamhet", "ar": 2027, "mnkr": 105, "forandring": -42, "sida": 1},
+        {"organ": "Kommunfullmäktige", "ar": 2027, "mnkr": 13, "forandring": -1, "sida": 1},
+        {"organ": "Samhällsnämnden", "ar": 2027, "mnkr": 235, "forandring": -5, "sida": 1},
+        {"organ": "Skolnämnden", "ar": 2027, "mnkr": 703, "forandring": 40, "sida": 1},
+        {"organ": "Socialnämnden", "ar": 2027, "mnkr": 928, "forandring": 35, "sida": 1}
+      ]
+    },
+    "M.pdf": {
+      "titel": "Moderaternas budgetförslag för Härnösands kommun 2027",
+      "utgangslage": "Planförutsättningar 2027",
+      "skattesats": {"forandring": -0.10, "sida": 1},
+      "resultat": [{"ar": 2027, "procent": 3.0, "sida": 2}],
+      "ramar": [
+        {"organ": "Kommunstyrelsen", "ar": 2027, "forandring": -37, "sida": 1},
+        {"organ": "Samhällsnämnden", "ar": 2027, "forandring": 1, "sida": 1},
+        {"organ": "Skolnämnden", "ar": 2027, "forandring": 15, "sida": 1},
+        {"organ": "Socialnämnden", "ar": 2027, "forandring": 13, "sida": 2}
+      ],
+      "anmarkning": "Förslaget anger ramarna som förändringar mot planförutsättningarna och resultatet som andel (minst 3 procent)."
+    }
+  }
+}

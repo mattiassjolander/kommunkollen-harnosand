@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import secrets
 from pathlib import Path
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, db, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -336,6 +336,62 @@ def create_app(
     @app.post("/api/rattelser/{rattelse_id}/publicering")
     def publicera_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         return _rattelse(rattelser.publicera, rattelse_id, anv.epost)
+
+    # Partiernas budgetförslag (#48): läses in som utkast, rättas av redaktör och publiceras av utgivare.
+
+    def _budget(steg, *args):
+        with db.connect(database_url) as conn:
+            try:
+                return steg(conn, *args)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except budgetforslag.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
+            except budgetforslag.EjTillatet as e:
+                raise HTTPException(403, str(e)) from e
+            except budgetforslag.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/budget", dependencies=[Depends(krav_roll("lasare"))])
+    def budgetar() -> list[dict]:
+        """Budgetåren med publicerade budgetförslag."""
+        return _budget(budgetforslag.budgetar)
+
+    @app.get("/api/budget/{ar}", dependencies=[Depends(krav_roll("lasare"))])
+    def budgetjamforelse(ar: int) -> dict:
+        """De publicerade förslagen för budgetåret bredvid varandra och mot den antagna budgeten."""
+        return _budget(budgetforslag.jamforelse, ar)
+
+    @app.get("/api/budgetforslag", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def lista_budgetforslag(
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt)$"),
+    ) -> list[dict]:
+        return _budget(budgetforslag.lista, status)
+
+    @app.get("/api/budgetforslag/{forslag_id}", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def las_budgetforslag(forslag_id: int) -> dict:
+        return _budget(budgetforslag.las, forslag_id)
+
+    @app.patch("/api/budgetforslag/{forslag_id}")
+    def andra_budgetforslag(forslag_id: int, data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Rättar ett utkast: {uppgifter, partier, titel, antagen, anmarkning}."""
+        return _budget(budgetforslag.andra, forslag_id, data, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/budgetforslag/{forslag_id}/granskning")
+    def granska_budgetforslag(forslag_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(budgetforslag.granska, forslag_id, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/budgetforslag/{forslag_id}/publicering")
+    def publicera_budgetforslag(forslag_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(budgetforslag.publicera, forslag_id, anv.epost, datetime.now(timezone.utc))
+
+    @app.get("/api/budgetforslag/{forslag_id}/original")
+    def budgetforslagets_original(forslag_id: int, request: Request,
+                                  anv: Anvandare | None = Depends(krav_roll("lasare"))) -> Response:
+        """Originaldokumentet. Ett opublicerat förslag visas bara för redaktör och utgivare."""
+        redaktion = bool(anv and anv.roller & {"redaktor", "utgivare"})
+        innehall, typ, namn = _budget(budgetforslag.original, forslag_id, redaktion)
+        return Response(innehall, media_type=typ, headers={"Content-Disposition": f'inline; filename="{namn}"'})
 
     @app.get("/api/ledamoter", dependencies=[Depends(krav_roll("lasare"))])
     def lista_ledamoter(q: str | None = None, parti: str | None = None, organ: str | None = None) -> list[dict]:
