@@ -10,6 +10,8 @@ import FlodenView from './views/FlodenView.vue'
 import OversiktView from './views/OversiktView.vue'
 import ArendeView from './views/politik/ArendeView.vue'
 import AvvikelserView from './views/politik/AvvikelserView.vue'
+import BudgetforslagView from './views/politik/BudgetforslagView.vue'
+import BudgetutkastView from './views/politik/BudgetutkastView.vue'
 import BehandlingView from './views/politik/BehandlingView.vue'
 import KopplingarView from './views/politik/KopplingarView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
@@ -37,6 +39,8 @@ const router = createRouter({
     { path: '/politik/rattelser', component: RattelserView, meta: { titel: 'Rättelser' } },
     { path: '/politik/statistik', component: StatistikView, meta: { titel: 'Statistik' } },
     { path: '/politik/avvikelser', component: AvvikelserView, meta: { titel: 'Avvikelser i protokollen' } },
+    { path: '/politik/budget', component: BudgetforslagView, meta: { titel: 'Budgetförslag' } },
+    { path: '/politik/budgetutkast', component: BudgetutkastView, meta: { titel: 'Budgetutkast' } },
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },

@@ -19,7 +19,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: `uv run --directory ../backend kommunkollen-dev --port ${API_PORT} --inspelningar tests/recordings --databas .e2e-db`,
+      command: `uv run --directory ../backend kommunkollen-dev --port ${API_PORT} --inspelningar tests/recordings --databas .e2e-db --budgetforslag tests/fixtures/budgetforslag`,
       url: `http://127.0.0.1:${API_PORT}/api/halsa`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,

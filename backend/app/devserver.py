@@ -2,7 +2,8 @@
 
 Startar API:t mot `DATABASE_URL` om den är satt, annars mot en inbäddad Postgres
 (pgserver) i `backend/.dev-db`. Med `--inspelningar <katalog>` används inspelade
-källsvar i stället för nätet, vilket e2e-testerna använder.
+källsvar i stället för nätet, vilket e2e-testerna använder. Med `--budgetforslag <mapp>`
+läses budgetförslagen i mappen in som utkast när servern startar (#48).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ def main() -> None:
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--inspelningar", type=Path, help="katalog med inspelade källsvar")
     p.add_argument("--databas", type=Path, default=Path(__file__).resolve().parent.parent / ".dev-db")
+    p.add_argument("--budgetforslag", type=Path, help="mapp med <budgetår>/ att läsa in som utkast")
     a = p.parse_args()
 
     if not os.environ.get("DATABASE_URL"):
@@ -42,6 +44,11 @@ def main() -> None:
         os.environ.setdefault("PROTOKOLL_URVAL", "2")
 
     from .main import create_app
+
+    if a.budgetforslag:
+        from . import budgetforslag
+
+        budgetforslag.main([str(a.budgetforslag.resolve()), "--redaktor", "import@kommunkollen.test"])
 
     uvicorn.run(create_app(), host="127.0.0.1", port=a.port)
 

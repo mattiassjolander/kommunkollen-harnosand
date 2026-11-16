@@ -27,3 +27,6 @@ playwright-report/
 
 # Härnösands platsvarumärke, original (stora bilder). Nedskalade kopior finns i frontend/public/platsvarumarke.
 /platsvarumarke/
+
+# Indata som läses in lokalt och skickas till servern, t.ex. budgetförslagen (docs/budgetforslag.md).
+/data/
