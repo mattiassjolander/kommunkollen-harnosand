@@ -5,12 +5,17 @@ import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   EjInloggad,
+  hamtaBehandlingarAvTyp,
   hamtaBehandlingsstatistik,
+  hamtaMotionsstatistik,
   hamtaOrgan,
   type Behandlingsstatistik,
+  type Motionsstatistik,
   type Organ,
+  type Statistikbehandling,
 } from '../../api'
 import { sammantradesdatum, tal } from '../../format'
+import MotionerOchForslag from '../../components/MotionerOchForslag.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
@@ -26,9 +31,14 @@ function fraga(namn: string) {
 const valtOrgan = fraga('organ')
 const fran = fraga('fran')
 const till = fraga('till')
+// Vald typ: listan med behandlingarna bakom siffran visas under nyckeltalen.
+const valdTyp = fraga('typ')
 
 const organ = ref<Organ[]>([])
 const s = ref<Behandlingsstatistik | null>(null)
+const m = ref<Motionsstatistik | null>(null)
+const lista = ref<Statistikbehandling[] | null>(null)
+const listaLaddar = ref(false)
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 const omvant = computed(() => !!fran.value && !!till.value && Number(fran.value) > Number(till.value))
@@ -38,7 +48,10 @@ async function ladda() {
   laddar.value = true
   fel.value = null
   try {
-    s.value = await hamtaBehandlingsstatistik(fran.value, till.value, valtOrgan.value || undefined)
+    ;[s.value, m.value] = await Promise.all([
+      hamtaBehandlingsstatistik(fran.value, till.value, valtOrgan.value || undefined),
+      hamtaMotionsstatistik(fran.value, till.value, valtOrgan.value || undefined),
+    ])
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
@@ -52,9 +65,30 @@ onMounted(async () => {
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
   }
-  await ladda()
+  await Promise.all([ladda(), laddaLista()])
 })
 watch([valtOrgan, fran, till], ladda)
+
+async function laddaLista() {
+  if (!valdTyp.value || omvant.value) {
+    lista.value = null
+    return
+  }
+  listaLaddar.value = true
+  try {
+    lista.value = await hamtaBehandlingarAvTyp(valdTyp.value, fran.value, till.value, valtOrgan.value || undefined)
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    fel.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    listaLaddar.value = false
+  }
+}
+watch([valdTyp, valtOrgan, fran, till], laddaLista)
+const valdTypNamn = computed(() => s.value?.typer.find((t) => t.id === valdTyp.value)?.namn ?? valdTyp.value)
+function valj(typ: string) {
+  valdTyp.value = valdTyp.value === typ ? '' : typ
+}
 
 // Valda år i filtret: URL:en, annars det API:t valde (hela arkivet).
 const franAr = computed({ get: () => fran.value || String(s.value?.fran ?? ''), set: (v) => (fran.value = v) })
@@ -165,20 +199,53 @@ const ofullstandigt = computed(
     </p>
 
     <section class="nyckeltal" aria-label="Summa för perioden" data-testid="nyckeltal">
-      <div v-for="id in NYCKELTAL" :key="id" class="tal" :data-typ="id">
+      <button
+        v-for="id in NYCKELTAL"
+        :key="id"
+        type="button"
+        class="tal valbar"
+        :class="{ vald: valdTyp === id }"
+        :aria-pressed="valdTyp === id"
+        :data-typ="id"
+        @click="valj(id)"
+      >
         <span class="varde">{{ tal(s.summa.antal[id]) }}</span>
         <span class="etikett">{{ s.typer.find((t) => t.id === id)?.namn }}</span>
-      </div>
+      </button>
       <div class="tal">
         <span class="varde">{{ tal(s.summa.sammantraden) }}</span>
         <span class="etikett">Sammanträden</span>
       </div>
     </section>
 
+    <section v-if="valdTyp" class="kort" aria-labelledby="lista-rubrik" data-testid="typlista">
+      <div class="rubrikrad">
+        <h2 id="lista-rubrik">{{ valdTypNamn }}, {{ intervall }}{{ s.organ ? `, ${s.organ.namn}` : '' }}</h2>
+        <button type="button" class="lankknapp" @click="valdTyp = ''">Stäng</button>
+      </div>
+      <p v-if="listaLaddar && !lista">Hämtar behandlingar…</p>
+      <p v-else-if="lista && !lista.length" class="saknas">Inga behandlingar av typen för perioden.</p>
+      <template v-else-if="lista">
+        <p class="kallrad">{{ tal(lista.length) }} behandlingar, de senaste först.</p>
+        <ul class="behandlingar">
+          <li v-for="b in lista" :key="`${b.sammantrade.id}-${b.paragraf}`" data-testid="typbehandling">
+            <RouterLink :to="`/politik/sammantraden/${b.sammantrade.id}/paragraf/${b.paragraf}`">{{ b.rubrik }}</RouterLink>
+            <span class="meta">
+              {{ b.sammantrade.organ.namn }} {{ sammantradesdatum(b.sammantrade.datum) }} § {{ b.paragraf }}
+            </span>
+          </li>
+        </ul>
+      </template>
+    </section>
+
     <section class="kort" aria-labelledby="diagram-rubrik">
       <h2 id="diagram-rubrik">Behandlingar per år och typ, {{ intervall }}{{ s.organ ? `, ${s.organ.namn}` : '' }}</h2>
       <ul class="forklaring" data-testid="teckenforklaring">
-        <li v-for="t in typer" :key="t.id"><span class="ruta" :style="{ background: t.farg }" />{{ t.namn }}</li>
+        <li v-for="t in typer" :key="t.id">
+          <button type="button" class="lankknapp" :aria-pressed="valdTyp === t.id" :data-typ="t.id" @click="valj(t.id)">
+            <span class="ruta" :style="{ background: t.farg }" />{{ t.namn }}
+          </button>
+        </li>
       </ul>
       <p v-if="!s.summa.behandlingar" class="saknas" data-testid="inga">Uppgift saknas för perioden.</p>
       <div v-else class="diagram">
@@ -266,6 +333,8 @@ const ofullstandigt = computed(
       </p>
     </section>
 
+    <MotionerOchForslag v-if="m" :m="m" />
+
     <section class="kort" aria-labelledby="underlag-rubrik" data-testid="underlag">
       <h2 id="underlag-rubrik">Underlag</h2>
       <p v-if="ofullstandigt" class="ofullstandigt" data-testid="ofullstandigt">Ofullständigt underlag</p>
@@ -291,6 +360,11 @@ const ofullstandigt = computed(
           </li>
         </ul>
       </template>
+      <p>
+        <RouterLink :to="{ path: '/politik/avvikelser', query: { organ: valtOrgan || undefined, fran: fran || undefined, till: till || undefined } }">
+          Se alla avvikelser i protokollen
+        </RouterLink>
+      </p>
       <p v-if="s.underlag.utan_datum">
         {{ s.underlag.utan_datum }} protokoll saknar datum och kan inte räknas till något år.
       </p>
@@ -355,6 +429,51 @@ const ofullstandigt = computed(
   padding: 12px 16px;
   display: grid;
   gap: 2px;
+}
+.valbar {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.valbar:hover {
+  border-color: var(--line-strong);
+}
+.valbar.vald {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.lankknapp {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lankknapp:hover,
+.lankknapp[aria-pressed='true'] {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.behandlingar {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  max-height: 480px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.behandlingar li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+}
+.behandlingar .meta {
+  font-size: 12px;
+  color: var(--ink-muted);
 }
 .tal .varde {
   font-size: 24px;

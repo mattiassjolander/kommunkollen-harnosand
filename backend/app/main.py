@@ -11,7 +11,8 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, auth, db, rattelser, ekonomi, floden, ledamoter, protokoll, serier, statistik, status
+from . import arenden, auth, avvikelser, db, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
+from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
 from .recorded import InspeladTransport
@@ -198,18 +199,47 @@ def create_app(
         with db.connect(database_url) as conn:
             return protokoll.sok_behandlingar(conn, q, organ, ar)
 
+    def intervall(conn, fran: int | None, till: int | None, organ: str | None) -> tuple[int, int]:
+        """Åren fran–till, som standard alla år med protokoll."""
+        if organ is not None and organ not in ORGAN:
+            raise HTTPException(422, f"Organet {organ} finns inte")
+        ar = statistik.tillgangliga_ar(conn)
+        fran = fran if fran is not None else (ar[0] if ar else date.today().year)
+        till = till if till is not None else (ar[-1] if ar else fran)
+        if fran > till:
+            raise HTTPException(422, "Startåret kan inte vara efter slutåret")
+        return fran, till
+
     @app.get("/api/statistik/behandlingar", dependencies=[Depends(krav_roll("lasare"))])
     def statistik_behandlingar(fran: int | None = None, till: int | None = None, organ: str | None = None) -> dict:
         """Behandlingar per år, organ och behandlingstyp för åren fran–till (båda inräknade)."""
-        if organ is not None and organ not in ORGAN:
-            raise HTTPException(422, f"Organet {organ} finns inte")
         with db.connect(database_url) as conn:
-            ar = statistik.tillgangliga_ar(conn)
-            fran = fran if fran is not None else (ar[0] if ar else date.today().year)
-            till = till if till is not None else (ar[-1] if ar else fran)
-            if fran > till:
-                raise HTTPException(422, "Startåret kan inte vara efter slutåret")
+            fran, till = intervall(conn, fran, till, organ)
             return statistik.behandlingar(conn, fran, till, organ)
+
+    @app.get("/api/statistik/behandlingar/{typ}", dependencies=[Depends(krav_roll("lasare"))])
+    def statistik_behandlingar_av_typ(typ: str, fran: int | None = None, till: int | None = None,
+                                      organ: str | None = None) -> list[dict]:
+        """Behandlingarna av en typ (eller "okand") för åren fran–till, de senaste först."""
+        if typ not in (*TYPER, statistik.OKAND):
+            raise HTTPException(422, f"Behandlingstypen {typ} finns inte")
+        with db.connect(database_url) as conn:
+            fran, till = intervall(conn, fran, till, organ)
+            return statistik.behandlingar_av_typ(conn, fran, till, organ, typ)
+
+    @app.get("/api/statistik/motioner", dependencies=[Depends(krav_roll("lasare"))])
+    def statistik_motioner(fran: int | None = None, till: int | None = None, organ: str | None = None) -> dict:
+        """Motioner och medborgarförslag: väckta, besvarade, utfall och ledtid (#45)."""
+        with db.connect(database_url) as conn:
+            fran, till = intervall(conn, fran, till, organ)
+            return motioner.motioner_och_forslag(conn, fran, till, organ)
+
+    @app.get("/api/avvikelser", dependencies=[Depends(krav_roll("lasare"))])
+    def protokollens_avvikelser(fran: int | None = None, till: int | None = None, organ: str | None = None) -> dict:
+        """Sammanträden vars protokoll har avvikelser eller publicerade rättelser."""
+        with db.connect(database_url) as conn:
+            fran, till = intervall(conn, fran, till, organ)
+            return avvikelser.lista(conn, fran, till, organ)
 
     @app.get("/api/sammantraden/{sammantrade_id}", dependencies=[Depends(krav_roll("lasare"))])
     def sammantrade(sammantrade_id: int) -> dict:

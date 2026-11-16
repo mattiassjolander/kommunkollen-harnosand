@@ -110,6 +110,9 @@ class Behandling:
     voteringar: list[Votering] = field(default_factory=list)
     reservationer: list[Reservation] = field(default_factory=list)
     hanvisningar: list[Hanvisning] = field(default_factory=list)
+    # Den eller de som väckt motionen, enligt protokollets bakgrund: (namn, parti). Namnet är None
+    # när protokollet bara anger partiet ("Centerpartiet har lämnat in en motion").
+    motionarer: list[tuple[str | None, str | None]] = field(default_factory=list)
 
 
 @dataclass
@@ -755,6 +758,8 @@ def _behandlingar(t: Tolkning, lop: list[str]) -> None:
             propositionsordning="\n\n".join(prop) or None,
             reservationer=[r for s in sektioner.get("reservation", []) for r in _reservationer(_lopande(s))],
             hanvisningar=[h for s in sektioner.get("beslutsunderlag", []) for h in hanvisningar("\n".join(s))],
+            motionarer=motionarer(" ".join(_lopande(s) for s in sektioner.get("bakgrund", [])))
+            if re.search(r"\bmotion", rubrik, re.I) else [],
         ))
 
 
@@ -863,7 +868,8 @@ def _sektioner(kropp: list[str]) -> dict[str, list[list[str]]]:
         if _ar_rubrik(r):
             nyckel = ("yrkande" if r.startswith("Yrkande") else "reservation" if r.startswith("Reservation")
                       else "propositionsordning" if r.startswith("Propositionsordning")
-                      else "beslutsunderlag" if r == "Beslutsunderlag" else None)
+                      else "beslutsunderlag" if r == "Beslutsunderlag"
+                      else "bakgrund" if r in ("Bakgrund", "Sammanfattning", "Ärendebeskrivning") else None)
             aktuell = None if nyckel is None else []
             if nyckel:
                 ut.setdefault(nyckel, []).append(aktuell)
@@ -906,6 +912,50 @@ def _yrkanden(text: str) -> list[Yrkande]:
         fore = re.split(r"\b(?:yrkar|föreslår|ställer|instämmer|tillstyrker|lämnar|bifaller)\b", s, maxsplit=1)[0]
         ut.append(Yrkande(text=s, personer=[(m["namn"], m["parti"]) for m in _NAMN_PARTI.finditer(fore)]))
     return ut
+
+
+# "Johan Wester (C) har lämnat in en motion", "… har den 20 oktober 2023 lämnat in en motion",
+# "… har till kommunfullmäktige inkommit med en motion", "… har i en motion föreslagit", "… har väckt en motion".
+_MOTION_VACKT = re.compile(
+    r"\bhar\b[^.]{0,60}?\b(?:lämnat in|inlämnat|inkommit med|väckt|i en)\s+(?:en\s+)?motion", re.I)
+_NAMN = re.compile(rf"{_ORD}(?: {_ORD}){{1,3}}")
+
+
+def motionarer(text: str) -> list[tuple[str | None, str | None]]:
+    """Motionärerna i bakgrunden till en motion: personerna (eller partiet) före "har lämnat in en motion".
+
+    "X och Y (SD)" ger båda partiet SD. "Johan Wester, Centerpartiet," och "Olle Löfgren (Liberalerna)"
+    ger partiets förkortning."""
+    m = _MOTION_VACKT.search(text)
+    if not m:
+        return []
+    fore = re.split(r"[.:;]\s", text[: m.start()])[-1].strip(" ,")
+    kod = {**{n: k for n, k in _PARTINAMN.items()}, **{k: k for k in _PARTINAMN.values()}, "-": "-"}
+    ut: list[list] = []
+    utan_parti: list[list] = []
+    for del_ in re.split(r",\s*|\s+och\s+", fore):
+        del_ = re.sub(r"\s+i Härnösand$", "", del_.strip())
+        p = re.fullmatch(rf"(?P<namn>{_NAMN.pattern}) \((?P<parti>[^)]+)\)", del_)
+        if p and p["parti"] in kod:
+            utan_parti.append([p["namn"], None])
+            for x in utan_parti:
+                x[1] = kod[p["parti"]]
+            ut += utan_parti
+            utan_parti = []
+        elif del_ in _PARTINAMN:
+            if utan_parti:
+                for x in utan_parti:
+                    x[1] = _PARTINAMN[del_]
+                ut += utan_parti
+                utan_parti = []
+            else:
+                ut.append([None, _PARTINAMN[del_]])
+        elif _NAMN.fullmatch(del_):
+            utan_parti.append([del_, None])
+        else:
+            utan_parti = []
+    ut += utan_parti
+    return [(n, p) for n, p in ut]
 
 
 def _reservationer(text: str) -> list[Reservation]:

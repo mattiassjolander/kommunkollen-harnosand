@@ -372,6 +372,77 @@ export interface Behandlingsstatistik {
   tillgangliga_ar: number[]
 }
 
+/** En behandling bakom en siffra i statistiken. */
+export interface Statistikbehandling {
+  sammantrade: Kortsammantrade
+  paragraf: number
+  rubrik: string
+  diarienummer: string[]
+}
+
+export type Motionsutfall = 'bifall' | 'avslag' | 'besvarad' | 'delvis' | 'annat'
+
+export interface Forloppsbehandling {
+  sammantrade: Kortsammantrade
+  paragraf: number
+  rubrik: string
+  beslut: string | null
+  osaker: boolean
+}
+
+export interface Forlopp {
+  arende_id: number
+  rubrik: string
+  vackt: {
+    datum: string
+    sammantrade_id: number
+    paragraf: number
+    organ: Organ
+    grund: 'beslut' | 'samlingspunkt'
+    osaker: boolean
+  } | null
+  forsta_behandling: Forloppsbehandling
+  besvarad: (Forloppsbehandling & { beslut: string | null }) | null
+  utfall: Motionsutfall | null
+  ledtid_dagar: number | null
+  over_ett_ar: boolean
+  aterremisser: number
+  bordlaggningar: number
+  behandlingar: Forloppsbehandling[]
+}
+
+export interface Motionsstatistik {
+  fran: number
+  till: number
+  organ: Organ | null
+  idag: string
+  utfall: { id: Motionsutfall; namn: string }[]
+  motioner: {
+    per_ar: { ar: number; vackta: number; besvarade: number; utfall: Record<Motionsutfall, number> }[]
+    per_parti: { parti: string; vackta: number; besvarade: number; utfall: Record<Motionsutfall, number> }[]
+    lista: (Forlopp & { motionarer: { namn: string | null; parti: string | null }[] })[]
+    utan_vackt: number
+  }
+  medborgarforslag: { lista: Forlopp[] }
+}
+
+export type Avvikelsekategori = 'motsagelse' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
+
+export interface Avvikelser {
+  fran: number
+  till: number
+  organ: Organ | null
+  kategorier: { id: Avvikelsekategori; namn: string; i_protokollet: boolean; antal: number }[]
+  sammantraden: {
+    sammantrade: Kortsammantrade & { tolkning: string }
+    url: string
+    avvikelser: { text: string; kategori: Avvikelsekategori }[]
+    i_protokollet: boolean
+    rattelser: number
+  }[]
+  granskade: number
+}
+
 export interface Namngiven {
   namn: string
   parti: string | null
@@ -466,6 +537,19 @@ export const hamtaBehandlingsstatistik = (fran?: string, till?: string, organ?: 
   if (organ) p.set('organ', organ)
   return hamta<Behandlingsstatistik>(`/api/statistik/behandlingar?${p}`)
 }
+function intervallparametrar(fran?: string, till?: string, organ?: string) {
+  const p = new URLSearchParams()
+  if (fran) p.set('fran', fran)
+  if (till) p.set('till', till)
+  if (organ) p.set('organ', organ)
+  return p
+}
+export const hamtaBehandlingarAvTyp = (typ: string, fran?: string, till?: string, organ?: string) =>
+  hamta<Statistikbehandling[]>(`/api/statistik/behandlingar/${typ}?${intervallparametrar(fran, till, organ)}`)
+export const hamtaMotionsstatistik = (fran?: string, till?: string, organ?: string) =>
+  hamta<Motionsstatistik>(`/api/statistik/motioner?${intervallparametrar(fran, till, organ)}`)
+export const hamtaAvvikelser = (fran?: string, till?: string, organ?: string) =>
+  hamta<Avvikelser>(`/api/avvikelser?${intervallparametrar(fran, till, organ)}`)
 export const hamtaSammantrade = (id: number | string) => hamtaEllerSaknas<Sammantrade>(`/api/sammantraden/${id}`)
 export const hamtaBehandling = (id: number | string, paragraf: number | string) =>
   hamtaEllerSaknas<Behandling>(`/api/sammantraden/${id}/behandlingar/${paragraf}`)

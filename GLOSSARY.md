@@ -75,6 +75,18 @@ Vad en behandling är: ett beslut, ett förslag till ett annat organ, en motion,
 **Motion**:
 Ett förslag från en eller flera ledamöter i kommunfullmäktige. Motionen väcks i fullmäktige, bereds och besvaras sedan med ett beslut i fullmäktige.
 
+**Motionär**:
+Den eller de ledamöter som har väckt en motion, med parti enligt protokollet.
+
+**Väckt motion**:
+En motion som kommunfullmäktige har överlämnat till kommunstyrelsen för beredning.
+
+**Besvarad motion**:
+En motion som kommunfullmäktige har fattat beslut i sak om: bifall, avslag, besvarad eller delvis bifall. En återremiss eller bordläggning besvarar inte motionen.
+
+**Ledtid**:
+Tiden från att en motion väcktes till att den besvarades.
+
 **Medborgarförslag**:
 Ett förslag från en invånare. I Härnösand lämnas medborgarförslag som e-förslag och besvaras av en nämnd eller kommunstyrelsen.
 _Avoid_: Medborgarmotion

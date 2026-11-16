@@ -64,9 +64,7 @@ def behandlingar(conn: psycopg.Connection, fran: int, till: int, organ: str | No
     for s in sammantraden:
         r = per.setdefault((s["ar"], s["organ"]), {"sammantraden": 0, "behandlingar": 0, "antal": tomt()})
         r["sammantraden"] += 1
-    for b in rader:
-        s = sammantrade[b["sammantrade_id"]]
-        typ = pub.behandling(s["id"], {k: b[k] for k in ("paragraf", "rubrik", "beslut", "diarienummer")})["typ"]
+    for s, _, typ in _med_typ(sammantrade, rader, pub):
         r = per[(s["ar"], s["organ"])]
         r["behandlingar"] += 1
         r["antal"][typ or OKAND] += 1
@@ -105,3 +103,38 @@ def behandlingar(conn: psycopg.Connection, fran: int, till: int, organ: str | No
         },
         "tillgangliga_ar": tillgangliga_ar(conn),
     }
+
+
+def _med_typ(sammantrade: dict[int, dict], rader: list[dict], pub: Publicerade):
+    """(sammanträde, behandling med rättelser pålagda, typ) för varje behandling."""
+    for b in rader:
+        s = sammantrade[b["sammantrade_id"]]
+        r = pub.behandling(s["id"], {k: b[k] for k in ("paragraf", "rubrik", "beslut", "diarienummer")})
+        yield s, r, r["typ"]
+
+
+def behandlingar_av_typ(conn: psycopg.Connection, fran: int, till: int, organ: str | None, typ: str) -> list[dict]:
+    """Behandlingarna bakom en siffra i statistiken: en typ (eller "okand") för åren fran–till."""
+    param = {"fran": fran, "till": till, "organ": organ}
+    sammantrade = {s["id"]: s for s in conn.execute(
+        """
+        SELECT s.id, s.organ, s.datum FROM sammantrade s
+        WHERE s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
+          AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
+        """, param).fetchall()}
+    rader = conn.execute(
+        """
+        SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.sammantrade_id, b.paragraf, b.rubrik, b.beslut,
+               b.diarienummer
+        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
+        WHERE s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
+          AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
+        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
+        """, param).fetchall()
+    pub = Publicerade(conn, list(sammantrade))
+    ut = [{"sammantrade": {"id": s["id"], "datum": s["datum"], "organ": _organ(s["organ"])},
+           "paragraf": b["paragraf"], "rubrik": b["rubrik"], "diarienummer": b["diarienummer"]}
+          for s, b, t in _med_typ(sammantrade, rader, pub) if (t or OKAND) == typ]
+    ut.sort(key=lambda x: (x["sammantrade"]["datum"], _organordning(x["sammantrade"]["organ"]["id"]), x["paragraf"]),
+            reverse=True)
+    return ut

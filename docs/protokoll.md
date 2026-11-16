@@ -80,6 +80,17 @@ Det som inte stämmer med protokollets egna uppgifter visas på sammanträdet, t
 
 En paragraf utan beslut (t.ex. en informationspunkt) är ingen avvikelse.
 
+Fliken Avvikelser samlar alla protokoll med avvikelser eller publicerade rättelser, per organ och årsintervall, med länk till originalprotokollet och CSV-export. Avvikelserna delas in så här (`avvikelser.py`):
+
+| Kategori | Avvikelser | Var felet troligen finns |
+|---|---|---|
+| Motsägelse i protokollet | Voteringslistan stämmer inte med protokollets text | I protokollet |
+| Ofullständigt dokument | PDF:en saknar sidor eller text, eller bara paragrafprotokoll finns | I protokollet |
+| Paragraferna stämmer inte | Paragraferna stämmer inte med paragrafintervallet, eller samma paragraf förekommer flera gånger | I protokollet eller i tolkningen |
+| Kunde inte läsas av plattformen | Övrigt, t.ex. att närvarolistan eller en rubrik inte hittades | I tolkningen |
+
+Indelningen är en hjälp att välja vad som ska kontrolleras mot originalet, inte ett påstående om att kommunens protokoll är fel. API:t: `/api/avvikelser?fran=&till=&organ=`.
+
 ## Ärenden
 
 Behandlingar i olika organ kopplas till samma ärende (ADR-0003). Ärendet är plattformens egen entitet, och diarienumren är egenskaper hos det. Reglerna är framtagna ur hela arkivet:
@@ -124,7 +135,23 @@ Typen läses ut med regler ur rubrik och beslut (`behandlingstyper.py`), i den h
 
 Typen räknas fram när behandlingen läses, ur rubrik och beslut efter eventuella rättelser, och kan själv rättas. Underlaget redovisas bredvid siffrorna: antalet sammanträden, protokoll som inte gick att tolka (deras behandlingar saknas), sammanträden som bara finns som paragrafprotokoll och protokoll utan datum. Finns sådana visas "Ofullständigt underlag".
 
-API:t: `/api/statistik/behandlingar?fran=&till=&organ=`. Utan år gäller hela arkivet. Startår efter slutår ger 422.
+Varje typ i nyckeltalen och teckenförklaringen går att välja. Då listas behandlingarna bakom siffran, med länk till varje behandling, och typen speglas i adressen (`typ=motion`).
+
+API:t: `/api/statistik/behandlingar?fran=&till=&organ=` och `/api/statistik/behandlingar/{typ}?fran=&till=&organ=` (typen eller `okand`). Utan år gäller hela arkivet. Startår efter slutår ger 422.
+
+### Motioner och medborgarförslag
+
+En motion följs genom ärendespårningen (`motioner.py`):
+
+- **Väckt**: kommunfullmäktiges beslut att överlämna motionen till kommunstyrelsen för beredning. Motioner som väcks i samlingspunkten "Tillkommande motioner, interpellationer och frågor" kopplas med diarienumret i beslutet ("Motion – Titel (KS2022-206)"), annars med rubriken. En koppling på rubriken visas som förslag (≈).
+- **Remissvar** i nämnderna har ofta nämndens eget diarienummer. Ett sådant ärende utan behandling i fullmäktige kopplas till den motion som har mest lik rubrik och väcktes före. Kopplingen visas som förslag.
+- **Besvarad**: fullmäktiges beslut i sak. Utfallet läses ur beslutet: delvis bifall (flera att-satser eller "delvis"), avslag, bifall, besvarad, annars annat beslut. Återremiss och bordläggning besvarar inte motionen men räknas.
+- **Motionärer**: personerna eller partiet före "har lämnat in en motion" (och liknande) under Bakgrund, Sammanfattning eller Ärendebeskrivning. "X och Y (SD)" ger båda partiet SD.
+- **Ledtid**: dagar från väckt till besvarad. Över ett år, obesvarad eller besvarad, markeras (kommunallagen 5 kap. 35 §).
+
+Väckta räknas på året de väcktes och besvarade på året de besvarades. Ett medborgarförslag (e-förslag) besvaras av nämnden eller kommunstyrelsen. När det lämnades står inte i protokollen, så tiden räknas från den första behandlingen.
+
+API:t: `/api/statistik/motioner?fran=&till=&organ=`.
 
 ## Filter och sökning
 
