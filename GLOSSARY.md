@@ -87,6 +87,15 @@ En motion som kommunfullmäktige har fattat beslut i sak om: bifall, avslag, bes
 **Ledtid**:
 Tiden från att en motion väcktes till att den besvarades.
 
+**Återkommande ärende**:
+Ett ärende som behandlats vid flera sammanträden under en period.
+
+**Återremiss**:
+Ett beslut att skicka tillbaka ett ärende för mer beredning i stället för att avgöra det.
+
+**Bordläggning**:
+Ett beslut att skjuta upp ett ärende till ett senare sammanträde.
+
 **Medborgarförslag**:
 Ett förslag från en invånare. I Härnösand lämnas medborgarförslag som e-förslag och besvaras av en nämnd eller kommunstyrelsen.
 _Avoid_: Medborgarmotion
