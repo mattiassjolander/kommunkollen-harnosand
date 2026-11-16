@@ -10,6 +10,13 @@ test('läsaren jämför budgetförslagen för ett budgetår', async ({ page }) =
   await page.goto('/politik')
   await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Budgetutkast' }).click()
   await expect(page.getByTestId('budgetutkast').or(page.getByTestId('inga-utkast')).first()).toBeVisible()
+  // Utgivaren ser siffrorna med sidan i originalet innan hen granskar.
+  const l = page.locator('[data-testid="budgetutkast"][data-nyckel="L"]')
+  if ((await l.count()) > 0) {
+    const ks = l.getByTestId('uppgifter').locator('tr', { hasText: 'Kommunstyrelsen' })
+    await expect(ks).toContainText('150 (−37)')
+    await expect(ks.getByRole('link', { name: 's. 1' })).toHaveAttribute('href', /\/original#page=1$/)
+  }
   for (const steg of ['granska', 'publicera'] as const) {
     while ((await page.getByTestId(steg).count()) > 0) {
       const antal = await page.getByTestId(steg).count()

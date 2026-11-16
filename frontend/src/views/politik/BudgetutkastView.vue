@@ -112,6 +112,16 @@ const granska = (f: Budgetutkast) => steg(f, () => granskaBudgetforslag(f.id), '
 const publicera = (f: Budgetutkast) => steg(f, () => publiceraBudgetforslag(f.id), 'Publicerat.')
 const andrat = (f: Budgetutkast) => JSON.stringify(f.uppgifter) !== JSON.stringify(f.inlast)
 const egen = (f: Budgetutkast) => !!jag.value && f.redaktorer.includes(jag.value.epost)
+
+// Granskningsvyn: siffrorna som de står i uppgifterna, utan avrundning, med sidan i originalet.
+const exakt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 3 })
+const med = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 3, signDisplay: 'exceptZero' })
+const nr = (v: number) => exakt.format(v)
+const fr = (v: number) => (v === 0 ? '±0' : med.format(v))
+const sidlank = (f: Budgetutkast, sida?: number) => (sida ? `${f.original}#page=${sida}` : null)
+const aren = (f: Budgetutkast) => [...new Set(f.uppgifter.ramar.map((r) => r.ar))].sort((a, b) => a - b)
+const organen = (f: Budgetutkast) => [...new Set(f.uppgifter.ramar.map((r) => r.organ))]
+const ramFor = (f: Budgetutkast, organ: string, ar: number) => f.uppgifter.ramar.find((r) => r.organ === organ && r.ar === ar)
 </script>
 
 <template>
@@ -143,6 +153,51 @@ const egen = (f: Budgetutkast) => !!jag.value && f.redaktorer.includes(jag.value
         <template v-if="andrat(f)"> Ändrat sedan inläsningen.</template>
       </p>
       <p v-if="f.anmarkning" class="meta">{{ f.anmarkning }}</p>
+
+      <div v-if="oppen !== f.id" class="uppgifter" data-testid="uppgifter">
+        <p>
+          <strong>Skattesats:</strong>
+          <template v-if="f.uppgifter.skattesats">
+            <template v-if="f.uppgifter.skattesats.procent !== undefined">{{ nr(f.uppgifter.skattesats.procent) }} %</template>
+            <template v-if="f.uppgifter.skattesats.forandring !== undefined">
+              {{ f.uppgifter.skattesats.procent !== undefined ? ', förändring ' : '' }}{{ fr(f.uppgifter.skattesats.forandring) }} procentenheter
+            </template>
+            <a v-if="sidlank(f, f.uppgifter.skattesats.sida)" :href="sidlank(f, f.uppgifter.skattesats.sida)!" target="_blank" rel="noopener" class="sida">s. {{ f.uppgifter.skattesats.sida }}</a>
+          </template>
+          <span v-else class="saknas">anges inte</span>
+          <template v-if="f.uppgifter.utgangslage"> · Förändringar räknas från {{ f.uppgifter.utgangslage }}</template>
+        </p>
+        <p>
+          <strong>Budgeterat resultat:</strong>
+          <span v-if="!f.uppgifter.resultat.length" class="saknas"> anges inte</span>
+          <span v-for="(r, i) in f.uppgifter.resultat" :key="r.ar">
+            {{ i ? ' · ' : ' ' }}{{ r.ar }}:
+            <template v-if="r.mnkr !== undefined">{{ nr(r.mnkr) }} mnkr</template>
+            <template v-if="r.procent !== undefined">{{ r.mnkr !== undefined ? ', ' : '' }}{{ nr(r.procent) }} %</template>
+            <a v-if="sidlank(f, r.sida)" :href="sidlank(f, r.sida)!" target="_blank" rel="noopener" class="sida">s. {{ r.sida }}</a>
+          </span>
+        </p>
+        <table v-if="f.uppgifter.ramar.length" class="ramtabell">
+          <caption>Ramar per nämnd, mnkr (förändring inom parentes)</caption>
+          <thead>
+            <tr><th scope="col">Nämnd</th><th v-for="ar in aren(f)" :key="ar" scope="col" class="num">{{ ar }}</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="o in organen(f)" :key="o">
+              <th scope="row">{{ o }}</th>
+              <td v-for="ar in aren(f)" :key="ar" class="num">
+                <template v-if="ramFor(f, o, ar)">
+                  <template v-if="ramFor(f, o, ar)!.mnkr !== undefined">{{ nr(ramFor(f, o, ar)!.mnkr!) }}</template>
+                  <template v-if="ramFor(f, o, ar)!.forandring !== undefined"> ({{ fr(ramFor(f, o, ar)!.forandring!) }})</template>
+                  <a v-if="sidlank(f, ramFor(f, o, ar)!.sida)" :href="sidlank(f, ramFor(f, o, ar)!.sida)!" target="_blank" rel="noopener" class="sida">s. {{ ramFor(f, o, ar)!.sida }}</a>
+                </template>
+                <span v-else class="saknas">–</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else><strong>Ramar:</strong> <span class="saknas">anges inte</span></p>
+      </div>
 
       <div class="knappar">
         <button v-if="arRedaktor && oppen !== f.id" type="button" @click="oppna(f)">Rätta</button>
@@ -336,6 +391,43 @@ input.kort-falt {
 }
 .redigera td {
   padding: 2px 4px;
+}
+.uppgifter {
+  margin-top: 10px;
+  font-size: 13px;
+  overflow-x: auto;
+}
+.uppgifter p {
+  margin: 4px 0;
+}
+.sida {
+  font-size: 12px;
+  margin-left: 4px;
+}
+.ramtabell {
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+.ramtabell caption {
+  text-align: left;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.ramtabell th,
+.ramtabell td {
+  padding: 3px 10px 3px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: normal;
+}
+.ramtabell thead th {
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.ramtabell .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .saknas {
   color: var(--ink-muted);
