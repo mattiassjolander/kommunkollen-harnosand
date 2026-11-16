@@ -781,36 +781,53 @@ export const publiceraRattelse = (id: number) =>
   skrivRattelse(`/api/rattelser/${id}/publicering`, 'POST') as Promise<Rattelse>
 export const taBortRattelse = (id: number) => skrivRattelse(`/api/rattelser/${id}`, 'DELETE')
 
-// Partiernas budgetförslag (#48)
+// Partiernas budgetförslag (#48) mot gemensamma planförutsättningar (#58)
 
 export interface Skattesats {
+  /** Förändring mot planförutsättningarnas skattesats i öre (0 om förslaget inte ändrar den). */
+  ore?: number
+  /** Skattesatsen i procent, bara för ett år utan planförutsättningar. */
   procent?: number
-  /** Procentenheter, t.ex. −0,10 för "10 öre lägre". */
-  forandring?: number
   /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
   sida?: number
 }
 export interface Budgetresultat {
-  ar: number
-  mnkr?: number
-  /** Andel av skatteintäkter, generella statsbidrag och utjämning. */
-  procent?: number
-  /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
+  /** Andel av skatteintäkter, generella bidrag och utjämning. */
+  procent: number
   sida?: number
 }
 export interface Budgetram {
   organ: string
-  ar: number
-  mnkr?: number
-  forandring?: number
-  /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
+  mnkr: number
   sida?: number
 }
+/** Uppgifterna för budgetåret. */
 export interface Budgetuppgifter {
-  skattesats: Skattesats | null
-  resultat: Budgetresultat[]
+  skattesats: Skattesats
+  resultat: Budgetresultat | null
   ramar: Budgetram[]
-  utgangslage: string | null
+}
+/** Det som skickas vid rättning: ramar kan anges som förändring, skatten som förändring i öre. */
+export interface Budgetuppgifterin {
+  skattesats: Skattesats
+  resultat: Budgetresultat | null
+  ramar: (Omit<Budgetram, 'mnkr'> & { mnkr?: number; forandring?: number })[]
+}
+/** Det som räknas fram ur förslaget och planförutsättningarna. */
+export interface Budgetberakning {
+  planforutsattningar: boolean
+  skattesats: { procent: number | null; ore: number | null; plan: number | null }
+  /** Skatteintäkternas förändring i mnkr. */
+  skattejustering: number | null
+  ramar: { organ: string; mnkr: number; plan: number | null; forandring: number | null }[]
+  /** Summan av förändringarna per nämnd. */
+  forandring: number | null
+  resultat: { procent: number; mnkr: number | null } | null
+  plan_resultat: number | null
+  /** Planförutsättningarnas resultat − förändringarna + skatteförändringen. */
+  beraknat: number | null
+  /** Förslagets resultat − det beräknade. */
+  differens: number | null
 }
 export interface Differens {
   mnkr: number
@@ -829,13 +846,16 @@ export interface Budgetforslag {
   anmarkning: string
   status: Budgetstatus
   uppgifter: Budgetuppgifter
+  /** Saknas för ett ersatt förslag i formatet före #58. */
+  berakning: Budgetberakning | null
   /** Länk till originaldokumentet. Lägg till `#page=N` för en sida. */
   original: string
   publicerad: string | null
   differens?: {
+    /** Öre. */
     skattesats: number | null
-    resultat: (Differens & { ar: number })[]
-    ramar: (Differens & { organ: string; ar: number })[]
+    resultat: Differens | null
+    ramar: (Differens & { organ: string })[]
   } | null
 }
 export interface Budgetutkast extends Budgetforslag {
@@ -846,11 +866,48 @@ export interface Budgetutkast extends Budgetforslag {
   andrad: string
   inlast: Budgetuppgifter
 }
+export interface Kalla {
+  text: string
+  /** Förslaget som källan hänvisar till, och sidan i det. */
+  forslag?: number
+  sida?: number
+}
+export interface Planpost {
+  post: string
+  mnkr: number
+  kalla: string
+  kallor: Kalla[]
+}
+export type Plantabell = 'resultatbudget' | 'namnder' | 'investeringar' | 'balansbudget' | 'kassaflode'
+export interface Kontroll {
+  tabell: Plantabell
+  post: string
+  summa?: number
+  angivet?: number
+  differens?: number
+  procent?: number
+}
+export interface Planforutsattningar {
+  id: number
+  budgetar: number
+  status: Budgetstatus
+  filnamn: string
+  skattesats: { procent: number; kalla: string; kallor: Kalla[] }
+  tabeller: Record<Plantabell, Planpost[]>
+  kontroller: Kontroll[]
+  publicerad: string | null
+}
+export interface Planutkast extends Planforutsattningar {
+  redaktorer: string[]
+  granskad_av: string | null
+  granskad: string | null
+  andrad: string
+}
 export interface Budgetjamforelse {
   budgetar: number
-  ar: number[]
   organ: string[]
   antagen: number | null
+  planforutsattningar: Planforutsattningar | null
   forslag: Budgetforslag[]
 }
 
@@ -866,9 +923,20 @@ export async function hamtaBudgetutkast(status?: Budgetstatus): Promise<Budgetut
 }
 export const andraBudgetforslag = (
   id: number,
-  data: Partial<Pick<Budgetforslag, 'uppgifter' | 'partier' | 'titel' | 'antagen' | 'anmarkning'>>,
+  data: Partial<Pick<Budgetforslag, 'partier' | 'titel' | 'antagen' | 'anmarkning'>> & { uppgifter?: Budgetuppgifterin },
 ) => skrivRattelse(`/api/budgetforslag/${id}`, 'PATCH', data) as unknown as Promise<Budgetutkast>
 export const granskaBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/granskning`, 'POST') as unknown as Promise<Budgetutkast>
 export const publiceraBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/publicering`, 'POST') as unknown as Promise<Budgetutkast>
+export async function hamtaPlanutkast(status?: Budgetstatus): Promise<Planutkast[]> {
+  const svar = await fetch(`/api/planforutsattningar${status ? `?status=${status}` : ''}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör eller utgivare.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+export const granskaPlanforutsattningar = (id: number) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/granskning`, 'POST') as unknown as Promise<Planutkast>
+export const publiceraPlanforutsattningar = (id: number) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/publicering`, 'POST') as unknown as Promise<Planutkast>
