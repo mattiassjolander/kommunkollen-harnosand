@@ -141,7 +141,10 @@ _RATTELSER = [
     (re.compile(r"^(\s*)8\s(?=\d{1,3}\b)"), r"\1§ "),  # "8 43-44, 46-60" i radbörjan
     (re.compile(r"—"), "–"),
 ]
-_INTERVALL = re.compile(r"Paragrafer\s+§*\s*(\d{1,3})\s*[–-]\s*(\d{1,3})")
+# Paragrafintervallet på första sidan. Bindestrecket kan läsas dubbelt ("62 –- 77") och siffrorna
+# i slutnumret som bokstäver ("TT" för 77).
+_INTERVALL = re.compile(r"Paragrafer\s+§*\s*(\d{1,3})\s*[–-]+\s*([\dTIlOoSBZ|]{1,3})(?!\w)")
+_SIFFERLIKA = str.maketrans("TIl|OoSBZ", "711100582")
 # En rad med bara ett nummer, eventuellt följt av diarienumret: paragrafrubriken.
 _NUMMERRAD = re.compile(r"^(\s*)§?\s?(\d{1,5})((?:\s+\S*\d\S*)?)$")
 
@@ -163,16 +166,25 @@ def ratta(rad: str, intervall: tuple[int, int] | None = None) -> str:
     return rad
 
 
+def paragrafintervall(text: str) -> tuple[int, int] | None:
+    """Protokollets paragrafintervall ur OCR-text, med vanliga läsfel i siffrorna rättade."""
+    m = _INTERVALL.search(" ".join(ratta(r) for r in text.splitlines()))
+    if not m:
+        return None
+    start, slut = int(m[1]), int(m[2].translate(_SIFFERLIKA))
+    return (start, slut) if start <= slut else None
+
+
 def sidtexter(pdf: bytes, dpi: int = DPI) -> tuple[list[str], list[str]]:
     """(löptext, layouttext) per sida, lästa med OCR och med vanliga läsfel rättade."""
     sidor = [_texter(_ord(bild)) for bild in _sidbilder(pdf, dpi)]
-    intervall = None
-    for lop, _ in sidor[:2]:
-        if m := _INTERVALL.search(" ".join(ratta(r) for r in lop.splitlines())):
-            intervall = (int(m[1]), int(m[2]))
-            break
+    intervall = next((i for lop, _ in sidor[:2] if (i := paragrafintervall(lop))), None)
 
     def rattad(text: str) -> str:
-        return "\n".join(ratta(r, intervall) for r in text.splitlines())
+        text = "\n".join(ratta(r, intervall) for r in text.splitlines())
+        if intervall:
+            # Intervallet skrivs som i protokollet, så att tolkningen kan jämföra paragraferna mot det.
+            text = _INTERVALL.sub(f"Paragrafer §§ {intervall[0]}–{intervall[1]}", text)
+        return text
 
     return [rattad(l) for l, _ in sidor], [rattad(y) for _, y in sidor]

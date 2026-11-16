@@ -46,6 +46,21 @@ def test_vanliga_lasfel_rattas(rad, vantat):
     assert ocr.ratta(rad, (43, 60)) == vantat
 
 
+@pytest.mark.parametrize(
+    ("text", "vantat"),
+    [
+        ("Sekreterare Felicia Bring Caris Paragrafer 88 43 — 60", (43, 60)),
+        # Samhällsnämnden 2026-05-28: dubbelt bindestreck och 77 läst som "TT".
+        ("Sekreterare Felicia Bring Caris Paragrafer 62 –- TT", (62, 77)),
+        ("Paragrafer §§ 1-1O", (1, 10)),
+        ("Paragrafer 62 – 12", None),
+        ("Paragrafer 62", None),
+    ],
+)
+def test_paragrafintervallet_lases_trots_lasfel(text, vantat):
+    assert ocr.paragrafintervall(text) == vantat
+
+
 def test_paragrafrubriker_rattas_inte_utan_kant_intervall():
     assert ocr.ratta("843") == "843"
 
