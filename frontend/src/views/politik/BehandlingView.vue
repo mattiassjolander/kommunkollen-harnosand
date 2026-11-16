@@ -88,7 +88,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
         Typ: {{ BEHANDLINGSTYPER.find((t) => t.id === b?.typ)?.namn ?? 'kunde inte klassas' }}
         <Rattelsemarkering v-if="b.rattelser?.typ" :rattelse="b.rattelser.typ" falt="typ" />
       </p>
-      <p class="markering"><Tolkningsmarkering /></p>
+      <p class="markering"><Tolkningsmarkering :ocr="b.sammantrade.ocr" /></p>
       <Protokollkalla :protokoll="b.sammantrade.protokoll" :paragraf="b.paragraf" />
     </header>
 

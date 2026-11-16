@@ -120,18 +120,19 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
             return
     sammantrade_id = conn.execute(
         """
-        INSERT INTO sammantrade (organ, nyckel, datum, starttid, sluttid, plats, dokument_id, tolkning, avvikelser, tolkad)
+        INSERT INTO sammantrade (organ, nyckel, datum, starttid, sluttid, plats, dokument_id, tolkning, avvikelser, tolkad,
+                                 ocr)
         VALUES (%(organ)s, %(nyckel)s, %(datum)s, %(starttid)s, %(sluttid)s, %(plats)s, %(dokument_id)s,
-                %(tolkning)s, %(avvikelser)s, %(tolkad)s)
+                %(tolkning)s, %(avvikelser)s, %(tolkad)s, %(ocr)s)
         ON CONFLICT (organ, nyckel) DO UPDATE SET
             datum = EXCLUDED.datum, starttid = EXCLUDED.starttid, sluttid = EXCLUDED.sluttid, plats = EXCLUDED.plats,
             dokument_id = EXCLUDED.dokument_id, tolkning = EXCLUDED.tolkning, avvikelser = EXCLUDED.avvikelser,
-            tolkad = EXCLUDED.tolkad
+            tolkad = EXCLUDED.tolkad, ocr = EXCLUDED.ocr
         RETURNING id
         """,
         {"organ": d.organ, "nyckel": nyckel, "datum": datum, "starttid": t.starttid, "sluttid": t.sluttid,
          "plats": t.plats, "dokument_id": dokument_id, "tolkning": "tolkad" if t.tolkad else "ej_tolkad",
-         "avvikelser": Jsonb(t.avvikelser), "tolkad": tolkad},
+         "avvikelser": Jsonb(t.avvikelser), "tolkad": tolkad, "ocr": t.ocr},
     ).fetchone()["id"]
     conn.execute("DELETE FROM narvaro WHERE sammantrade_id = %s", (sammantrade_id,))
     conn.execute("DELETE FROM behandling WHERE sammantrade_id = %s", (sammantrade_id,))
@@ -198,7 +199,7 @@ def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: in
 # Läsning
 
 _SAMMANTRADE = """
-    SELECT s.id, s.organ, s.datum, s.starttid, s.sluttid, s.plats, s.tolkning, s.avvikelser, s.tolkad,
+    SELECT s.id, s.organ, s.datum, s.starttid, s.sluttid, s.plats, s.tolkning, s.avvikelser, s.tolkad, s.ocr,
            d.id AS dokument_id, d.url AS dokument_url, d.filnamn, d.typ AS dokument_typ,
            d.version AS dokument_version,
            d.sha256, d.storlek, d.hamtad, d.datakalla_id, k.titel AS datakalla_titel,
@@ -222,6 +223,7 @@ def _sammantrade(rad: dict) -> dict:
         "plats": rad["plats"],
         "tolkning": rad["tolkning"],
         "avvikelser": rad["avvikelser"],
+        "ocr": rad["ocr"],
         "antal_behandlingar": rad["antal_behandlingar"],
         "paragrafer": [rad["forsta_paragraf"], rad["sista_paragraf"]] if rad["forsta_paragraf"] is not None else None,
         "protokoll": {

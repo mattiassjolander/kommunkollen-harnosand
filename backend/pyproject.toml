@@ -11,6 +11,8 @@ dependencies = [
     "itsdangerous>=2.2.0",
     "tzdata>=2026.6",
     "pypdf>=5",
+    "pypdfium2>=5.15.2",
+    "pillow>=13.0.0",
 ]
 
 [dependency-groups]

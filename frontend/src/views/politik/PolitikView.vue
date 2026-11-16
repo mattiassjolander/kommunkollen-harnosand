@@ -195,7 +195,7 @@ const paragrafer = (s: Sammantradesrad) =>
           <td class="tal">{{ tid(s) }}</td>
           <td class="tal">{{ paragrafer(s) }}</td>
           <td class="tal hoger">{{ s.antal_behandlingar }}</td>
-          <td><Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" /></td>
+          <td><Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" /></td>
         </tr>
       </tbody>
     </table>

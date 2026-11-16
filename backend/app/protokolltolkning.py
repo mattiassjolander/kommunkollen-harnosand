@@ -135,6 +135,8 @@ class Tolkning:
     narvaro: list[Narvaro] = field(default_factory=list)
     behandlingar: list[Behandling] = field(default_factory=list)
     avvikelser: list[str] = field(default_factory=list)
+    # Texten är läst med OCR ur sidbilder (#52) och kan innehålla läsfel.
+    ocr: bool = False
 
     @property
     def tolkad(self) -> bool:
@@ -1604,9 +1606,23 @@ def _tolka(pdf: bytes) -> Tolkning:
         t.avvikelser.append(f"PDF:en kunde inte läsas ({type(e).__name__})")
         return t
     if not lop or not lop[0].strip():
-        # Helt inskannad, eller inskannad med bara enstaka sidor som har text.
-        t.avvikelser.append("PDF:en saknar text (inskannad?)")
-        return t
+        # Sidorna är bilder: inskannade, eller ett digitalt protokoll som plattats till bilder.
+        # Texten läses då med OCR, om OCR finns.
+        from . import ocr
+
+        if not ocr.tillganglig():
+            t.avvikelser.append("PDF:en saknar text (inskannad?)")
+            return t
+        try:
+            lop, layout = ocr.sidtexter(pdf)
+        except ocr.OcrSaknas as e:
+            t.avvikelser.append(f"PDF:en saknar text och kunde inte läsas med OCR ({e})")
+            return t
+        if not lop or not lop[0].strip():
+            t.avvikelser.append("PDF:en saknar text (inskannad?)")
+            return t
+        t.ocr = True
+        t.avvikelser.append("PDF:en saknar text och har lästs med OCR")
     alla_sidor = len(lop)
     lop, layout = _protokollets_sidor(lop, layout)
     _sammantrade(t, lop, layout)
