@@ -78,7 +78,7 @@ Rösterna knyts till ledamotsregistret på namn. Namn som bara förekommer i vot
 
 Vissa protokoll publiceras som en PDF där varje sida är en bild, utan text (inskannade, eller digitala protokoll som plattats till bilder). Då renderas sidorna i 400 dpi och läses med Tesseract och svensk språkdata (`ocr.py`). Ur ordens placering byggs samma löptext och layouttext som ur en vanlig PDF, och resten av tolkningen är densamma.
 
-Vanliga läsfel rättas bara i OCR-text: paragraftecknet läses som 8, 5, 3, & eller $ ("(SD) 8 45", "$8 43 — 60"). En paragrafrubrik på egen rad ("843", "5849 SAM/2026-116") rättas bara när protokollets paragrafintervall är känt från första sidan, och numret blir den del av siffrorna som ligger inom intervallet.
+Vanliga läsfel rättas bara i OCR-text: paragraftecknet läses som 8, 5, 3, & eller $ ("(SD) 8 45", "$8 43 — 60"). En paragrafrubrik på egen rad ("843", "5849 SAM/2026-116") rättas bara när protokollets paragrafintervall är känt från första sidan, och numret blir den del av siffrorna som ligger inom intervallet. Intervallet läses trots dubbla bindestreck och siffror som lästs som bokstäver ("Paragrafer 62 –- TT" blir §§ 62–77).
 
 Sammanträdet märks "Läst med OCR, ej granskad". Avvikelsen "PDF:en saknar text och har lästs med OCR" står kvar på avvikelsesidan, så att kommunen kan ombes publicera en PDF med text. Finns inte Tesseract blir protokollet ej tolkat, som tidigare.
 
