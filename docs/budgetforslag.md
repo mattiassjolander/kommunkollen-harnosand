@@ -77,7 +77,7 @@ Applikationen räknar fram:
 - **Skatteintäkternas förändring:** skatteintäkterna × öre / 100 / skattesatsen. 10 öre 2027 är cirka −6,4 mnkr.
 - **Resultat i mnkr:** procenten av förslagets bas.
 - **Beräknat resultat:** planförutsättningarnas resultat − summan av förändringarna + skatteintäkternas förändring.
-- **Differens:** förslagets resultat i mnkr − det beräknade. Skiljer de sig saknar förslaget finansiering för skillnaden, eller redovisar den inte. Exempel 2027: L budgeterar 80 mnkr men sparar bara 10 mnkr netto (beräknat 60, differens 20), och SD räknar resultatet som skatter och bidrag minus ramar och utelämnar kostnaderna utanför nämnderna (beräknat 21,2, differens cirka 23).
+- **Differens:** förslagets resultat i mnkr − det beräknade. Skiljer de sig saknar förslaget finansiering för skillnaden, eller redovisar den inte. Exempel 2027, mot kommunens planförutsättningar (resultat 50,3 mnkr, nämnderna 2 144,7 mnkr): L budgeterar cirka 80 mnkr men sparar bara 10,7 mnkr netto på ramarna (beräknat 61,0, differens 18,9), och SD räknar resultatet som skatter och bidrag minus ramar och utelämnar kostnaderna utanför nämnderna (beräknat 22,2, differens 22,2). M sänker skatten med 10 öre och går nästan ihop (differens −1,3).
 
 ## Inläsning
 
