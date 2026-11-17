@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -359,7 +359,7 @@ def create_app(
 
     @app.get("/api/budget/{ar}", dependencies=[Depends(krav_roll("lasare"))])
     def budgetjamforelse(ar: int) -> dict:
-        """De publicerade förslagen för budgetåret bredvid varandra och mot den antagna budgeten."""
+        """De publicerade förslagen för budgetåret bredvid varandra, mot planförutsättningarna och den antagna budgeten."""
         return _budget(budgetforslag.jamforelse, ar)
 
     @app.get("/api/budgetforslag", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
@@ -392,6 +392,26 @@ def create_app(
         redaktion = bool(anv and anv.roller & {"redaktor", "utgivare"})
         innehall, typ, namn = _budget(budgetforslag.original, forslag_id, redaktion)
         return Response(innehall, media_type=typ, headers={"Content-Disposition": f'inline; filename="{namn}"'})
+
+    # Planförutsättningar per budgetår (#58): läses in som utkast tillsammans med förslagen.
+
+    @app.get("/api/planforutsattningar", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def lista_planforutsattningar(
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt)$"),
+    ) -> list[dict]:
+        return _budget(planforutsattningar.lista, status)
+
+    @app.get("/api/planforutsattningar/{pf_id}", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def las_planforutsattningar(pf_id: int) -> dict:
+        return _budget(planforutsattningar.las, pf_id)
+
+    @app.post("/api/planforutsattningar/{pf_id}/granskning")
+    def granska_planforutsattningar(pf_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(planforutsattningar.granska, pf_id, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/planforutsattningar/{pf_id}/publicering")
+    def publicera_planforutsattningar(pf_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(planforutsattningar.publicera, pf_id, anv.epost, datetime.now(timezone.utc))
 
     @app.get("/api/ledamoter", dependencies=[Depends(krav_roll("lasare"))])
     def lista_ledamoter(q: str | None = None, parti: str | None = None, organ: str | None = None) -> list[dict]:

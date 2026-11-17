@@ -178,8 +178,19 @@ Ett av åren efter budgetåret som en budget eller ett budgetförslag också ang
 De skattemedel en budget eller ett budgetförslag tilldelar ett organ för ett år.
 _Avoid_: Anslag, budgetram (som eget begrepp)
 
-**Utgångsläge**:
-Det ett budgetförslag räknar sina förändringar från, oftast kommunens planförutsättningar för budgetåret.
+**Planförutsättningar**:
+Kommunens gemensamma ekonomiska utgångspunkt för ett budgetår, före politiska prioriteringar: ramar per organ, skattesats samt resultat-, investerings- och balansbudget och kassaflöde. Alla budgetförslag för budgetåret utgår från samma planförutsättningar.
+_Avoid_: Utgångsläge, plan
+
+**Förändring**:
+Skillnaden mellan ett budgetförslags ram och planförutsättningarnas ram för samma organ och budgetår, i mnkr.
+_Avoid_: Politisk prioritering (som eget begrepp)
+
+**Budgeterat resultat**:
+Det resultat ett budgetförslag budgeterar för budgetåret, i procent av skatteintäkter och generella bidrag och utjämning.
+
+**Beräknat resultat**:
+Det resultat ett budgetförslag får om planförutsättningarnas resultat justeras med förslagets förändringar av ramar och skatt. Skiljer det sig från det budgeterade resultatet saknar förslaget finansiering för skillnaden, eller redovisar den inte.
 
 **Differens**:
 Skillnaden mellan ett budgetförslags siffra och den antagna budgetens för samma år, i mnkr och procent.
