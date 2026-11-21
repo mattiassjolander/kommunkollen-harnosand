@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Undernavigering i Politik och beslut. Kopplingar och rättelser visas för redaktörer och utgivare.
+// Undernavigering i Politik och beslut. Kopplingar, sammanträdesplaner och rättelser visas för redaktörer och utgivare.
 import { computed, inject, ref, type Ref } from 'vue'
 import type { Jag } from '../api'
 
@@ -16,6 +16,7 @@ const arUtgivare = computed(() => jag.value?.roller.includes('utgivare') ?? fals
     <RouterLink to="/politik/avvikelser" exact-active-class="aktiv">Avvikelser</RouterLink>
     <RouterLink to="/politik/budget" exact-active-class="aktiv">Budgetförslag</RouterLink>
     <RouterLink v-if="arRedaktor" to="/politik/kopplingar" active-class="aktiv">Kopplingar</RouterLink>
+    <RouterLink v-if="arRedaktor" to="/politik/sammantradesplaner" exact-active-class="aktiv">Planer</RouterLink>
     <RouterLink v-if="arRedaktor || arUtgivare" to="/politik/rattelser" exact-active-class="aktiv">Rättelser</RouterLink>
     <RouterLink v-if="arRedaktor || arUtgivare" to="/politik/budgetutkast" exact-active-class="aktiv">Budgetutkast</RouterLink>
   </nav>

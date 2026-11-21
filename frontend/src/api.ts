@@ -1100,3 +1100,54 @@ export const granskaPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/granskning`, 'POST') as unknown as Promise<Planutkast>
 export const publiceraPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/publicering`, 'POST') as unknown as Promise<Planutkast>
+
+// Sammanträdesplaner (#68): organens planer så som webbsidan visar dem, och skillnaderna mot besluten i
+// protokollen. Bara för redaktionen.
+export type Planstatus = 'planerat' | 'installt' | 'borttaget'
+
+export interface Planversion {
+  version: number
+  datum: string | null
+  starttid: string | null
+  status: Planstatus
+  anmarkning: string | null
+  kalltext: string
+  hamtad: string
+}
+
+export interface PlaneratSammantrade {
+  id: number
+  nyckel: string
+  datum: string | null
+  manad: string
+  starttid: string | null
+  status: Planstatus
+  anmarkning: string | null
+  version: number
+  protokoll: boolean
+  versioner: Planversion[]
+}
+
+export interface Planskillnad {
+  datum: string
+  typ: 'bara_sidan' | 'bara_beslutet' | 'tid'
+  sidan: string | null
+  beslutet: string | null
+}
+
+export interface Sammantradesplan {
+  organ: { id: string; namn: string }
+  ar: number
+  url: string
+  sammantraden: PlaneratSammantrade[]
+  beslut: { sammantrade_id: number; paragraf: number; rubrik: string; datum: string }[]
+  skillnader: Planskillnad[] | null
+}
+
+export async function hamtaSammantradesplaner(): Promise<Sammantradesplan[]> {
+  const svar = await fetch('/api/sammantradesplaner')
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}

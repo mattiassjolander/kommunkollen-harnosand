@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, protokoll, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -21,6 +21,7 @@ from .schema import SVERIGE, Schema
 from .sources.base import Datakalla
 from .sources.kolada import Kolada
 from .sources.harnosand import ORGAN, Protokollkalla
+from .sources.sammantradesplaner import Sammantradesplaner
 from .sources.scb import Scb
 from .sources.skr import SkrSkatteunderlag
 
@@ -47,6 +48,7 @@ def standardkallor() -> list[Datakalla]:
         SkrSkatteunderlag(anrop_per_sekund=_anropsgrans("SKR", 1)),
         *(Protokollkalla(organ, urval=int(os.environ.get("PROTOKOLL_URVAL") or 0),
                          anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
+        Sammantradesplaner(anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)),
     ]
 
 
@@ -280,6 +282,14 @@ def create_app(
         if resultat is None:
             raise HTTPException(404, f"Ärendet {arende_id} finns inte")
         return resultat
+
+    @app.get("/api/sammantradesplaner", dependencies=[Depends(krav_roll("redaktor"))])
+    def sammantradesplaner() -> list[dict]:
+        """Organens sammanträdesplaner med versionerna, och skillnaderna mot besluten i protokollen.
+
+        Bara för redaktionen, eftersom skillnaderna inte visas publikt."""
+        with db.connect(database_url) as conn:
+            return sammantradesplan.lista(conn)
 
     @app.get("/api/kopplingar")
     def kopplingar(status: str = Query("forslag", pattern="^(automatisk|forslag|bekraftad|avvisad)$"),

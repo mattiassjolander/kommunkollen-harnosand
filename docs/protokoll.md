@@ -15,6 +15,49 @@ Kommunfullmäktige (KF), kommunstyrelsen (KS), samhällsnämnden (SAM), socialn�
 - Varje protokoll sparas som plattformens egen kopia med SHA-256. Nytt innehåll under samma adress blir en ny version, och den tidigare finns kvar. Samma innehåll under en ny adress sparas inte igen.
 - Den första insamlingen hämtar alla protokoll sedan 2022, ungefär 270 filer och 200 MB. Med standardgränsen ett anrop per sekund tar det några minuter.
 
+## Sammanträdesplaner
+
+Datakällan "Sammanträdesplaner" (`harnosand-sammantradesplaner`, #68) läser tabellerna med sammanträdesdagar
+på de fem organens sidor. Varje tabell har kolumnerna Månad, Datum och Tid, och året står i tabellens rubrik
+eller i rubriken ovanför. Kommunstyrelsen har två tabeller (2026 och 2027).
+
+Fritexten i tabellerna tolkas:
+
+| Text | Tolkning |
+| --- | --- |
+| "Inställt" eller "Inställd" i Tid | Sammanträdet är inställt |
+| "Inställd" i Datum, utan dag | Månadens sammanträde är inställt. Har sammanträdet tidigare haft ett datum behåller det datumet |
+| "OBS tiden: 11.00" | Ändrad starttid |
+| "(8/9 ställs in) 15, 29" | 8 september är inställt, 15 och 29 är planerade |
+| "5, 26" | Två sammanträden i månaden |
+| Annan text | Sparas som en anmärkning på raden och ger *delvis fel* |
+
+Varje rad blir ett planerat sammanträde i tabellen `sammantrade`, med plan_*-kolumnerna ifyllda och utan
+protokoll. Raden identifieras av organet och datumet. En ändrad tid eller status blir en ny version i
+`planversion` (en reviderad uppgift) och sammanträdet behåller sitt id. Ett sammanträde som försvinner från
+sidan, för ett år som sidan fortfarande visar, markeras som borttaget ur planen och finns kvar.
+
+**Koppling till protokollen.** När ett protokoll läses in kopplas det till det planerade sammanträdet med
+samma organ och datum, i stället för att skapa ett nytt. Har båda en starttid väljs det sammanträde vars tid
+ligger närmast, högst 60 minuter ifrån. Fullmäktige hade till exempel två sammanträden 2026-10-26: planens
+11.00 gäller protokollet som började 11.10, och protokollet från 13.15 blir ett eget sammanträde. Finns
+protokollet redan när planen läses kopplas planen till det på samma sätt.
+
+**Jämförelse med besluten.** Organen beslutar om planen i protokollen, med rubriker som "Sammanträdestider
+2027" eller "Socialnämndens sammanträdesdagar 2026". Ur besluten läses att-satser om organets egna sammanträden:
+
+- "att kommunstyrelsen sammanträder 08.15 följande datum: 2 februari, 6 april …" ger hela planen för året.
+  Förslag till ett annat organ och arbetsutskottets datum räknas inte.
+- "att sammanträdet den 17 juni ställs in" tar bort ett datum.
+- "att kommunstyrelsens sammanträde 8 september 2026 senareläggs till 15 september 2026" (även "flyttas" och
+  "tidigareläggs") flyttar ett datum.
+
+Besluten gäller i datumordning. Webbsidans planerade sammanträden jämförs med datumen enligt besluten, och
+skillnaderna (bara på webbsidan, bara i beslutet och annan tid) visas på sidan Planer för redaktionen. De visas
+inte publikt. Anger inget beslut datumen, t.ex. "att anta förslag till sammanträdestider", jämförs planen inte.
+
+Planerade sammanträden räknas inte i statistiken och listas inte bland sammanträdena med protokoll.
+
 ## Paragrafprotokoll
 
 Ett paragrafprotokoll (filnamn med §, "utdrag", "direktjustering" eller "omedelbar justering") innehåller de paragrafer som justerades direkt. Hela protokollet är det primära:

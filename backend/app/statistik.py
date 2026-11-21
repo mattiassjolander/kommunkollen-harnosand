@@ -27,7 +27,8 @@ def _organordning(organ_id: str) -> int:
 
 def tillgangliga_ar(conn: psycopg.Connection) -> list[int]:
     rad = conn.execute(
-        "SELECT extract(year FROM min(datum))::int AS fran, extract(year FROM max(datum))::int AS till FROM sammantrade"
+        "SELECT extract(year FROM min(datum))::int AS fran, extract(year FROM max(datum))::int AS till FROM sammantrade "
+        "WHERE dokument_id IS NOT NULL"
     ).fetchone()
     return list(range(rad["fran"], rad["till"] + 1)) if rad and rad["fran"] else []
 
@@ -80,7 +81,8 @@ def behandlingar(conn: psycopg.Connection, fran: int, till: int, organ: str | No
         return {"id": s["id"], "datum": s["datum"], "organ": _organ(s["organ"])}
 
     utan_datum = conn.execute(
-        "SELECT count(*) AS n FROM sammantrade WHERE datum IS NULL AND (%(organ)s::text IS NULL OR organ = %(organ)s)",
+        "SELECT count(*) AS n FROM sammantrade WHERE datum IS NULL AND dokument_id IS NOT NULL "
+        "AND (%(organ)s::text IS NULL OR organ = %(organ)s)",
         param,
     ).fetchone()["n"]
     return {
@@ -119,7 +121,7 @@ def behandlingar_av_typ(conn: psycopg.Connection, fran: int, till: int, organ: s
     sammantrade = {s["id"]: s for s in conn.execute(
         """
         SELECT s.id, s.organ, s.datum FROM sammantrade s
-        WHERE s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
+        WHERE s.dokument_id IS NOT NULL AND s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
           AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
         """, param).fetchall()}
     rader = conn.execute(

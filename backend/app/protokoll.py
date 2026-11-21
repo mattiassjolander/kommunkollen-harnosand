@@ -19,7 +19,7 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import arenden, ledamoter, partier
+from . import arenden, ledamoter, partier, sammantradesplan
 from .rattelser import Publicerade
 from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_vid, tolka
 from .sources.base import Dokument
@@ -118,6 +118,10 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
         ).fetchone()
         if befintlig is not None and (befintlig["typ"] == "protokoll" or befintlig["url"] != d.url):
             return
+    # Ett protokoll för ett planerat sammanträde kopplas till det i stället för att skapa ett nytt.
+    if not conn.execute("SELECT 1 FROM sammantrade WHERE organ = %s AND nyckel = %s", (d.organ, nyckel)).fetchone():
+        if (planerat := sammantradesplan.planerat_for_protokoll(conn, d.organ, datum, t.starttid)) is not None:
+            conn.execute("UPDATE sammantrade SET nyckel = %s WHERE id = %s", (nyckel, planerat))
     sammantrade_id = conn.execute(
         """
         INSERT INTO sammantrade (organ, nyckel, datum, starttid, sluttid, plats, dokument_id, tolkning, avvikelser, tolkad,
