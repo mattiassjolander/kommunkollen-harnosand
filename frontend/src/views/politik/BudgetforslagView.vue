@@ -2,7 +2,8 @@
 // Partiernas budgetförslag (#48) mot gemensamma planförutsättningar (#58): förslagen för ett budgetår
 // bredvid varandra, med ram och förändring per nämnd, skattesats, resultat och beräknat resultat.
 // Budgetåret speglas i URL:en (design.md, Filter). Varje siffra länkar till sidan i originalet.
-// Partier står i alfabetisk ordning (design.md).
+// Partier står i alfabetisk ordning (design.md). En nämnd kan öppnas och visar då förslagens åtgärder
+// och satsningar för ramen, med belopp, sidlänk och hur stor del av förändringen de förklarar (#57).
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -70,6 +71,29 @@ const planram = (o: string) => plan.value?.tabeller.namnder.find((p) => p.post =
 const ram = (f: Budgetforslag, o: string) => f.uppgifter.ramar.find((r) => r.organ === o) ?? null
 const berakning = (f: Budgetforslag, o: string) => f.berakning?.ramar.find((r) => r.organ === o) ?? null
 const diffRam = (f: Budgetforslag, o: string): Differens | null => f.differens?.ramar.find((d) => d.organ === o) ?? null
+
+// Öppnade nämnder, som visar åtgärderna per förslag.
+const oppna = ref(new Set<string>())
+function vaxla(o: string) {
+  const ny = new Set(oppna.value)
+  if (ny.has(o)) ny.delete(o)
+  else ny.add(o)
+  oppna.value = ny
+}
+const harAtgarder = (o: string) =>
+  forslag.value.some((f) => ram(f, o)?.atgarder?.length || berakning(f, o)?.atgarder.saknas)
+// "åtgärder för −3,0 av −3,0 mnkr", eller att förslaget ändrar ramen utan att ange några.
+function tackningstext(f: Budgetforslag, o: string): string | null {
+  const b = berakning(f, o)
+  if (!b) return null
+  const t = b.atgarder
+  if (t.saknas) return 'Inga åtgärder anges'
+  if (!t.antal) return null
+  if (t.mnkr === null) return t.antal === 1 ? '1 åtgärd utan belopp' : `${t.antal} åtgärder utan belopp`
+  return b.forandring !== null
+    ? `åtgärder för ${talforandring(t.mnkr, 'mnkr').replace(/ mnkr$/, '')} av ${talforandring(b.forandring, 'mnkr')}`
+    : `åtgärder för ${talforandring(t.mnkr, 'mnkr')}`
+}
 const difftext = (d: Differens) =>
   d.procent === null ? talforandring(d.mnkr, 'mnkr') : `${talforandring(d.mnkr, 'mnkr')} (${talforandring(d.procent, '%')})`
 
@@ -145,8 +169,22 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
               </tr>
             </thead>
             <tbody>
-              <tr v-for="o in j.organ" :key="o" :data-organ="o">
-                <th scope="row">{{ o }}</th>
+              <template v-for="o in j.organ" :key="o">
+              <tr :data-organ="o">
+                <th scope="row">
+                  <button
+                    v-if="harAtgarder(o)"
+                    type="button"
+                    class="vaxla"
+                    :aria-expanded="oppna.has(o)"
+                    :aria-controls="`atgarder-${o}`"
+                    data-testid="visa-atgarder"
+                    @click="vaxla(o)"
+                  >
+                    <span aria-hidden="true">{{ oppna.has(o) ? '▾' : '▸' }}</span> {{ o }}
+                  </button>
+                  <template v-else>{{ o }}</template>
+                </th>
                 <td v-if="plan" class="num plan">{{ planram(o) ? tal(planram(o)!.mnkr, 'mnkr') : '–' }}</td>
                 <td v-for="f in j.forslag" :key="f.id" class="num">
                   <template v-if="ram(f, o)">
@@ -157,6 +195,25 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
                   <span v-else class="saknas">{{ plan ? 'Oförändrad' : 'Anges inte' }}</span>
                 </td>
               </tr>
+              <tr v-if="oppna.has(o)" :id="`atgarder-${o}`" class="atgarder" :data-atgarder="o">
+                <th scope="row" class="atgardsrubrik">Åtgärder</th>
+                <td v-if="plan" class="plan" />
+                <td v-for="f in j.forslag" :key="f.id" data-testid="atgarder">
+                  <ul v-if="ram(f, o)?.atgarder?.length" class="atgardslista">
+                    <li v-for="(a, i) in ram(f, o)!.atgarder" :key="i">
+                      <span class="atgardstext">{{ a.text }}</span>
+                      <span v-if="a.mnkr !== undefined" class="atgardsbelopp">{{ talforandring(a.mnkr, 'mnkr') }}</span>
+                      <a v-if="a.sida" v-bind="lank(f, a.sida)" class="sidlank">s. {{ a.sida }}</a>
+                    </li>
+                  </ul>
+                  <span
+                    v-if="tackningstext(f, o)"
+                    :class="berakning(f, o)?.atgarder.saknas ? 'saknas' : 'diff'"
+                    data-testid="tackning"
+                  >{{ tackningstext(f, o) }}</span>
+                </td>
+              </tr>
+              </template>
               <tr v-if="plan" data-rad="forandring" class="summa">
                 <th scope="row">Förändring av ramarna</th>
                 <td class="num plan" />
@@ -215,7 +272,8 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
         <p class="kallrad">
           Ramarna är nämndernas nettokostnad eller tilldelade skattemedel, som förslaget redovisar dem. En nämnd som
           förslaget inte tar upp räknas som oförändrad. Resultatet i mnkr är procenten av förslagets skatteintäkter och
-          generella bidrag.
+          generella bidrag. Öppna en nämnd för att se förslagens åtgärder och satsningar, återgivna nära originalets
+          text med sidan där de står.
         </p>
       </section>
 
@@ -351,6 +409,44 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
   display: block;
   font-size: 12px;
   color: var(--ink-secondary);
+}
+.vaxla {
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.atgarder td,
+.atgarder th {
+  font-size: 12px;
+}
+.atgardsrubrik {
+  font-weight: 400 !important;
+  color: var(--ink-secondary);
+}
+.atgardslista {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  max-width: 280px;
+}
+.atgardstext {
+  display: block;
+  white-space: normal;
+}
+.atgardsbelopp {
+  font-variant-numeric: tabular-nums;
+  margin-right: 6px;
+}
+.sidlank {
+  font-size: 12px;
 }
 .saknas {
   color: var(--ink-muted);

@@ -90,6 +90,41 @@ def _valfria(post: dict, falt: str, namn: tuple[str, ...]) -> dict:
     return ut
 
 
+def atgarder(v: Any, falt: str, sidor: bool) -> list[dict]:
+    """Åtgärderna för en ram (#57): [{text, mnkr?, sida}]. Texten är ett citat eller en kort sammanfattning
+    av det som står i förslaget, beloppet är ramens förändring i mnkr om förslaget anger det, och sidan
+    krävs för en PDF men anges inte för ett Word-dokument."""
+    if v is None:
+        return []
+    if not isinstance(v, list):
+        raise Ogiltig(f"{falt}: atgarder ska vara en lista")
+    ut = []
+    for i, a in enumerate(v):
+        f = f"{falt}, åtgärd {i + 1}"
+        if not isinstance(a, dict):
+            raise Ogiltig(f"{f} ska vara ett objekt med text, mnkr och sida")
+        okanda = set(a) - {"text", "mnkr", "sida"}
+        if okanda:
+            raise Ogiltig(f"{f}: okända fält: {', '.join(sorted(okanda))}")
+        text = a.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise Ogiltig(f"{f}: text saknas")
+        atgard: dict = {"text": " ".join(text.split())}
+        if a.get("mnkr") is not None:
+            atgard["mnkr"] = round(_tal(a["mnkr"], f"{f} (mnkr)"), 3)
+        ut.append(atgard | _sida(a.get("sida"), f, sidor))
+    return ut
+
+
+def tackning(ram: dict, forandring: float | None) -> dict:
+    """Hur stor del av ramens förändring åtgärderna förklarar: antal, summan av beloppen (None om inget
+    belopp anges) och om ramen ändras utan att förslaget anger några åtgärder."""
+    atg = ram.get("atgarder") or []
+    belopp = [a["mnkr"] for a in atg if "mnkr" in a]
+    return {"antal": len(atg), "mnkr": round(sum(belopp), 3) if belopp else None,
+            "saknas": not atg and bool(forandring)}
+
+
 def skattejustering(nt: dict, ore: int) -> float:
     """Skatteintäkternas förändring i mnkr när skattesatsen ändras med `ore` öre."""
     return nt["skatteintakter"] * ore / 100 / nt["skattesats"]
@@ -106,7 +141,8 @@ def uppgifter(data: Any, budgetar: int, sidor: bool = True, nt: dict | None = No
     `nt` är nyckeltalen ur årets planförutsättningar (`planforutsattningar.nyckeltal`), None om de saknas.
     Uppgifterna är det som står i dokumentet, med sida när dokumentet har fasta sidor (`sidor`, PDF):
 
-    - `ramar`: per nämnd, {mnkr} eller {forandring} mot planförutsättningen. Lagras som mnkr.
+    - `ramar`: per nämnd, {mnkr} eller {forandring} mot planförutsättningen. Lagras som mnkr. En ram kan ha
+      `atgarder`, en lista med åtgärder och satsningar (`atgarder`, #57).
     - `skattesats`: {ore}, {forandring} i procentenheter (−0,10 för "10 öre lägre") eller {procent}.
       Lagras som förändring i öre, eller som procent när planförutsättningar saknas. Utelämnad är 0 öre.
     - `resultat`: {procent} av skatteintäkter och generella bidrag, eller {mnkr}. Lagras som procent.
@@ -181,7 +217,10 @@ def uppgifter(data: Any, budgetar: int, sidor: bool = True, nt: dict | None = No
             raise Ogiltig(f"{f}: {organ} finns inte i planförutsättningarna för {budgetar}, ange mnkr")
         else:
             mnkr = nt["ramar"][organ] + v["forandring"]
-        ramar.append({"organ": organ, "mnkr": round(mnkr, 3)} | _sida(r.get("sida"), f, sidor))
+        ram = {"organ": organ, "mnkr": round(mnkr, 3)} | _sida(r.get("sida"), f, sidor)
+        if atg := atgarder(r.get("atgarder"), f"{f} ({organ})", sidor):
+            ram["atgarder"] = atg
+        ramar.append(ram)
     if len({r["organ"] for r in ramar}) != len(ramar):
         raise Ogiltig("Samma nämnd står flera gånger")
     return {"skattesats": skatt, "resultat": resultat, "ramar": ramar}
@@ -208,15 +247,17 @@ def berakning(u: dict, nt: dict | None) -> dict:
         return {"planforutsattningar": False,
                 "skattesats": {"procent": u["skattesats"].get("procent"), "ore": ore, "plan": None},
                 "skattejustering": None,
-                "ramar": [{"organ": r["organ"], "mnkr": r["mnkr"], "plan": None, "forandring": None} for r in u["ramar"]],
+                "ramar": [{"organ": r["organ"], "mnkr": r["mnkr"], "plan": None, "forandring": None,
+                           "atgarder": tackning(r, None)} for r in u["ramar"]],
                 "forandring": None, "resultat": {"procent": res["procent"], "mnkr": None} if res else None,
                 "plan_resultat": None, "beraknat": None, "differens": None}
     ore = ore or 0
     ramar = []
     for r in u["ramar"]:
         plan = nt["ramar"].get(r["organ"])
-        ramar.append({"organ": r["organ"], "mnkr": r["mnkr"], "plan": plan,
-                      "forandring": round(r["mnkr"] - plan, 3) if plan is not None else None})
+        forandring = round(r["mnkr"] - plan, 3) if plan is not None else None
+        ramar.append({"organ": r["organ"], "mnkr": r["mnkr"], "plan": plan, "forandring": forandring,
+                      "atgarder": tackning(r, forandring)})
     forandring = round(sum(r["forandring"] or 0 for r in ramar), 3)
     justering = skattejustering(nt, ore)
     beraknat = nt["resultat"] - forandring + justering

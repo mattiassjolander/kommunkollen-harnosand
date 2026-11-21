@@ -2,6 +2,7 @@
 // Budgetförslag och planförutsättningar som utkast (#48, #58): redaktören rättar förslagens siffror mot
 // originalet, och en utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem
 // (kravspec 18, ADR-0002). Planförutsättningarna rättas i Excelfilen och läses in på nytt.
+// Varje ram kan ha åtgärder och satsningar med belopp och sida (#57), som granskas med förslaget.
 import { computed, inject, onMounted, reactive, ref, type Ref } from 'vue'
 import {
   EjInloggad,
@@ -42,7 +43,12 @@ interface Formular {
   anmarkning: string
   skatt: { ore: string; sida: string }
   resultat: { procent: string; sida: string }
-  ramar: { organ: string; mnkr: string; forandring: string; sida: string }[]
+  ramar: { organ: string; mnkr: string; forandring: string; sida: string; atgarder: Atgardsfalt[] }[]
+}
+interface Atgardsfalt {
+  text: string
+  mnkr: string
+  sida: string
 }
 const form = ref<Formular | null>(null)
 
@@ -78,7 +84,13 @@ function oppna(f: Budgetutkast) {
     anmarkning: f.anmarkning,
     skatt: { ore: s(u.skattesats.ore), sida: s(u.skattesats.sida) },
     resultat: { procent: s(u.resultat?.procent), sida: s(u.resultat?.sida) },
-    ramar: u.ramar.map((r) => ({ organ: r.organ, mnkr: s(r.mnkr), forandring: '', sida: s(r.sida) })),
+    ramar: u.ramar.map((r) => ({
+      organ: r.organ,
+      mnkr: s(r.mnkr),
+      forandring: '',
+      sida: s(r.sida),
+      atgarder: (r.atgarder ?? []).map((a) => ({ text: a.text, mnkr: s(a.mnkr), sida: s(a.sida) })),
+    })),
   }
 }
 
@@ -92,11 +104,13 @@ function uppgifter(f: Formular, u: Budgetutkast['uppgifter']): Budgetuppgifterin
   return {
     skattesats: skatt,
     resultat: f.resultat.procent.trim() ? { procent: tal(f.resultat.procent)!, sida: tal(f.resultat.sida) } : null,
-    ramar: f.ramar.map((r) =>
-      r.mnkr.trim()
+    ramar: f.ramar.map((r) => {
+      const atgarder = r.atgarder.map((a) => ({ text: a.text, mnkr: tal(a.mnkr), sida: tal(a.sida) }))
+      const ram = r.mnkr.trim()
         ? { organ: r.organ, mnkr: tal(r.mnkr), sida: tal(r.sida) }
-        : { organ: r.organ, forandring: tal(r.forandring), sida: tal(r.sida) },
-    ),
+        : { organ: r.organ, forandring: tal(r.forandring), sida: tal(r.sida) }
+      return atgarder.length ? { ...ram, atgarder } : ram
+    }),
   }
 }
 
@@ -149,6 +163,7 @@ const nr = (v: number) => exakt.format(v)
 const fr = (v: number) => (v === 0 ? '±0' : med.format(v))
 const sidlank = (f: Budgetutkast, sida?: number) => (sida ? `${f.original}#page=${sida}` : null)
 const forandring = (f: Budgetutkast, organ: string) => f.berakning?.ramar.find((r) => r.organ === organ)?.forandring ?? null
+const tackning = (f: Budgetutkast, organ: string) => f.berakning?.ramar.find((r) => r.organ === organ)?.atgarder ?? null
 const kallank = (k: Kalla) => `/api/budgetforslag/${k.forslag}/original#page=${k.sida}`
 
 const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
@@ -269,15 +284,28 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
             </p>
             <p v-else class="saknas">Planförutsättningar för {{ f.budgetar }} saknas, så ingen förändring räknas.</p>
             <table v-if="f.uppgifter.ramar.length" class="ramtabell">
-              <caption>Ramar per nämnd {{ f.budgetar }}, mnkr (förändring mot planförutsättningarna inom parentes)</caption>
+              <caption>Ramar per nämnd {{ f.budgetar }}, mnkr (förändring mot planförutsättningarna inom parentes), med åtgärder</caption>
               <tbody>
-                <tr v-for="r in f.uppgifter.ramar" :key="r.organ">
-                  <th scope="row">{{ r.organ }}</th>
-                  <td class="num">
-                    {{ nr(r.mnkr) }}<template v-if="forandring(f, r.organ) !== null"> ({{ fr(forandring(f, r.organ)!) }})</template>
-                    <a v-if="sidlank(f, r.sida)" :href="sidlank(f, r.sida)!" target="_blank" rel="noopener" class="sida">s. {{ r.sida }}</a>
-                  </td>
-                </tr>
+                <template v-for="r in f.uppgifter.ramar" :key="r.organ">
+                  <tr>
+                    <th scope="row">{{ r.organ }}</th>
+                    <td class="num">
+                      {{ nr(r.mnkr) }}<template v-if="forandring(f, r.organ) !== null"> ({{ fr(forandring(f, r.organ)!) }})</template>
+                      <a v-if="sidlank(f, r.sida)" :href="sidlank(f, r.sida)!" target="_blank" rel="noopener" class="sida">s. {{ r.sida }}</a>
+                    </td>
+                    <td class="kalla" data-testid="tackning">
+                      <template v-if="tackning(f, r.organ)?.saknas">Inga åtgärder anges</template>
+                      <template v-else-if="tackning(f, r.organ)?.mnkr != null">åtgärder för {{ fr(tackning(f, r.organ)!.mnkr!) }} mnkr</template>
+                    </td>
+                  </tr>
+                  <tr v-for="(a, i) in r.atgarder ?? []" :key="`${r.organ}-${i}`" class="atgard" data-testid="atgard">
+                    <td colspan="2">{{ a.text }}</td>
+                    <td class="num">
+                      <template v-if="a.mnkr !== undefined">{{ fr(a.mnkr) }}</template>
+                      <a v-if="sidlank(f, a.sida)" :href="sidlank(f, a.sida)!" target="_blank" rel="noopener" class="sida">s. {{ a.sida }}</a>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
             <p v-else><strong>Ramar:</strong> <span class="saknas">anges inte</span></p>
@@ -304,19 +332,34 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
             </div>
 
             <table class="redigera">
-              <caption>Ramar per nämnd {{ f.budgetar }}. Ange mnkr, eller lämna tomt och ange förändringen mot planförutsättningarna.</caption>
+              <caption>
+                Ramar per nämnd {{ f.budgetar }}. Ange mnkr, eller lämna tomt och ange förändringen mot planförutsättningarna.
+                Åtgärderna skrivs nära originalets text, med beloppet om förslaget anger det.
+              </caption>
               <thead><tr><th>Nämnd</th><th>Mnkr</th><th>Förändring, mnkr</th><th>Sida</th><th /></tr></thead>
               <tbody>
-                <tr v-for="(r, i) in form.ramar" :key="i">
-                  <td><input v-model="r.organ" /></td>
-                  <td><input v-model="r.mnkr" inputmode="decimal" /></td>
-                  <td><input v-model="r.forandring" inputmode="decimal" :disabled="!!r.mnkr.trim()" /></td>
-                  <td><input v-model="r.sida" class="kort-falt" /></td>
-                  <td><button type="button" @click="form.ramar.splice(i, 1)">Ta bort</button></td>
-                </tr>
+                <template v-for="(r, i) in form.ramar" :key="i">
+                  <tr :data-ram="r.organ">
+                    <td><input v-model="r.organ" /></td>
+                    <td><input v-model="r.mnkr" inputmode="decimal" /></td>
+                    <td><input v-model="r.forandring" inputmode="decimal" :disabled="!!r.mnkr.trim()" /></td>
+                    <td><input v-model="r.sida" class="kort-falt" /></td>
+                    <td>
+                      <button type="button" @click="form.ramar.splice(i, 1)">Ta bort</button>
+                      <button type="button" data-testid="lagg-till-atgard" @click="r.atgarder.push({ text: '', mnkr: '', sida: '' })">Lägg till åtgärd</button>
+                    </td>
+                  </tr>
+                  <tr v-for="(a, k) in r.atgarder" :key="`${i}-${k}`" class="atgard" data-testid="atgardsfalt" :data-ram-atgard="r.organ">
+                    <td><textarea v-model="a.text" rows="2" aria-label="Åtgärd" placeholder="Åtgärd, nära originalets text" /></td>
+                    <td><input v-model="a.mnkr" inputmode="decimal" aria-label="Åtgärdens belopp, mnkr" placeholder="mnkr" /></td>
+                    <td />
+                    <td><input v-model="a.sida" class="kort-falt" aria-label="Åtgärdens sida" /></td>
+                    <td><button type="button" @click="r.atgarder.splice(k, 1)">Ta bort åtgärd</button></td>
+                  </tr>
+                </template>
               </tbody>
             </table>
-            <button type="button" @click="form.ramar.push({ organ: '', mnkr: '', forandring: '', sida: '' })">Lägg till ram</button>
+            <button type="button" @click="form.ramar.push({ organ: '', mnkr: '', forandring: '', sida: '', atgarder: [] })">Lägg till ram</button>
 
             <label class="bred">Anmärkning <textarea v-model="form.anmarkning" rows="2" /></label>
             <div class="knappar">
@@ -498,6 +541,14 @@ input.kort-falt {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.atgard td {
+  color: var(--ink-secondary);
+  padding-left: 16px;
+}
+.atgard textarea {
+  width: 100%;
+  min-width: 24em;
 }
 .sektion {
   font-size: 15px;

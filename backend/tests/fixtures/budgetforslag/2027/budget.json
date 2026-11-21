@@ -150,7 +150,14 @@
         {
           "organ": "Kommunstyrelsen",
           "forandring": -37,
-          "sida": 1
+          "sida": 1,
+          "atgarder": [
+            {
+              "text": "Budgetminskning med 20 % Kommunstyrelseförvaltningen. Fokus på styrning, uppföljning och samordning.",
+              "mnkr": -37,
+              "sida": 1
+            }
+          ]
         },
         {
           "organ": "Kommungemensam verksamhet",
@@ -160,17 +167,37 @@
         {
           "organ": "Samhällsnämnden",
           "forandring": 1,
-          "sida": 1
+          "sida": 1,
+          "atgarder": [
+            {
+              "text": "Extra pengar för avskrivningskostnader.",
+              "mnkr": 1,
+              "sida": 1
+            }
+          ]
         },
         {
           "organ": "Skolnämnden",
           "forandring": 15,
-          "sida": 1
+          "sida": 1,
+          "atgarder": [
+            {
+              "text": "Mindre barngrupper, stödundervisning, vidare satsning på elevhälsoteam och lugn och ro i skolan.",
+              "mnkr": 15,
+              "sida": 1
+            }
+          ]
         },
         {
           "organ": "Socialnämnden",
           "forandring": 13,
-          "sida": 2
+          "sida": 2,
+          "atgarder": [
+            {
+              "text": "Arbetsscheman anpassas: delade turer och långa arbetspass tas bort, minutstyrningen i hemtjänsten tas bort.",
+              "sida": 2
+            }
+          ]
         }
       ],
       "anmarkning": "Förslaget anger ramarna som förändringar mot planförutsättningarna. Skattesänkningen är 10 öre."

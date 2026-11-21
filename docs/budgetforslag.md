@@ -44,7 +44,9 @@ Bredvid förslagen beskriver `budget.json` varje förslag. Filen tas fram en gå
       "titel": "Moderaternas budgetförslag för Härnösands kommun 2027",
       "skattesats": {"ore": -10, "sida": 4},
       "resultat": {"procent": 2.5, "sida": 3},
-      "ramar": [{"organ": "Skolnämnden", "forandring": 15, "sida": 4}]
+      "ramar": [{"organ": "Skolnämnden", "forandring": 15, "sida": 4, "atgarder": [
+        {"text": "Mindre barngrupper, stödundervisning och elevhälsoteam.", "mnkr": 15, "sida": 4}
+      ]}]
     }
   }
 }
@@ -56,10 +58,22 @@ Bredvid förslagen beskriver `budget.json` varje förslag. Filen tas fram en gå
 | `titel` | Förslagets rubrik som i dokumentet. |
 | `typ` | `budget` eller `tillagg`. Utelämnas för en budget. |
 | `antagen` | `true` för det förslag kommunfullmäktige antog. |
-| `ramar` | Per nämnd för budgetåret: `mnkr` eller `forandring` mot planförutsättningen. En förändring räknas om till mnkr. |
+| `ramar` | Per nämnd för budgetåret: `mnkr` eller `forandring` mot planförutsättningen. En förändring räknas om till mnkr. En ram kan ha `atgarder`, se nedan. |
 | `skattesats` | Förändringen: `ore` (−10 för "10 öre lägre") eller `forandring` i procentenheter (−0.10). En skattesats i `procent` räknas om till förändring. Utelämnas om förslaget inte ändrar skatten. |
 | `resultat` | `procent` av skatteintäkter och generella bidrag och utjämning, eller `mnkr`, som räknas om till procent. |
 | `anmarkning` | Det läsaren behöver veta om hur förslaget redovisar siffrorna, till exempel att det räknat från en annan version av planförutsättningarna eller ändrar investeringarna. |
+
+### Åtgärder per nämnd
+
+En ram kan ha en lista `atgarder` med de besparingar och satsningar förslaget anger för nämnden (#57). Varje åtgärd har:
+
+| Fält | Innehåll |
+|---|---|
+| `text` | Ett citat eller en kort sammanfattning av det som står i förslaget. Texten ligger nära originalet och värderas inte. |
+| `mnkr` | Ramens förändring i mnkr för åtgärden, när förslaget anger ett belopp. Utelämnas annars. Negativt för en besparing. |
+| `sida` | Sidan i PDF:en. Krävs för en PDF och anges inte för ett Word-dokument. |
+
+Åtgärderna står oftare i löptext än i tabeller, så avläsningen är mer tolkning än för ramarna. Därför krävs sidan. En åtgärd som inte går att knyta till en nämnd, till exempel en avgiftshöjning som inte anges per nämnd, tas inte med. En ogiltig åtgärd (utan text, med okänt fält, utan sida i en PDF) stoppar inläsningen med fil och fel.
 
 Bara budgetåret läses. Planåren tas inte med. Det tidigare formatet med listor per år (`"ar": 2027`) och `utgangslage` tas emot, och då läses bara budgetårets poster. Nämnderna skrivs med samma namn i alla förslag och i planförutsättningarna: Kommunfullmäktige, Kommunstyrelsen, Kommungemensam verksamhet, Samhällsnämnden, Skolnämnden och Socialnämnden.
 
@@ -77,6 +91,7 @@ Applikationen räknar fram:
 - **Skatteintäkternas förändring:** skatteintäkterna × öre / 100 / skattesatsen. 10 öre 2027 är cirka −6,4 mnkr.
 - **Resultat i mnkr:** procenten av förslagets bas.
 - **Beräknat resultat:** planförutsättningarnas resultat − summan av förändringarna + skatteintäkternas förändring.
+- **Täckning** per nämnd: antalet åtgärder och summan av deras belopp, mot förändringen. En ram som ändras utan åtgärder markeras "Inga åtgärder anges".
 - **Differens:** förslagets resultat i mnkr − det beräknade. Skiljer de sig saknar förslaget finansiering för skillnaden, eller redovisar den inte. Exempel 2027, mot kommunens planförutsättningar (resultat 50,3 mnkr, nämnderna 2 144,7 mnkr): L budgeterar cirka 80 mnkr men sparar bara 10,7 mnkr netto på ramarna (beräknat 61,0, differens 18,9), och SD räknar resultatet som skatter och bidrag minus ramar och utelämnar kostnaderna utanför nämnderna (beräknat 22,2, differens 22,2). M sänker skatten med 10 öre och går nästan ihop (differens −1,3).
 
 ## Inläsning
@@ -93,12 +108,14 @@ Kommandot läser först planförutsättningarna och sedan förslagen, och skapar
 
 Planförutsättningarna rättas i Excelfilen och läses in igen. Under Politik och beslut → Budgetutkast visas alla tabeller med källa och länk till sidan i förslaget, och kontrollsummorna: det angivna beloppet minus summan av posterna (±0 betyder att tabellen går ihop).
 
-En redaktör rättar ett förslags utkast på samma sida. En ram kan anges i mnkr eller som förändring. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem (utkast → granskad → publicerad, kravspec 18, ADR-0002). Ändras ett granskat förslag blir det utkast igen.
+En redaktör rättar ett förslags utkast på samma sida. En ram kan anges i mnkr eller som förändring. Under varje ram lägger redaktören till, ändrar och tar bort åtgärder, och utgivaren ser dem med belopp, sidlänk och täckning innan granskningen. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem (utkast → granskad → publicerad, kravspec 18, ADR-0002). Ändras ett granskat förslag blir det utkast igen.
 
 ## Jämförelse
 
 Läsaren ser de publicerade förslagen för ett budgetår bredvid varandra, med planförutsättningarna först och den antagna budgeten som första förslag. Per nämnd visas ramen med förändringen mot planförutsättningen, och sedan skattesatsen (planförutsättningen ± förändringen), resultatet i mnkr och procent, det beräknade resultatet och differensen. Planförutsättningarnas resultat-, investerings-, balans- och kassaflödesbudget visas en gång under förslagen, gemensamt för alla.
 
 Förändringar och beräknat resultat visas först när årets planförutsättningar är publicerade. Dessförinnan, och för ett år utan planförutsättningar, visas förslagens egna ramar, skattesats och resultat i procent.
+
+**Åtgärder:** läsaren öppnar en nämnd och ser, per förslag, åtgärderna med belopp och länk till sidan i originalet, och täckningen, till exempel "åtgärder för −3,0 av −3,0 mnkr". Ett förslag som ändrar ramen utan att ange åtgärder markeras "Inga åtgärder anges".
 
 **Differensanalys:** när den antagna budgeten för året finns visas skillnaden mot den per nämnd i kronor och procent, för resultatet i mnkr och för skattesatsen i öre.

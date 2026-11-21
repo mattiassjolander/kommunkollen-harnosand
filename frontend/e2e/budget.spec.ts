@@ -2,9 +2,36 @@ import { expect, test } from '@playwright/test'
 
 // Söm 2 (#48, #58): planförutsättningarna och budgetförslagen för 2027 är inlästa som utkast när
 // servern startar (`--budgetforslag tests/fixtures/budgetforslag`). Utgivaren granskar och publicerar
-// dem, och läsaren jämför förslagen mot planförutsättningarna och den antagna budgeten.
+// dem, och läsaren jämför förslagen mot planförutsättningarna och den antagna budgeten. En redaktör lägger
+// till en åtgärd i Moderaternas förslag, och läsaren öppnar en nämnd och ser åtgärderna (#57).
 
 test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ page }) => {
+  // Redaktören lägger till en åtgärd för en ram som förslaget ändrar utan att ange åtgärder.
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik/budgetutkast')
+  await expect(page.getByTestId('budgetutkast').or(page.getByTestId('inga-utkast')).first()).toBeVisible()
+  const mUtkast = page.locator('[data-testid="budgetutkast"][data-nyckel="M"]')
+  const rattad = (await mUtkast.count()) > 0
+  if (rattad) {
+    // Utgivaren ser åtgärderna med belopp, sida och täckning redan i utkastet.
+    const ks = mUtkast.getByTestId('uppgifter')
+    await expect(ks.getByTestId('atgard').first()).toContainText('Budgetminskning med 20 % Kommunstyrelseförvaltningen')
+    await expect(ks.getByTestId('atgard').first().getByRole('link', { name: 's. 1' })).toHaveAttribute('href', /#page=1$/)
+    await expect(ks.locator('tr', { hasText: 'Kommungemensam verksamhet' }).getByTestId('tackning')).toHaveText('Inga åtgärder anges')
+
+    await mUtkast.getByRole('button', { name: 'Rätta' }).click()
+    await mUtkast.locator('tr[data-ram="Kommungemensam verksamhet"]').getByTestId('lagg-till-atgard').click()
+    const falt = mUtkast.locator('tr[data-ram-atgard="Kommungemensam verksamhet"]').last()
+    await falt.getByRole('textbox', { name: 'Åtgärd', exact: true }).fill('Minskade kostnader för kommungemensam verksamhet')
+    await falt.getByRole('textbox', { name: 'Åtgärdens belopp, mnkr' }).fill('-4')
+    await falt.getByRole('textbox', { name: 'Åtgärdens sida' }).fill('1')
+    await mUtkast.getByTestId('spara').click()
+    await expect(mUtkast.getByRole('status')).toHaveText('Sparat som utkast.')
+    await mUtkast.getByRole('button', { name: 'Avbryt' }).click()
+    const kg = mUtkast.getByTestId('uppgifter').locator('tr', { has: page.getByRole('rowheader', { name: 'Kommungemensam verksamhet' }) })
+    await expect(kg.getByTestId('tackning')).toHaveText('åtgärder för −4 mnkr')
+  }
+
   // Utgivaren granskar och publicerar utkasten (de som inte redan publicerats i en tidigare körning).
   await page.request.post('/api/auth/test/utgivare')
   await page.goto('/politik')
@@ -76,6 +103,30 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
   await expect(diff.nth(2)).toHaveText('−0,4 mnkr')
   await expect(diff.nth(3)).toHaveText('+23,1 mnkr')
   await expect(tabell.locator('tr[data-rad="beraknat"] td').nth(2)).toHaveText('60,0 mnkr')
+
+  // Läsaren öppnar en nämnd och ser åtgärderna per förslag med belopp, sidlänk och täckning.
+  const visa = tabell.locator('tr[data-organ="Kommunstyrelsen"]').getByTestId('visa-atgarder')
+  await expect(visa).toHaveAttribute('aria-expanded', 'false')
+  await visa.click()
+  await expect(visa).toHaveAttribute('aria-expanded', 'true')
+  const atg = tabell.locator('tr[data-atgarder="Kommunstyrelsen"] [data-testid="atgarder"]')
+  await expect(atg).toHaveCount(4)
+  await expect(atg.nth(2)).toContainText('Budgetminskning med 20 % Kommunstyrelseförvaltningen')
+  await expect(atg.nth(2)).toContainText('−37,0 mnkr')
+  await expect(atg.nth(2).getByRole('link', { name: 's. 1' })).toHaveAttribute('href', /\/api\/budgetforslag\/\d+\/original#page=1$/)
+  await expect(atg.nth(2).getByTestId('tackning')).toHaveText('åtgärder för −37,0 av −37,0 mnkr')
+  // Liberalerna ändrar ramen utan att ange åtgärder.
+  await expect(atg.nth(1).getByTestId('tackning')).toHaveText('Inga åtgärder anges')
+  if (rattad) {
+    await tabell.locator('tr[data-organ="Kommungemensam verksamhet"]').getByTestId('visa-atgarder').click()
+    await expect(tabell.locator('tr[data-atgarder="Kommungemensam verksamhet"] [data-testid="atgarder"]').nth(2))
+      .toContainText('åtgärder för −4,0 av −4,0 mnkr')
+  }
+  // Socialnämnden: Moderaternas åtgärd har inget belopp.
+  await tabell.locator('tr[data-organ="Socialnämnden"]').getByTestId('visa-atgarder').click()
+  await expect(tabell.locator('tr[data-atgarder="Socialnämnden"] [data-testid="tackning"]').nth(2)).toHaveText('1 åtgärd utan belopp')
+  await visa.click()
+  await expect(tabell.locator('tr[data-atgarder="Kommunstyrelsen"]')).toHaveCount(0)
 
   // Resultat-, investerings-, balans- och kassaflödesbudget visas en gång för budgetåret.
   const pf = page.getByTestId('planforutsattningar')
