@@ -19,6 +19,12 @@ _Avoid_: Möte
 Ett organs fastställda datum och tider för kommande sammanträden. Organet beslutar om planen i ett protokoll, och kommunen publicerar den som en tabell på organets webbsida. Ändringar i tabellen blir reviderade uppgifter.
 _Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
 
+**Kallelse**:
+Handlingen som kallar till ett sammanträde och listar ärendena. För kommunfullmäktige heter den *kungörelse*. Kallelsen publiceras ofta 1–3 dagar före sammanträdet, ibland tillsammans med handlingarna.
+
+**Webbsändning**:
+Ett sammanträde i kommunfullmäktige som sänds och spelas in i kommunens webb-tv. Inspelningen får en egen länk efter sammanträdet.
+
 **Inställt sammanträde**:
 Ett planerat sammanträde som inte blir av. Det finns kvar i planen, markerat som inställt. Ett sammanträde som försvinner från webbsidans plan utan att vara inställt är *borttaget ur planen* och finns också kvar.
 

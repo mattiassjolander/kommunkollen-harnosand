@@ -45,6 +45,9 @@ test('kalendern listar kommande sammanträden med prenumeration och ics per samm
   const dec = page.locator('[data-testid="kalenderhandelse"][data-datum="2026-12-14"]')
   await expect(dec).toContainText('kl. 13.15–ca')
   await expect(dec).toContainText('(enligt senaste protokollet)')
+  // Fullmäktige webbsänds: före sammanträdet länkar kalendern till sidan för webb-tv (#68, del 3).
+  await expect(dec.getByTestId('webbsandning')).toHaveText('Webb-tv')
+  await expect(dec.getByTestId('webbsandning')).toHaveAttribute('href', /kommunfullmaktige\/webb-tv\.html$/)
 
   // Ett sammanträde som .ics-fil.
   const nedladdning = page.waitForEvent('download')
@@ -58,6 +61,10 @@ test('kalendern listar kommande sammanträden med prenumeration och ics per samm
   await expect(installt).toHaveAttribute('data-status', 'installt')
   await expect(installt.locator('strong')).toHaveCSS('text-decoration-line', 'line-through')
   await expect(installt).toContainText('Inställt')
+  // Efter sammanträdet: kungörelsen och inspelningen.
+  const mars = page.getByTestId('tidigare').locator('[data-datum="2026-03-23"]')
+  await expect(mars.getByTestId('kallelse')).toHaveText('Kungörelse')
+  await expect(mars.getByTestId('webbsandning')).toHaveAttribute('href', /^https:\/\/qcnl\.tv\/p\//)
   // e2e läser två av fullmäktiges protokoll (februari och mars).
   await page.getByTestId('tidigare').locator('[data-datum="2026-03-23"]').getByRole('link', { name: 'Protokoll' }).click()
   await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+$/)

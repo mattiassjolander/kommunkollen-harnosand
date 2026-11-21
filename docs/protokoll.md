@@ -87,15 +87,40 @@ månad som bara anges som inställd) ingår inte. Händelserna:
   protokollets start- och sluttid. Ett planerat sammanträde har planens starttid, och sluttiden är starttiden
   plus medianlängden för organets sammanträden enligt protokollen (3 timmar för fullmäktige och 4 för övriga
   utan historik). Beskrivningen säger då att sluttiden är ungefärlig. Utan starttid blir det en heldag.
-- **Plats:** protokollets, annars platsen i organets senaste protokoll, och beskrivningen säger att den är antagen.
+- **Plats:** protokollets, annars kallelsens, annars platsen i organets senaste protokoll. I det sista fallet
+  säger beskrivningen att platsen är antagen.
 - **Status:** ett inställt eller borttaget sammanträde finns kvar med `STATUS:CANCELLED` och "Inställt:" eller
   "Borttaget ur planen:" i titeln.
-- **Beskrivning och URL:** länk till protokollet i Kommunkollen efter sammanträdet, annars till sammanträdet i
-  kalendern, samt till sammanträdesplanen på harnosand.se. Kallelse och webb-tv kommer i #68 del 3.
+- **Beskrivning och URL:** beskrivningen har länkar till
+  - protokollet i Kommunkollen efter sammanträdet, annars till sammanträdet i kalendern;
+  - kallelsen eller kungörelsen och handlingarna;
+  - för fullmäktige webb-tv före sammanträdet och inspelningen efter;
+  - sammanträdesplanen på harnosand.se.
 
 Raderna avslutas med CRLF och viks vid 75 oktetter utan att dela ett UTF-8-tecken. Testerna läser flödena med
 biblioteket icalendar. I e2e-tester och lokalt låser `KOMMUNKOLLEN_IDAG` dagens datum. nginx och Vite skickar
 `/kalender/….ics` till backend.
+
+## Kallelser och webbsändningar
+
+Datakällan Sammanträdesplaner läser också kallelserna på organens sidor och fullmäktiges sida för webb-tv
+(`app/sources/kallelser.py`, #68).
+
+- **Kallelser:** länkarna till kungörelser (fullmäktige), kallelser (nämnderna) och handlingar
+  (kommunstyrelsen och fullmäktige). Datum och klockslag läses ur filnamnet, t.ex. "Kungörelse
+  kommunfullmäktige 2026-10-26 kl. 11.00" och "Handlingar kommunfullmäktige 2026-10-26, 11 00", och
+  filstorleken ur länktexten. Utskott och beredningar ingår inte.
+- **Plats:** läses ur kallelsens första sida ("… kallas härmed till sammanträde 2026-10-26 kl. 11:00 - i
+  Rådhuset - KF-salen."). Bara kallelser på högst 2 MB hämtas, eftersom kallelser med handlingar kan vara
+  flera hundra MB. En läst kallelse hämtas inte igen. En kallelse som byts ut får en ny adress och läses då.
+- **Koppling:** kallelser kopplas till sammanträdena när kalendern läses: samma organ och datum. Har organet
+  flera sammanträden samma dag går en kallelse med klockslag till det närmaste (fullmäktige 2026-10-26).
+  Den senast publicerade kallelsen gäller.
+- **Webbsändningar:** sidan för webb-tv har en länk per sammanträde i fullmäktige ("Sammanträde
+  2026-10-26"), till qcnl.tv från 2026 och play.quickchannel.com för 2024–2025. Länken kopplas till
+  fullmäktiges sammanträden samma datum. Före sammanträdet länkar kalendern till sidan för webb-tv.
+
+Ett extra sammanträde som bara finns som kallelse, utan plan eller protokoll, visas inte i kalendern än.
 
 ## Paragrafprotokoll
 

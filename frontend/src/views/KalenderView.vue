@@ -117,6 +117,9 @@ const STATUS: Record<Kalenderhandelse['status'], string> = {
   borttaget: 'Borttaget ur planen',
   hallet: 'Hållet',
 }
+function storlek(byte: number): string {
+  return byte >= 1_000_000 ? `${(byte / 1_000_000).toFixed(0)} MB` : `${Math.max(1, Math.round(byte / 1_000))} kB`
+}
 const installt = (h: Kalenderhandelse) => h.status === 'installt' || h.status === 'borttaget'
 
 watch(valtOrgan, () => (kopierad.value = false))
@@ -185,8 +188,8 @@ watch(valt, async (id) => {
         </li>
       </ul>
       <p class="anteckning">
-        Kalendern uppdateras automatiskt. Sluttiden är ungefärlig före sammanträdet, och platsen kommer från organets
-        senaste protokoll tills något annat är känt.
+        Kalendern uppdateras automatiskt. Sluttiden är ungefärlig före sammanträdet. Platsen kommer från kallelsen
+        när den står där, annars från organets senaste protokoll. Kommunfullmäktige webbsänds.
       </p>
     </section>
 
@@ -256,12 +259,22 @@ watch(valt, async (id) => {
               <div class="vad">
                 <strong>{{ h.organ.namn }}</strong>
                 <span v-if="installt(h)" class="statusetikett">{{ STATUS[h.status] }}</span>
-                <span v-if="h.plats" class="plats">
+                <span v-if="h.plats && !installt(h)" class="plats" data-testid="plats" :data-kalla="h.plats_kalla">
                   {{ h.plats }}<template v-if="h.plats_antagen"> (enligt senaste protokollet)</template>
+                  <template v-else-if="h.plats_kalla === 'kallelse'"> (enligt kallelsen)</template>
                 </span>
               </div>
               <div class="lankar">
                 <RouterLink v-if="h.protokoll" :to="`/politik/sammantraden/${h.id}`">Protokoll</RouterLink>
+                <a v-if="h.kallelse" :href="h.kallelse.url" rel="noopener" data-testid="kallelse">
+                  {{ h.kallelse.typ === 'kungorelse' ? 'Kungörelse' : 'Kallelse' }}
+                </a>
+                <a v-for="x in h.handlingar" :key="x.url" :href="x.url" rel="noopener" data-testid="handlingar">
+                  Handlingar<template v-if="x.storlek"> ({{ storlek(x.storlek) }})</template>
+                </a>
+                <a v-if="h.webbsandning" :href="h.webbsandning.url" rel="noopener" data-testid="webbsandning">
+                  {{ h.webbsandning.inspelning ? 'Inspelning' : 'Webb-tv' }}
+                </a>
                 <a
                   v-if="!installt(h)"
                   :href="`/kalender/sammantraden/${h.id}.ics`"
@@ -297,11 +310,22 @@ watch(valt, async (id) => {
             <div class="vad">
               <strong>{{ h.organ.namn }}</strong>
               <span v-if="installt(h)" class="statusetikett">{{ STATUS[h.status] }}</span>
-              <span v-if="h.plats" class="plats">{{ h.plats }}</span>
+              <span v-if="h.plats && !installt(h)" class="plats">{{ h.plats }}</span>
             </div>
             <div class="lankar">
               <RouterLink v-if="h.protokoll" :to="`/politik/sammantraden/${h.id}`">Protokoll</RouterLink>
-              <span v-else-if="!installt(h)" class="anteckning">Protokollet är inte publicerat än</span>
+              <span v-else-if="!installt(h)" class="anteckning">Protokollet finns inte i Kommunkollen än</span>
+              <a v-if="h.kallelse" :href="h.kallelse.url" rel="noopener" data-testid="kallelse">
+                {{ h.kallelse.typ === 'kungorelse' ? 'Kungörelse' : 'Kallelse' }}
+              </a>
+              <a
+                v-if="h.webbsandning?.inspelning"
+                :href="h.webbsandning.url"
+                rel="noopener"
+                data-testid="webbsandning"
+              >
+                Inspelning
+              </a>
             </div>
           </li>
         </ul>

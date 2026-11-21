@@ -144,9 +144,12 @@ def test_datakallan_laser_alla_fem_organen(database_url, google):
     api = TestClient(skapa_app(database_url, google, kallor=[Sammantradesplaner(anrop_per_sekund=None)]))
     [res] = kor(api)["kallor"]
     assert (res["datakalla_id"], res["status"]) == (KALLA, "lyckad")
-    assert res["antal_nya"] == 10 + 19 + 10 + 11 + 9
+    # 59 planerade sammanträden, och kallelserna och webbsändningarna (#68, del 3).
+    assert res["antal_nya"] > 10 + 19 + 10 + 11 + 9
+    nya = res["antal_nya"]
 
     p = planer(api)
+    assert sum(len(x["sammantraden"]) for x in p.values()) == 10 + 19 + 10 + 11 + 9
     assert set(p) == {("KF", 2026), ("KS", 2026), ("KS", 2027), ("SAM", 2026), ("SOC", 2026), ("SKOL", 2026)}
     assert rad(p[("KF", 2026)], "2026-10-15")["status"] == "installt"
     assert rad(p[("SOC", 2026)], "2026-06")["datum"] is None
@@ -154,7 +157,7 @@ def test_datakallan_laser_alla_fem_organen(database_url, google):
 
     # Ingen ändring: allt oförändrat.
     [res] = kor(api)["kallor"]
-    assert (res["status"], res["antal_oforandrade"]) == ("inga_nya", 59)
+    assert (res["status"], res["antal_oforandrade"]) == ("inga_nya", nya)
 
     # Planerade sammanträden är inte hållna sammanträden med protokoll, och räknas inte i statistiken.
     assert api.get("/api/sammantraden", params={"organ": "KF"}).json() == []
