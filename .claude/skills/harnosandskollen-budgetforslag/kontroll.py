@@ -24,7 +24,9 @@ from app import planforutsattningar as pf
 
 # Förslagen redovisar oftast hela mnkr, så avrundningen ger skillnader under de här gränserna.
 SKILLNAD_MNKR = 2.0  # budgeterat − beräknat resultat
-VERSION_MNKR = 1.0  # förslagets egen planförutsättning (mnkr − förändring, två avrundade tal) mot den gemensamma
+# Förslagets egen planförutsättning (ram − förändring) mot den gemensamma. Förändringen är förslagets eget
+# beslut och avrundas inte, så bara ramens avrundning till hela mnkr (högst 0,5) skiljer dem åt.
+VERSION_MNKR = 0.5
 PROCENT_PE = 0.1  # förslagets resultat i procent mot dess mnkr räknat på basen
 KONTROLL_MNKR = 0.3  # kontrollsumma i planförutsättningarna: beloppen har en decimal, så avrundningen ger några tiondelar
 
@@ -54,8 +56,8 @@ def version(ra: dict, ar: int, nt: dict) -> list[str]:
         if gemensam is None:
             ut.append(f"    {r['organ']}: finns inte i planförutsättningarna{_flagga(True)}")
             continue
-        ut.append(f"    {r['organ']}: förslagets plan {_tal(egen)}, gemensam {_tal(gemensam)}"
-                  f"{_flagga(abs(egen - gemensam) > VERSION_MNKR)}")
+        ut.append(f"    {r['organ']}: ram − förändring {_tal(egen)}, gemensam plan {_tal(gemensam)}"
+                  f"{_flagga(abs(egen - gemensam) > VERSION_MNKR + 0.001)}")
     skatt = ra.get("skattesats") or {}
     if skatt.get("procent") is not None and skatt.get("ore") is None and skatt.get("forandring") is None:
         ut.append(f"    skattesats {skatt['procent']} %, gemensam {nt['skattesats']} % (läses som förändring "
