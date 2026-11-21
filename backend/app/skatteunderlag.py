@@ -288,3 +288,36 @@ def lista(conn: psycopg.Connection, kommun: str = KOMMUN) -> dict:
     ).fetchall()
     prognoser = sorted((_ut(r) for r in rader), key=lambda p: (p["publicerad"], p["cirkular"]))
     return {"kommun": kommun, "senaste": prognoser[-1] if prognoser else None, "prognoser": prognoser}
+
+
+# Raden som jämförs med planförutsättningarnas skatteintäkter och generella bidrag och utjämning (#62).
+JAMFORD_RAD = "summa_inkl"
+FORSTA_AR = 2026  # SKR har inga äldre prognosfiler att hämta.
+
+
+def jamforelse(conn: psycopg.Connection, ar: int, plan_mnkr: float | None, kommun: str = KOMMUN) -> dict:
+    """Planförutsättningarnas summa bredvid varje skatteunderlagsprognos som har en siffra för budgetåret.
+
+    Differensen är SKR − planförutsättningar, i mnkr och procent. Ingen prognos pekas ut som den rätta.
+    Saknas planförutsättningar eller prognos är `prognoser` tom och `saknas` säger varför."""
+    prognoser = []
+    for p in lista(conn, kommun)["prognoser"]:
+        rad = next((r for r in p["rader"] if r["id"] == JAMFORD_RAD), None)
+        tkr = rad["tkr"].get(str(ar)) if rad else None
+        if tkr is None:
+            continue
+        mnkr = round(tkr / 1000, 3)
+        d = None
+        if plan_mnkr is not None:
+            d = {"mnkr": round(mnkr - plan_mnkr, 1),
+                 "procent": round((mnkr - plan_mnkr) / plan_mnkr * 100, 2) if plan_mnkr else None}
+        prognoser.append({"cirkular": p["cirkular"], "publicerad": p["publicerad"], "url": p["url"],
+                          "filnamn": p["filnamn"], "mnkr": mnkr, "differens": d})
+    saknas = None
+    if plan_mnkr is None:
+        saknas = f"Planförutsättningarna för {ar} är inte publicerade."
+    elif not prognoser:
+        saknas = (f"SKR:s prognoser finns från {FORSTA_AR}." if ar < FORSTA_AR
+                  else f"Ingen av SKR:s skatteunderlagsprognoser har en siffra för {ar}.")
+    return {"planforutsattningar_mnkr": plan_mnkr, "prognoser": prognoser if plan_mnkr is not None else [],
+            "saknas": saknas}

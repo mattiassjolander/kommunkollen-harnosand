@@ -18,7 +18,7 @@ import {
   type Kalla,
   type Plantabell,
 } from '../../api'
-import { tal, talforandring } from '../../format'
+import { datum, tal, talforandring } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
@@ -377,6 +377,51 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
         </div>
         <p class="kallrad">Källa: förslagen och sidan där siffran står. Skattesats {{ skattesats(plan.skattesats.procent) }}.</p>
       </section>
+
+      <section class="kort" aria-labelledby="skr-rubrik" data-testid="skr-jamforelse">
+        <h2 id="skr-rubrik">Jämfört med SKR:s prognoser</h2>
+        <p v-if="j.skr.saknas" class="forklaring" data-testid="skr-saknas">{{ j.skr.saknas }}</p>
+        <template v-else>
+          <p class="forklaring">
+            Planförutsättningarnas skatteintäkter och generella bidrag och utjämning bredvid summa intäkter inklusive
+            avräkning och fastighetsavgift för {{ j.budgetar }} i varje skatteunderlagsprognos från SKR. Differensen är
+            SKR:s summa minus planförutsättningarnas.
+          </p>
+          <p class="referens" data-testid="skr-plan">
+            Planförutsättningar {{ j.budgetar }}: <strong>{{ tal(j.skr.planforutsattningar_mnkr, 'mnkr') }}</strong>
+          </p>
+          <div class="rulla">
+            <table class="tabell" data-testid="skr-tabell">
+              <thead>
+                <tr>
+                  <th scope="col">Cirkulär</th>
+                  <th scope="col" class="num">SKR {{ j.budgetar }}</th>
+                  <th scope="col" class="num">Differens</th>
+                  <th scope="col" class="num">Differens, %</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in j.skr.prognoser" :key="p.cirkular" :data-cirkular="p.cirkular">
+                  <th scope="row">
+                    <a :href="p.url" target="_blank" rel="noopener">{{ p.cirkular }}</a>, {{ datum(p.publicerad) }}
+                  </th>
+                  <td class="num">{{ tal(p.mnkr, 'mnkr') }}</td>
+                  <td class="num">{{ talforandring(p.differens?.mnkr ?? null, 'mnkr') }}</td>
+                  <td class="num">{{ talforandring(p.differens?.procent ?? null, '%') }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="forklaring" data-testid="skr-forklaring">
+            Kommunen och SKR avgränsar de generella statsbidragen olika. Kommunen kan räkna in bidrag som SKR:s underlag
+            inte innehåller, och tvärtom. En differens behöver därför inte vara ett fel i planförutsättningarna.
+          </p>
+        </template>
+        <p class="kallrad">
+          Källa: SKR, skatteunderlagsprognoser, omräknade för Härnösand.
+          <RouterLink to="/ekonomi/skatteunderlag">Alla prognoser</RouterLink>
+        </p>
+      </section>
     </template>
   </template>
 </template>
@@ -603,6 +648,10 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
   font-size: 12px;
   color: var(--ink-muted);
   white-space: nowrap;
+}
+.referens {
+  font-size: 13px;
+  margin: 0 0 8px;
 }
 .kallrad {
   font-size: 12px;

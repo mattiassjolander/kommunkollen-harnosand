@@ -1000,6 +1000,24 @@ export interface Budgetjamforelse {
   /** Summeringens frågor, samma för alla förslag. */
   mall: Summeringsfraga[]
   forslag: Budgetforslag[]
+  /** Planförutsättningarnas skatteintäkter och generella bidrag och utjämning mot SKR:s prognoser (#62). */
+  skr: SkrJamforelse
+}
+
+export interface SkrJamforelse {
+  planforutsattningar_mnkr: number | null
+  /** En rad per skatteunderlagsprognos med en siffra för budgetåret, sorterade efter publiceringsdatum. */
+  prognoser: {
+    cirkular: string
+    publicerad: string
+    url: string
+    filnamn: string
+    mnkr: number
+    /** SKR − planförutsättningar. */
+    differens: { mnkr: number; procent: number | null } | null
+  }[]
+  /** Varför jämförelsen saknas, annars null. */
+  saknas: string | null
 }
 
 export const hamtaBudgetar = () =>
