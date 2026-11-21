@@ -20,6 +20,7 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pgserver>=0.1.4",
+    "icalendar>=7.3.2",
 ]
 
 [project.scripts]

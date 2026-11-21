@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -282,6 +282,44 @@ def create_app(
         if resultat is None:
             raise HTTPException(404, f"Ärendet {arende_id} finns inte")
         return resultat
+
+    def _bas(request: Request) -> str:
+        return os.environ.get("PUBLIK_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
+
+    @app.get("/api/kalender", dependencies=[Depends(krav_roll("lasare"))])
+    def kalender_api(organ: str | None = None) -> dict:
+        """Sammanträdena för sidan Kalender: kommande och de senaste 12 månaderna, med flödenas adresser."""
+        if organ is not None and organ not in ORGAN:
+            raise HTTPException(422, f"Organet {organ} finns inte")
+        with db.connect(database_url) as conn:
+            return {
+                "idag": kalender.idag().isoformat(),
+                "floden": [{"organ": o, "namn": ORGAN[o].namn, "flode": s} for o, s in kalender.SLUG.items()],
+                "handelser": kalender.handelser(conn, organ),
+            }
+
+    # Kalenderflödena är alltid öppna utan inloggning, eftersom kalenderappar inte kan logga in.
+    @app.get("/kalender/{flode}.ics", response_class=Response)
+    def kalenderflode(flode: str, request: Request) -> Response:
+        organ = kalender.organ_for_slug(flode)
+        if organ is None:
+            raise HTTPException(404, f"Kalenderflödet {flode} finns inte")
+        with db.connect(database_url) as conn:
+            innehall = kalender.ics(kalender.handelser(conn, organ or None), kalender.flodesnamn(organ), _bas(request))
+        return Response(innehall, media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition": f'inline; filename="{flode}.ics"'})
+
+    @app.get("/kalender/sammantraden/{sammantrade_id}.ics", response_class=Response)
+    def kalenderhandelse(sammantrade_id: int, request: Request) -> Response:
+        with db.connect(database_url) as conn:
+            handelser = kalender.handelser(conn, sammantrade_id=sammantrade_id)
+        if not handelser:
+            raise HTTPException(404, f"Sammanträdet {sammantrade_id} finns inte i kalendern")
+        h = handelser[0]
+        innehall = kalender.ics(handelser, kalender.flodesnamn(h["organ"]["id"]), _bas(request))
+        return Response(innehall, media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{h["organ"]["flode"]}-{h["datum"]}.ics"'})
 
     @app.get("/api/sammantradesplaner", dependencies=[Depends(krav_roll("redaktor"))])
     def sammantradesplaner() -> list[dict]:
