@@ -4,6 +4,8 @@
 // Budgetåret speglas i URL:en (design.md, Filter). Varje siffra länkar till sidan i originalet.
 // Partier står i alfabetisk ordning (design.md). En nämnd kan öppnas och visar då förslagens åtgärder
 // och satsningar för ramen, med belopp, sidlänk och hur stor del av förändringen de förklarar (#57).
+// Varje förslag länkar till behandlingen i fullmäktige där det ställdes, med partiets yrkande och
+// voteringarna, och summeringarna med samma frågor för alla förslag visas märkta Analys (#48).
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -94,6 +96,17 @@ function tackningstext(f: Budgetforslag, o: string): string | null {
     ? `åtgärder för ${talforandring(t.mnkr, 'mnkr').replace(/ mnkr$/, '')} av ${talforandring(b.forandring, 'mnkr')}`
     : `åtgärder för ${talforandring(t.mnkr, 'mnkr')}`
 }
+const harBehandling = computed(() => forslag.value.some((f) => f.behandling))
+const behandlingslank = (f: Budgetforslag) =>
+  f.behandling?.sammantrade_id ? `/politik/sammantraden/${f.behandling.sammantrade_id}/paragraf/${f.behandling.paragraf}` : null
+const forslagsstallare = (f: Budgetforslag) => {
+  const p = f.behandling?.yrkanden[0]?.personer[0]
+  return p ? `${p.namn} (${p.parti ?? 'parti anges inte'})` : null
+}
+const roster = (l: { ja: number; nej: number; avstar: number }) => `${l.ja} ja, ${l.nej} nej, ${l.avstar} avstår`
+const summerade = computed(() => forslag.value.filter((f) => f.summering))
+const svar = (f: Budgetforslag, id: string) => f.summering?.find((x) => x.id === id) ?? null
+const sidlankar = (f: Budgetforslag, sidor?: number[]) => (sidor ?? []).map((s) => ({ sida: s, ...lank(f, s) }))
 const difftext = (d: Differens) =>
   d.procent === null ? talforandring(d.mnkr, 'mnkr') : `${talforandring(d.mnkr, 'mnkr')} (${talforandring(d.procent, '%')})`
 
@@ -261,6 +274,33 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
                   </td>
                 </tr>
               </template>
+              <tr v-if="harBehandling" data-rad="behandling" class="summa">
+                <th scope="row">Behandling</th>
+                <td v-if="plan" class="plan" />
+                <td v-for="f in j.forslag" :key="f.id" class="behandling" data-testid="behandling">
+                  <template v-if="f.behandling">
+                    <RouterLink v-if="behandlingslank(f)" :to="behandlingslank(f)!">
+                      {{ f.behandling.organ }} {{ f.behandling.datum }} § {{ f.behandling.paragraf }}
+                    </RouterLink>
+                    <template v-else>{{ f.behandling.organ }} {{ f.behandling.datum }} § {{ f.behandling.paragraf }}</template>
+                    <template v-if="f.behandling.hittad">
+                      <span v-if="forslagsstallare(f)" class="diff" data-testid="yrkande">
+                        Yrkande: {{ forslagsstallare(f) }}<template v-if="f.behandling.yrkanden.length > 1">, med fler</template>
+                        <span class="automatisk" title="Yrkandet är kopplat till förslaget efter förslagsställarens parti">⚙ Automatisk koppling</span>
+                      </span>
+                      <span v-else class="saknas">Inget yrkande från förslagets partier hittades</span>
+                      <template v-if="f.behandling.voteringar.length">
+                        <span v-for="v in f.behandling.voteringar" :key="v.nummer" class="diff" data-testid="votering">
+                          Votering {{ v.nummer }}<template v-if="v.sida">: {{ v.sida }}-förslag</template>, {{ roster(v.lista) }}
+                        </span>
+                      </template>
+                      <span v-else class="diff" data-testid="ingen-votering">Ingen votering i protokollet</span>
+                    </template>
+                    <span v-else class="saknas">Protokollet finns inte här än</span>
+                  </template>
+                  <span v-else class="saknas">Anges inte</span>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -275,6 +315,44 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
           generella bidrag. Öppna en nämnd för att se förslagens åtgärder och satsningar, återgivna nära originalets
           text med sidan där de står.
         </p>
+      </section>
+
+      <section v-if="summerade.length" class="kort analys" aria-labelledby="summering-rubrik" data-testid="summering">
+        <h2 id="summering-rubrik">Summering av förslagen <span class="analysetikett">Analys</span></h2>
+        <p class="forklaring">
+          Varje förslag är summerat med samma frågor. Svaren återger vad förslaget säger, med sidan där det står, och
+          värderar det inte. Summeringen är redaktionens sammanfattning och ingen uppgift ur förslaget.
+          <template v-if="summerade.length < forslag.length">
+            Förslag utan summering: {{ forslag.filter((f) => !f.summering).map((f) => f.titel).join(', ') }}.
+          </template>
+        </p>
+        <div class="rulla">
+          <table class="tabell summeringstabell">
+            <thead>
+              <tr>
+                <th scope="col">Fråga</th>
+                <th v-for="f in summerade" :key="f.id" scope="col" :data-nyckel="f.nyckel">
+                  <span class="partier vanster"><Partimarkering v-for="p in f.partier" :key="p" :parti="p" /></span>
+                  <span class="titel">{{ f.titel }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="q in j.mall" :key="q.id" :data-fraga="q.id">
+                <th scope="row" class="fraga">{{ q.fraga }}</th>
+                <td v-for="f in summerade" :key="f.id">
+                  <span v-if="svar(f, q.id)?.anges_inte" class="saknas">Förslaget tar inte upp frågan</span>
+                  <template v-else>
+                    {{ svar(f, q.id)?.text }}
+                    <span class="sidor">
+                      <a v-for="l in sidlankar(f, svar(f, q.id)?.sidor)" :key="l.sida" v-bind="l">s. {{ l.sida }}</a>
+                    </span>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section v-if="plan" class="kort" aria-labelledby="plan-rubrik" data-testid="planforutsattningar">
@@ -409,6 +487,48 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
   display: block;
   font-size: 12px;
   color: var(--ink-secondary);
+}
+.behandling {
+  white-space: nowrap;
+}
+.automatisk {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.analys {
+  border-style: dashed;
+  border-color: var(--line-strong);
+}
+.analysetikett {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 6px;
+  margin-left: 6px;
+}
+.summeringstabell td {
+  min-width: 220px;
+  max-width: 360px;
+  white-space: normal;
+}
+.summeringstabell .fraga {
+  white-space: normal !important;
+  min-width: 180px;
+  max-width: 240px;
+}
+.vanster {
+  justify-content: flex-start !important;
+}
+.sidor {
+  display: block;
+  margin-top: 2px;
+}
+.sidor a {
+  font-size: 12px;
+  margin-right: 6px;
 }
 .vaxla {
   font: inherit;

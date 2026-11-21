@@ -32,6 +32,7 @@ Bredvid förslagen beskriver `budget.json` varje förslag. Filen tas fram en gå
 
 ```json
 {
+  "behandling": {"organ": "KF", "datum": "2026-06-15", "paragraf": 108},
   "forslag": {
     "majoritet.pdf": {
       "partier": ["KD", "MP", "S"],
@@ -61,6 +62,8 @@ Bredvid förslagen beskriver `budget.json` varje förslag. Filen tas fram en gå
 | `ramar` | Per nämnd för budgetåret: `mnkr` eller `forandring` mot planförutsättningen. En förändring räknas om till mnkr. En ram kan ha `atgarder`, se nedan. |
 | `skattesats` | Förändringen: `ore` (−10 för "10 öre lägre") eller `forandring` i procentenheter (−0.10). En skattesats i `procent` räknas om till förändring. Utelämnas om förslaget inte ändrar skatten. |
 | `resultat` | `procent` av skatteintäkter och generella bidrag och utjämning, eller `mnkr`, som räknas om till procent. |
+| `behandling` | `{organ, datum, paragraf}` för behandlingen där förslaget ställdes. Organet är `KF` om det utelämnas. En `behandling` överst i filen gäller alla förslag som inte anger en egen. |
+| `summering` | Ett svar per fråga i mallen, se *Summering*. |
 | `anmarkning` | Det läsaren behöver veta om hur förslaget redovisar siffrorna, till exempel att det räknat från en annan version av planförutsättningarna eller ändrar investeringarna. |
 
 ### Åtgärder per nämnd
@@ -74,6 +77,21 @@ En ram kan ha en lista `atgarder` med de besparingar och satsningar förslaget a
 | `sida` | Sidan i PDF:en. Krävs för en PDF och anges inte för ett Word-dokument. |
 
 Åtgärderna står oftare i löptext än i tabeller, så avläsningen är mer tolkning än för ramarna. Därför krävs sidan. En åtgärd som inte går att knyta till en nämnd, till exempel en avgiftshöjning som inte anges per nämnd, tas inte med. En ogiltig åtgärd (utan text, med okänt fält, utan sida i en PDF) stoppar inläsningen med fil och fel.
+
+### Summering
+
+Varje förslag kan summeras med samma frågor, i samma ordning (`MALL` i `backend/app/budgetforslag.py`):
+
+| Id | Fråga |
+|---|---|
+| `prioriteringar` | Vilka verksamheter prioriterar förslaget? |
+| `besparingar` | Var föreslår förslaget lägre kostnader? |
+| `skatt_och_avgifter` | Vad föreslår förslaget om skattesats, avgifter och taxor? |
+| `resultat` | Vilket resultat budgeterar förslaget, och hur motiveras det? |
+| `investeringar` | Vad föreslår förslaget om investeringar och lån? |
+| `ovrigt` | Vad föreslår förslaget utöver budgetmodellen, till exempel uppdrag eller organisation? |
+
+Ett svar är `{"text": …, "sidor": [1, 2]}`, eller `{"anges_inte": true}` när förslaget inte tar upp frågan. Sidorna krävs för en PDF och anges inte för ett Word-dokument. En summering har svar på alla frågor eller finns inte alls. Svaren återger vad förslaget säger, nära texten, och värderar det inte. Summeringen är redaktionens sammanfattning och märks **Analys** (streckad kantlinje, `docs/design.md`). Den granskas och publiceras med förslaget.
 
 Bara budgetåret läses. Planåren tas inte med. Det tidigare formatet med listor per år (`"ar": 2027`) och `utgangslage` tas emot, och då läses bara budgetårets poster. Nämnderna skrivs med samma namn i alla förslag och i planförutsättningarna: Kommunfullmäktige, Kommunstyrelsen, Kommungemensam verksamhet, Samhällsnämnden, Skolnämnden och Socialnämnden.
 
@@ -110,11 +128,22 @@ Planförutsättningarna rättas i Excelfilen och läses in igen. Under Politik o
 
 En redaktör rättar ett förslags utkast på samma sida. En ram kan anges i mnkr eller som förändring. Under varje ram lägger redaktören till, ändrar och tar bort åtgärder, och utgivaren ser dem med belopp, sidlänk och täckning innan granskningen. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem (utkast → granskad → publicerad, kravspec 18, ADR-0002). Ändras ett granskat förslag blir det utkast igen.
 
+## Koppling till behandlingen
+
+Förslaget hänvisar till behandlingen där det ställdes (kravspec 18). Hänvisningen är en uppgift som redaktören anger och utgivaren granskar. Ur protokollet kopplas resten automatiskt och märks ⚙ *Automatisk koppling*:
+
+- **Yrkandet:** det yrkande vars förslagsställare tillhör något av förslagets partier, med dem som ställde sig bakom det. Majoritetens förslag är kommunstyrelsens förslag, som någon i majoriteten yrkar bifall till.
+- **Voteringarna** i behandlingen, med siffrorna i voteringslistan och den sida (ja eller nej) där förslagsställarens namn står.
+
+Fullmäktige behandlade förslagen för 2027 den 2026-06-15 i § 108 utan votering: ordföranden ställde de fem förslagen mot varandra. Då visas "Ingen votering i protokollet". Är protokollet inte insamlat visas hänvisningen utan länk.
+
 ## Jämförelse
 
 Läsaren ser de publicerade förslagen för ett budgetår bredvid varandra, med planförutsättningarna först och den antagna budgeten som första förslag. Per nämnd visas ramen med förändringen mot planförutsättningen, och sedan skattesatsen (planförutsättningen ± förändringen), resultatet i mnkr och procent, det beräknade resultatet och differensen. Planförutsättningarnas resultat-, investerings-, balans- och kassaflödesbudget visas en gång under förslagen, gemensamt för alla.
 
 Förändringar och beräknat resultat visas först när årets planförutsättningar är publicerade. Dessförinnan, och för ett år utan planförutsättningar, visas förslagens egna ramar, skattesats och resultat i procent.
+
+**Behandling och summering:** sist i tabellen står behandlingen med länk till paragrafen, yrkandet och voteringarna. Under tabellen visas summeringarna bredvid varandra, en rad per fråga, märkta Analys.
 
 **Åtgärder:** läsaren öppnar en nämnd och ser, per förslag, åtgärderna med belopp och länk till sidan i originalet, och täckningen, till exempel "åtgärder för −3,0 av −3,0 mnkr". Ett förslag som ändrar ramen utan att ange åtgärder markeras "Inga åtgärder anges".
 

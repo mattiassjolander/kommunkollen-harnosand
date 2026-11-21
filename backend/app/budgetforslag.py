@@ -20,6 +20,10 @@ och skapar utkast. Med `-` som mapp läses en tar-ström från stdin, så att ma
 Ett utkast rättas av en redaktör och publiceras av en utgivare (utkast → granskad → publicerad).
 Ingen godkänner ett förslag som hen själv läst in eller ändrat. Läsaren ser bara publicerade
 förslag, bredvid varandra och bredvid den antagna budgeten för året när den finns.
+
+Ett förslag kan ha en summering med samma frågor för alla förslag (`MALL`), som märks Analys, och en
+hänvisning till behandlingen i kommunfullmäktige där det ställdes. Ur behandlingen kopplas partiets
+yrkande och voteringarna automatiskt (#48).
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from . import planforutsattningar as pf
+from . import protokoll
 from .planforutsattningar import EjTillatet, Konflikt, Ogiltig
 
 __all__ = ["EjTillatet", "Konflikt", "Ogiltig"]
@@ -125,6 +130,74 @@ def tackning(ram: dict, forandring: float | None) -> dict:
             "saknas": not atg and bool(forandring)}
 
 
+# Summeringen: samma frågor, i samma ordning, för alla förslag. Svaren återger vad förslaget säger
+# och värderar det inte. En fråga som förslaget inte tar upp besvaras med {"anges_inte": true}.
+MALL: list[tuple[str, str]] = [
+    ("prioriteringar", "Vilka verksamheter prioriterar förslaget?"),
+    ("besparingar", "Var föreslår förslaget lägre kostnader?"),
+    ("skatt_och_avgifter", "Vad föreslår förslaget om skattesats, avgifter och taxor?"),
+    ("resultat", "Vilket resultat budgeterar förslaget, och hur motiveras det?"),
+    ("investeringar", "Vad föreslår förslaget om investeringar och lån?"),
+    ("ovrigt", "Vad föreslår förslaget utöver budgetmodellen, till exempel uppdrag eller organisation?"),
+]
+_DATUM = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def summering(v: Any, sidor: bool) -> dict:
+    """Validerar summeringen: ett svar per fråga i `MALL`, {text, sidor} eller {anges_inte: true}.
+    Sidorna krävs för en PDF och anges inte för ett Word-dokument."""
+    if not isinstance(v, dict):
+        raise Ogiltig("summering ska vara ett objekt med ett svar per fråga")
+    fragor = [f for f, _ in MALL]
+    okanda = set(v) - set(fragor)
+    if okanda:
+        raise Ogiltig(f"summering: okända frågor: {', '.join(sorted(okanda))}")
+    if saknas := [f for f in fragor if f not in v]:
+        raise Ogiltig(f"summering: svar saknas för {', '.join(saknas)}")
+    ut = {}
+    for f in fragor:
+        svar = v[f]
+        if not isinstance(svar, dict):
+            raise Ogiltig(f"summering {f} ska vara {{text, sidor}} eller {{anges_inte: true}}")
+        if svar.get("anges_inte") is True:
+            if set(svar) != {"anges_inte"}:
+                raise Ogiltig(f"summering {f}: ett svar med anges_inte har ingen text")
+            ut[f] = {"anges_inte": True}
+            continue
+        if set(svar) - {"text", "sidor"}:
+            raise Ogiltig(f"summering {f}: okända fält: {', '.join(sorted(set(svar) - {'text', 'sidor'}))}")
+        text = svar.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise Ogiltig(f"summering {f}: text saknas")
+        s_in = svar.get("sidor")
+        if not sidor:
+            if s_in:
+                raise Ogiltig(f"summering {f}: ett Word-dokument har inga fasta sidor, ange inga sidor")
+            ut[f] = {"text": text.strip()}
+            continue
+        if (not isinstance(s_in, list) or not s_in
+                or not all(isinstance(x, int) and not isinstance(x, bool) and x >= 1 for x in s_in)):
+            raise Ogiltig(f"summering {f}: sidor ska vara en lista med sidnummer från 1")
+        ut[f] = {"text": text.strip(), "sidor": sorted(set(s_in))}
+    return ut
+
+
+def behandling(v: Any) -> dict:
+    """Hänvisningen till behandlingen där förslaget ställdes: {organ, datum, paragraf}. Organet är KF om
+    det utelämnas."""
+    if not isinstance(v, dict) or set(v) - {"organ", "datum", "paragraf"}:
+        raise Ogiltig("behandling ska vara {organ, datum, paragraf}, t.ex. {\"datum\": \"2026-06-15\", \"paragraf\": 108}")
+    organ = v.get("organ", "KF")
+    if not isinstance(organ, str) or not organ.strip():
+        raise Ogiltig("behandling: organet saknas")
+    if not isinstance(v.get("datum"), str) or not _DATUM.fullmatch(v["datum"]):
+        raise Ogiltig("behandling: datum ska anges som ÅÅÅÅ-MM-DD")
+    p = v.get("paragraf")
+    if isinstance(p, bool) or not isinstance(p, int) or p < 1:
+        raise Ogiltig("behandling: paragrafen ska vara ett heltal från 1")
+    return {"organ": organ.strip(), "datum": v["datum"], "paragraf": p}
+
+
 def skattejustering(nt: dict, ore: int) -> float:
     """Skatteintäkternas förändring i mnkr när skattesatsen ändras med `ore` öre."""
     return nt["skatteintakter"] * ore / 100 / nt["skattesats"]
@@ -146,12 +219,14 @@ def uppgifter(data: Any, budgetar: int, sidor: bool = True, nt: dict | None = No
     - `skattesats`: {ore}, {forandring} i procentenheter (−0,10 för "10 öre lägre") eller {procent}.
       Lagras som förändring i öre, eller som procent när planförutsättningar saknas. Utelämnad är 0 öre.
     - `resultat`: {procent} av skatteintäkter och generella bidrag, eller {mnkr}. Lagras som procent.
+    - `behandling`: {organ, datum, paragraf} där förslaget ställdes (`behandling`).
+    - `summering`: ett svar per fråga i `MALL` (`summering`). Den märks Analys när den visas.
 
     Det tidigare formatet med planår (listor med `ar`) och `utgangslage` tas emot: bara budgetåret läses.
     """
     if not isinstance(data, dict):
         raise Ogiltig("Uppgifterna ska vara ett objekt")
-    okanda = set(data) - {"skattesats", "resultat", "ramar", "utgangslage"}
+    okanda = set(data) - {"skattesats", "resultat", "ramar", "utgangslage", "behandling", "summering"}
     if okanda:
         raise Ogiltig(f"Okända fält: {', '.join(sorted(okanda))}")
 
@@ -223,7 +298,12 @@ def uppgifter(data: Any, budgetar: int, sidor: bool = True, nt: dict | None = No
         ramar.append(ram)
     if len({r["organ"] for r in ramar}) != len(ramar):
         raise Ogiltig("Samma nämnd står flera gånger")
-    return {"skattesats": skatt, "resultat": resultat, "ramar": ramar}
+    ut = {"skattesats": skatt, "resultat": resultat, "ramar": ramar}
+    if data.get("behandling") is not None:
+        ut["behandling"] = behandling(data["behandling"])
+    if data.get("summering") is not None:
+        ut["summering"] = summering(data["summering"], sidor)
+    return ut
 
 
 def tidigare_format(u: dict) -> bool:
@@ -315,7 +395,10 @@ def las_mapp(rot: Path, nyckeltal: dict[int, dict] | None = None) -> list[Forsla
         budgetar = int(katalog.name)
         nt = nyckeltal.get(budgetar)
         beskrivning = katalog / BESKRIVNING
-        poster = json.loads(beskrivning.read_text(encoding="utf-8")).get("forslag", {}) if beskrivning.exists() else {}
+        besk = json.loads(beskrivning.read_text(encoding="utf-8")) if beskrivning.exists() else {}
+        poster = besk.get("forslag", {})
+        # En behandling för hela budgetåret gäller alla förslag som inte anger en egen.
+        gemensam = besk.get("behandling")
         filer = sorted(p for p in katalog.iterdir() if p.suffix.lower() in FILTYPER)
         for namn in set(poster) - {f.name for f in filer}:
             raise Ogiltig(f"{katalog.name}/{BESKRIVNING}: filen {namn} finns inte")
@@ -330,10 +413,11 @@ def las_mapp(rot: Path, nyckeltal: dict[int, dict] | None = None) -> list[Forsla
                     partier = m["partier"].split("+")
                     forslag.append(Forslag(budgetar, fil.stem, fil.name, fil.read_bytes(), _partier(partier),
                                            f"Budgetförslag {budgetar}", "tillagg" if m["variant"] else "budget", False,
-                                           uppgifter({}, budgetar, sidor, nt), f"Uppgifter saknas i {BESKRIVNING}."))
+                                           uppgifter({"behandling": gemensam}, budgetar, sidor, nt),
+                                           f"Uppgifter saknas i {BESKRIVNING}."))
                     continue
                 okanda = set(post) - {"partier", "titel", "typ", "antagen", "anmarkning", "skattesats", "resultat",
-                                      "ramar", "utgangslage"}
+                                      "ramar", "utgangslage", "behandling", "summering"}
                 if okanda:
                     raise Ogiltig(f"Okända fält: {', '.join(sorted(okanda))}")
                 partier = post.get("partier") or m["partier"].split("+")
@@ -343,7 +427,9 @@ def las_mapp(rot: Path, nyckeltal: dict[int, dict] | None = None) -> list[Forsla
                 forslag.append(Forslag(
                     budgetar, fil.stem, fil.name, fil.read_bytes(), _partier(partier),
                     str(post.get("titel") or f"Budgetförslag {budgetar}"), typ, bool(post.get("antagen", False)),
-                    uppgifter({k: post[k] for k in ("skattesats", "resultat", "ramar") if k in post}, budgetar, sidor, nt),
+                    uppgifter({"behandling": gemensam} | {k: post[k] for k in ("skattesats", "resultat", "ramar",
+                                                                              "behandling", "summering") if k in post},
+                              budgetar, sidor, nt),
                     str(post.get("anmarkning") or ""),
                 ))
             except Ogiltig as e:
@@ -436,23 +522,83 @@ def for_over(conn: psycopg.Connection, nyckeltal: dict[int, dict], redaktor: str
     return antal
 
 
+# Koppling till behandlingen och voteringarna
+
+
+def _yrkandegrupper(yrkanden: list[dict]) -> list[list[dict]]:
+    """Yrkandena grupperade: ett yrkande som föreslår något och de som ställer sig bakom det."""
+    grupper: list[list[dict]] = []
+    for y in yrkanden:
+        if not grupper or " föreslår " in f" {y['text']} " or "yrkar" in y["text"]:
+            grupper.append([y])
+        else:
+            grupper[-1].append(y)
+    return grupper
+
+
+def koppling(conn: psycopg.Connection, b: dict | None, partier: list[str]) -> dict | None:
+    """Behandlingen där förslaget ställdes, med partiets yrkande och voteringarna.
+
+    Hänvisningen (organ, datum, paragraf) är en uppgift som redaktören granskar. Yrkandet och sidan i
+    voteringen kopplas automatiskt: yrkandet vars förslagsställare tillhör något av förslagets partier,
+    och den sida i voteringen (ja eller nej) där förslagsställarens namn står."""
+    if b is None:
+        return None
+    ut = {**b, "hittad": False, "sammantrade_id": None, "rubrik": None, "yrkanden": [], "voteringar": []}
+    rad = conn.execute(
+        "SELECT s.id FROM sammantrade s JOIN behandling x ON x.sammantrade_id = s.id "
+        "WHERE s.organ = %s AND s.datum = %s AND x.paragraf = %s ORDER BY s.id LIMIT 1",
+        (b["organ"], b["datum"], b["paragraf"]),
+    ).fetchone()
+    las = protokoll.las_behandling(conn, rad["id"], b["paragraf"]) if rad else None
+    if las is None:
+        return ut
+    grupp = next((g for g in _yrkandegrupper(las["yrkanden"])
+                  if g[0]["personer"] and g[0]["personer"][0]["parti"] in partier), [])
+    stallare = [p["namn"] for p in grupp[0]["personer"]] if grupp else []
+
+    def sida(v: dict) -> str | None:
+        for s_, text in (("ja", v["ja_forslag"]), ("nej", v["nej_forslag"])):
+            if text and any(n in text or n.split()[0] in text for n in stallare):
+                return s_
+        return None
+
+    return ut | {
+        "hittad": True, "sammantrade_id": las["sammantrade"]["id"], "rubrik": las["rubrik"],
+        "yrkanden": [{"text": y["text"], "personer": y["personer"]} for y in grupp],
+        "voteringar": [{"nummer": v["nummer"], "ja_forslag": v["ja_forslag"], "nej_forslag": v["nej_forslag"],
+                        "vinnare": v["vinnare"], "lista": v["lista"], "sida": sida(v)} for v in las["voteringar"]],
+    }
+
+
+def _summering(u: dict) -> list[dict] | None:
+    """Summeringen i mallens ordning, med frågan. None om förslaget inte har någon."""
+    s = u.get("summering")
+    if s is None:
+        return None
+    return [{"id": f, "fraga": fraga, **s[f]} for f, fraga in MALL]
+
+
 # Redigering och publicering
 
 _KOLUMNER = ("id, budgetar, nyckel, partier, titel, typ, antagen, filnamn, sha256, uppgifter, anmarkning, status, "
              "redaktorer, skapad, andrad, granskad_av, granskad, publicerad_av, publicerad, inlast")
 
 
-def _ut(r: dict, nyckeltal: dict[int, dict], redaktion: bool = False) -> dict:
+def _ut(conn: psycopg.Connection, r: dict, nyckeltal: dict[int, dict], redaktion: bool = False) -> dict:
     ut = {k: r[k] for k in ("id", "budgetar", "nyckel", "partier", "titel", "typ", "antagen", "filnamn", "anmarkning",
                             "status", "uppgifter")}
     ut["original"] = f"/api/budgetforslag/{r['id']}/original"
     ut["publicerad"] = r["publicerad"].isoformat() if r["publicerad"] else None
     nt = nyckeltal.get(r["budgetar"])
     ut["berakning"] = None if tidigare_format(r["uppgifter"]) else berakning(r["uppgifter"], nt)
+    ut["behandling"] = koppling(conn, r["uppgifter"].get("behandling"), r["partier"])
+    ut["summering"] = _summering(r["uppgifter"])
     if redaktion:
         ut |= {"redaktorer": r["redaktorer"], "granskad_av": r["granskad_av"], "publicerad_av": r["publicerad_av"],
                "andrad": r["andrad"].isoformat(), "inlast": r["inlast"]["uppgifter"],
-               "granskad": r["granskad"].isoformat() if r["granskad"] else None}
+               "granskad": r["granskad"].isoformat() if r["granskad"] else None,
+               "mall": [{"id": f, "fraga": fraga} for f, fraga in MALL]}
     return ut
 
 
@@ -473,11 +619,11 @@ def lista(conn: psycopg.Connection, status: str | None = None) -> list[dict]:
         "ORDER BY budgetar DESC, antagen DESC, nyckel, id DESC", {"s": status},
     ).fetchall()
     nt = _nyckeltal(conn, publicerade=False)
-    return [_ut(r, nt, redaktion=True) for r in rader]
+    return [_ut(conn, r, nt, redaktion=True) for r in rader]
 
 
 def las(conn: psycopg.Connection, forslag_id: int) -> dict:
-    return _ut(_hamta(conn, forslag_id), _nyckeltal(conn, publicerade=False), redaktion=True)
+    return _ut(conn, _hamta(conn, forslag_id), _nyckeltal(conn, publicerade=False), redaktion=True)
 
 
 def andra(conn: psycopg.Connection, forslag_id: int, data: dict, redaktor: str, nu: datetime) -> dict:
@@ -573,7 +719,7 @@ def jamforelse(conn: psycopg.Connection, ar: int) -> dict:
     ).fetchall()
     plan = pf.publicerad(conn, ar)
     nt = {ar: pf.nyckeltal(plan)} if plan else {}
-    forslag = [_ut(r, nt) for r in rader]
+    forslag = [_ut(conn, r, nt) for r in rader]
     antagen = next((f for f in forslag if f["antagen"] and f["typ"] == "budget"), None)
     # Nämnderna i planförutsättningarnas ordning, sedan i den ordning de står i förslagen.
     organ = list(dict.fromkeys([*(nt[ar]["ramar"] if nt else []), *(x["organ"] for f in forslag for x in f["uppgifter"]["ramar"])]))
@@ -590,7 +736,8 @@ def jamforelse(conn: psycopg.Connection, ar: int) -> dict:
             "ramar": [{"organ": x["organ"], **d} for x in u["ramar"] if (d := _differens(x["mnkr"], ram_a.get(x["organ"])))],
         }
     return {"budgetar": ar, "organ": organ, "antagen": antagen["id"] if antagen else None,
-            "planforutsattningar": plan, "forslag": forslag}
+            "planforutsattningar": plan, "mall": [{"id": f, "fraga": fraga} for f, fraga in MALL],
+            "forslag": forslag}
 
 
 # Kommandot

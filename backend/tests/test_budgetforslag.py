@@ -20,12 +20,15 @@ from pathlib import Path
 import psycopg
 import pytest
 from conftest import skapa_app
+from test_protokoll import kf, kor
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
 from app import budgetforslag
 
 FIXTURER = Path(__file__).parent / "fixtures" / "budgetforslag"
+# En fullständig summering, ett svar per fråga i mallen.
+HELA = {f: {"text": "Förslaget anger det.", "sidor": [1]} for f, _ in budgetforslag.MALL}
 REDAKTOR = "test-redaktor@kommunkollen.test"
 
 
@@ -352,6 +355,13 @@ def test_ar_utan_planforutsattningar(api, database_url, monkeypatch, capsys, tmp
                               "atgarder": [{"text": "Fler lärare", "mnkr": "2", "sida": 1}]}]}, r"åtgärd 1 \(mnkr\) ska vara ett tal"),
         ("S.pdf", {"ramar": [{"organ": "Skolnämnden", "mnkr": 1, "sida": 1,
                               "atgarder": [{"text": "Fler lärare", "varde": "bra", "sida": 1}]}]}, "åtgärd 1: okända fält: varde"),
+        ("S.pdf", {"behandling": {"datum": "15 juni 2026", "paragraf": 108}}, "datum ska anges som ÅÅÅÅ-MM-DD"),
+        ("S.pdf", {"behandling": {"datum": "2026-06-15"}}, "paragrafen ska vara ett heltal"),
+        ("S.pdf", {"summering": {"prioriteringar": {"text": "Skolan", "sidor": [1]}}}, "svar saknas för besparingar"),
+        ("S.pdf", {"summering": {**HELA, "bedomning": {"text": "Bra", "sidor": [1]}}}, "okända frågor: bedomning"),
+        ("S.pdf", {"summering": {**HELA, "resultat": {"text": "3 %"}}}, "summering resultat: sidor ska vara en lista"),
+        ("S.docx", {"summering": {**HELA}}, "summering prioriteringar: ett Word-dokument har inga fasta sidor"),
+        ("S.pdf", {"summering": {**HELA, "ovrigt": {"anges_inte": True, "text": "x"}}}, "ett svar med anges_inte har ingen text"),
     ],
 )
 def test_ogiltig_mapp_avbryter_inlasningen(tmp_path, fil, post, fel):
@@ -429,3 +439,67 @@ def test_atgarder_per_namnd(api, database_url, monkeypatch, capsys):
     assert skola["atgarder"][0]["mnkr"] == 15.0 and skola["atgarder"][0]["sida"] == 1
     [b] = [r for r in m["berakning"]["ramar"] if r["organ"] == "Skolnämnden"]
     assert (b["forandring"], b["atgarder"]) == (15.0, {"antal": 1, "mnkr": 15.0, "saknas": False})
+
+
+def test_summering_med_samma_mall(api, database_url, monkeypatch, capsys):
+    """#48: summeringen har samma frågor i samma ordning för alla förslag. Den rättas av redaktören
+    och publiceras med förslaget."""
+    las_in(database_url, monkeypatch, capsys)
+    f = utkast(api)
+    m = f["M"]
+    assert [x["id"] for x in m["summering"]] == [q for q, _ in budgetforslag.MALL]
+    assert m["summering"][0]["fraga"] == "Vilka verksamheter prioriterar förslaget?"
+    assert m["summering"][0]["sidor"] == [1, 2]
+    assert m["summering"][4] == {"id": "investeringar", "fraga": "Vad föreslår förslaget om investeringar och lån?",
+                                 "text": "Investeringsnivån sänks med 16 mnkr, i samhällsnämnden.", "sidor": [1, 2]}
+    assert f["L"]["summering"] is None
+
+    # Redaktören skriver Liberalernas summering, med en fråga som förslaget inte tar upp.
+    svar = {q: {"text": "Liberalerna anger det.", "sidor": [1]} for q, _ in budgetforslag.MALL}
+    svar["investeringar"] = {"anges_inte": True}
+    ny = api.patch(f"/api/budgetforslag/{f['L']['id']}", json={"uppgifter": {**f["L"]["uppgifter"], "summering": svar}})
+    assert ny.status_code == 200, ny.text
+    assert ny.json()["summering"][4] == {"id": "investeringar", "fraga": "Vad föreslår förslaget om investeringar och lån?",
+                                         "anges_inte": True}
+    fel = api.patch(f"/api/budgetforslag/{f['L']['id']}", json={"uppgifter": {"summering": {"resultat": {"text": "x", "sidor": [1]}}}})
+    assert fel.status_code == 422 and "svar saknas" in fel.json()["detail"]
+
+    # Läsaren ser summeringarna och mallen när förslagen är publicerade.
+    publicera_alla(api)
+    j = api.get("/api/budget/2027").json()
+    assert [x["fraga"] for x in j["mall"]] == [q for _, q in budgetforslag.MALL]
+    l = next(x for x in j["forslag"] if x["nyckel"] == "L")
+    assert l["summering"][0]["text"] == "Liberalerna anger det."
+
+
+def test_forslaget_kopplas_till_behandlingen_och_yrkandet(database_url, google, monkeypatch, capsys):
+    """#48, kravspec 18: förslagen för 2027 ställdes i kommunfullmäktige 2026-06-15 § 108. Behandlingen
+    hade ingen votering: ordföranden ställde de fem förslagen mot varandra."""
+    api = TestClient(skapa_app(database_url, google, kallor=kf(), anonym_lasning=True))
+    kor(api)
+    las_in(database_url, monkeypatch, capsys)
+    publicera_alla(api)
+
+    j = api.get("/api/budget/2027").json()
+    f = {x["nyckel"]: x for x in j["forslag"]}
+    b = f["M"]["behandling"]
+    assert (b["organ"], b["datum"], b["paragraf"], b["hittad"], b["rubrik"]) == (
+        "KF", "2026-06-15", 108, True, "Mål, budget och skattesats 2027")
+    s = api.get(f"/api/sammantraden/{b['sammantrade_id']}").json()
+    assert s["datum"] == "2026-06-15"
+    # Partiets yrkande och de som ställde sig bakom det.
+    assert [y["text"] for y in b["yrkanden"]] == [
+        "Eva-Clara Viklund (M) föreslår att kommunfullmäktige ska besluta att anta Moderaternas förslag till årsplan.",
+        "Christian Wasell (M), Margareta Tjärnlund (M) ställer sig bakom Eva-Claras förslag."]
+    assert b["voteringar"] == []
+    # Majoritetens förslag är kommunstyrelsens förslag, som Jonas Bergström (S) yrkade bifall till.
+    maj = f["majoritet"]["behandling"]
+    assert maj["yrkanden"][0]["text"].startswith("Jonas Bergström (S) föreslår att kommunfullmäktige beslutar enligt")
+    assert {p["parti"] for p in maj["yrkanden"][1]["personer"]} == {"KD", "MP", "S", "V"}
+    assert f["L"]["behandling"]["yrkanden"][0]["personer"][0]["namn"] == "Olle Löfgren"
+
+
+def test_behandling_som_inte_finns_visas_som_hanvisning(api, database_url, monkeypatch, capsys):
+    las_in(database_url, monkeypatch, capsys)
+    b = utkast(api)["M"]["behandling"]
+    assert (b["datum"], b["paragraf"], b["hittad"], b["sammantrade_id"], b["yrkanden"]) == ("2026-06-15", 108, False, None, [])

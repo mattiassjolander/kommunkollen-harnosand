@@ -202,6 +202,10 @@ Det resultat ett budgetförslag får om planförutsättningarnas resultat juster
 **Differens**:
 Skillnaden mellan ett budgetförslags siffra och den antagna budgetens för samma år, i mnkr och procent.
 
+**Summering**:
+En sammanfattning av ett budgetförslag med samma frågor för alla förslag, med sidorna i originalet. Den är redaktionens analys, inte en uppgift ur förslaget, och märks Analys.
+_Avoid_: Bedömning, recension
+
 ## Redaktionellt arbete
 
 **Redaktör**:
