@@ -4,6 +4,9 @@ import { expect, test } from '@playwright/test'
 // servern startar (`--budgetforslag tests/fixtures/budgetforslag`). Utgivaren granskar och publicerar
 // dem, och läsaren jämför förslagen mot planförutsättningarna och den antagna budgeten. En redaktör lägger
 // till en åtgärd i Moderaternas förslag, och läsaren öppnar en nämnd och ser åtgärderna (#57).
+// Förslagen hänvisar till behandlingen i fullmäktige 2026-06-15 § 108, och redaktören skriver
+// Liberalernas summering med samma frågor som Moderaternas (#48). Protokollet 2026-06-15 ingår inte i
+// e2e-urvalet, så hänvisningen visas utan yrkande; kopplingen till yrkandet prövas i söm 1.
 
 test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ page }) => {
   // Redaktören lägger till en åtgärd för en ram som förslaget ändrar utan att ange åtgärder.
@@ -30,6 +33,30 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
     await mUtkast.getByRole('button', { name: 'Avbryt' }).click()
     const kg = mUtkast.getByTestId('uppgifter').locator('tr', { has: page.getByRole('rowheader', { name: 'Kommungemensam verksamhet' }) })
     await expect(kg.getByTestId('tackning')).toHaveText('åtgärder för −4 mnkr')
+  }
+
+  // Redaktören skriver Liberalernas summering: samma frågor, ett svar per fråga.
+  const lUtkast = page.locator('[data-testid="budgetutkast"][data-nyckel="L"]')
+  const summerad = (await lUtkast.count()) > 0
+  if (summerad) {
+    await expect(lUtkast.getByTestId('behandling')).toContainText('KF 2026-06-15 § 108 (finns inte i plattformen)')
+    await lUtkast.getByRole('button', { name: 'Rätta' }).click()
+    const fragor = lUtkast.locator('.svar')
+    await expect(fragor).toHaveCount(6)
+    for (let i = 0; i < 6; i++) {
+      const q = fragor.nth(i)
+      if (i === 4) {
+        await q.getByRole('checkbox', { name: 'Förslaget tar inte upp frågan' }).check()
+      } else {
+        await q.getByRole('textbox').first().fill('Besparingar om minst 30 mnkr i lägre kostnader läggs till resultatet.')
+        await q.getByRole('textbox', { name: 'Sidor' }).fill('1')
+      }
+    }
+    await lUtkast.getByTestId('spara').click()
+    await expect(lUtkast.getByRole('status')).toHaveText('Sparat som utkast.')
+    await lUtkast.getByRole('button', { name: 'Avbryt' }).click()
+    await expect(lUtkast.getByTestId('summering')).toContainText('Analys')
+    await expect(lUtkast.getByTestId('summering')).toContainText('Förslaget tar inte upp frågan')
   }
 
   // Utgivaren granskar och publicerar utkasten (de som inte redan publicerats i en tidigare körning).
@@ -127,6 +154,25 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
   await expect(tabell.locator('tr[data-atgarder="Socialnämnden"] [data-testid="tackning"]').nth(2)).toHaveText('1 åtgärd utan belopp')
   await visa.click()
   await expect(tabell.locator('tr[data-atgarder="Kommunstyrelsen"]')).toHaveCount(0)
+
+  // Behandlingen där förslagen ställdes. Protokollet är inte insamlat här, så hänvisningen står utan länk.
+  const beh = tabell.locator('tr[data-rad="behandling"] [data-testid="behandling"]')
+  await expect(beh).toHaveCount(4)
+  await expect(beh.nth(2)).toContainText('KF 2026-06-15 § 108')
+  await expect(beh.nth(2)).toContainText('Protokollet finns inte här än')
+
+  // Summeringarna med samma frågor, märkta Analys, med sidlänkar.
+  const sum = page.getByTestId('summering')
+  await expect(sum.getByRole('heading')).toContainText('Analys')
+  await expect(sum.locator('tbody tr')).toHaveCount(6)
+  const inv = sum.locator('tr[data-fraga="investeringar"] td')
+  const kolM = await sum.locator('thead th[data-nyckel]').evaluateAll((th) => th.findIndex((t) => t.getAttribute('data-nyckel') === 'M'))
+  await expect(inv.nth(kolM)).toContainText('Investeringsnivån sänks med 16 mnkr')
+  await expect(inv.nth(kolM).getByRole('link', { name: 's. 2' })).toHaveAttribute('href', /\/original#page=2$/)
+  if (summerad) {
+    const kolL = await sum.locator('thead th[data-nyckel]').evaluateAll((th) => th.findIndex((t) => t.getAttribute('data-nyckel') === 'L'))
+    await expect(inv.nth(kolL)).toHaveText('Förslaget tar inte upp frågan')
+  }
 
   // Resultat-, investerings-, balans- och kassaflödesbudget visas en gång för budgetåret.
   const pf = page.getByTestId('planforutsattningar')

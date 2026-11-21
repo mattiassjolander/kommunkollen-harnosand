@@ -3,6 +3,8 @@
 // originalet, och en utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem
 // (kravspec 18, ADR-0002). Planförutsättningarna rättas i Excelfilen och läses in på nytt.
 // Varje ram kan ha åtgärder och satsningar med belopp och sida (#57), som granskas med förslaget.
+// Redaktören anger behandlingen där förslaget ställdes och skriver summeringen med samma frågor för alla
+// förslag (#48). Summeringen märks Analys.
 import { computed, inject, onMounted, reactive, ref, type Ref } from 'vue'
 import {
   EjInloggad,
@@ -14,6 +16,7 @@ import {
   publiceraBudgetforslag,
   publiceraPlanforutsattningar,
   type Budgetuppgifterin,
+  type Summeringssvar,
   type Budgetutkast,
   type Jag,
   type Kalla,
@@ -44,6 +47,13 @@ interface Formular {
   skatt: { ore: string; sida: string }
   resultat: { procent: string; sida: string }
   ramar: { organ: string; mnkr: string; forandring: string; sida: string; atgarder: Atgardsfalt[] }[]
+  behandling: { organ: string; datum: string; paragraf: string }
+  summering: Record<string, Svarsfalt>
+}
+interface Svarsfalt {
+  text: string
+  sidor: string
+  anges_inte: boolean
 }
 interface Atgardsfalt {
   text: string
@@ -91,6 +101,15 @@ function oppna(f: Budgetutkast) {
       sida: s(r.sida),
       atgarder: (r.atgarder ?? []).map((a) => ({ text: a.text, mnkr: s(a.mnkr), sida: s(a.sida) })),
     })),
+    behandling: { organ: u.behandling?.organ ?? 'KF', datum: u.behandling?.datum ?? '', paragraf: s(u.behandling?.paragraf) },
+    summering: Object.fromEntries(
+      f.mall.map((q) => {
+        const v = u.summering?.[q.id]
+        return [q.id, v && 'anges_inte' in v
+          ? { text: '', sidor: '', anges_inte: true }
+          : { text: v?.text ?? '', sidor: (v?.sidor ?? []).join(', '), anges_inte: false }]
+      }),
+    ),
   }
 }
 
@@ -111,6 +130,15 @@ function uppgifter(f: Formular, u: Budgetutkast['uppgifter']): Budgetuppgifterin
         : { organ: r.organ, forandring: tal(r.forandring), sida: tal(r.sida) }
       return atgarder.length ? { ...ram, atgarder } : ram
     }),
+    // Behandlingen skickas när datum eller paragraf är ifyllt, summeringen när något svar är ifyllt.
+    ...(f.behandling.datum.trim() || f.behandling.paragraf.trim()
+      ? { behandling: { organ: f.behandling.organ.trim() || 'KF', datum: f.behandling.datum.trim(), paragraf: tal(f.behandling.paragraf) } }
+      : {}),
+    ...(Object.values(f.summering).some((v) => v.anges_inte || v.text.trim())
+      ? { summering: Object.fromEntries(Object.entries(f.summering).map(([id, v]): [string, Summeringssvar] => [id, v.anges_inte
+          ? { anges_inte: true }
+          : { text: v.text, sidor: v.sidor.split(/[,\s]+/).filter(Boolean).map(Number) }])) }
+      : {}),
   }
 }
 
@@ -309,6 +337,33 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
               </tbody>
             </table>
             <p v-else><strong>Ramar:</strong> <span class="saknas">anges inte</span></p>
+            <p data-testid="behandling">
+              <strong>Behandling:</strong>
+              <template v-if="f.behandling">
+                <RouterLink v-if="f.behandling.sammantrade_id" :to="`/politik/sammantraden/${f.behandling.sammantrade_id}/paragraf/${f.behandling.paragraf}`">
+                  {{ f.behandling.organ }} {{ f.behandling.datum }} § {{ f.behandling.paragraf }}<template v-if="f.behandling.rubrik">, {{ f.behandling.rubrik }}</template>
+                </RouterLink>
+                <template v-else>{{ f.behandling.organ }} {{ f.behandling.datum }} § {{ f.behandling.paragraf }} <span class="saknas">(finns inte i plattformen)</span></template>
+                <template v-if="f.behandling.yrkanden.length"> · yrkande: {{ f.behandling.yrkanden[0].text }}</template>
+              </template>
+              <span v-else class="saknas"> anges inte</span>
+            </p>
+            <div v-if="f.summering" class="summering" data-testid="summering">
+              <p><strong>Summering</strong> <span class="analysetikett">Analys</span></p>
+              <dl>
+                <template v-for="q in f.summering" :key="q.id">
+                  <dt>{{ q.fraga }}</dt>
+                  <dd>
+                    <span v-if="q.anges_inte" class="saknas">Förslaget tar inte upp frågan</span>
+                    <template v-else>
+                      {{ q.text }}
+                      <template v-for="sd in q.sidor ?? []" :key="sd"><a :href="sidlank(f, sd)!" target="_blank" rel="noopener" class="sida">s. {{ sd }}</a></template>
+                    </template>
+                  </dd>
+                </template>
+              </dl>
+            </div>
+            <p v-else><strong>Summering:</strong> <span class="saknas">saknas</span></p>
           </div>
 
           <div class="knappar">
@@ -360,6 +415,32 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
               </tbody>
             </table>
             <button type="button" @click="form.ramar.push({ organ: '', mnkr: '', forandring: '', sida: '', atgarder: [] })">Lägg till ram</button>
+
+            <fieldset class="grupp">
+              <legend>Behandling där förslaget ställdes</legend>
+              <div class="falt">
+                <label>Organ <input v-model="form.behandling.organ" class="kort-falt" /></label>
+                <label>Datum <input v-model="form.behandling.datum" placeholder="ÅÅÅÅ-MM-DD" data-testid="behandling-datum" /></label>
+                <label>Paragraf <input v-model="form.behandling.paragraf" inputmode="numeric" class="kort-falt" data-testid="behandling-paragraf" /></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="grupp analysfalt">
+              <legend>Summering <span class="analysetikett">Analys</span></legend>
+              <p class="meta">
+                Samma frågor för alla förslag. Återge vad förslaget säger, nära texten och utan värdering, med sidorna där
+                det står. Fyll i alla frågor, eller ingen.
+              </p>
+              <div v-for="q in f.mall" :key="q.id" class="svar" :data-fraga="q.id">
+                <label class="bred">{{ q.fraga }}
+                  <textarea v-model="form.summering[q.id].text" rows="2" :disabled="form.summering[q.id].anges_inte" />
+                </label>
+                <div class="falt">
+                  <label>Sidor <input v-model="form.summering[q.id].sidor" placeholder="1, 2" :disabled="form.summering[q.id].anges_inte" /></label>
+                  <label class="kryss"><input v-model="form.summering[q.id].anges_inte" type="checkbox" /> Förslaget tar inte upp frågan</label>
+                </div>
+              </div>
+            </fieldset>
 
             <label class="bred">Anmärkning <textarea v-model="form.anmarkning" rows="2" /></label>
             <div class="knappar">
@@ -541,6 +622,48 @@ input.kort-falt {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.grupp {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+.grupp legend {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+.analysfalt {
+  border-style: dashed;
+  border-color: var(--line-strong);
+}
+.analysetikett {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 6px;
+}
+.svar {
+  display: grid;
+  gap: 4px;
+}
+.summering {
+  margin-top: 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 4px 12px;
+}
+.summering dt {
+  font-weight: 600;
+  margin-top: 6px;
+}
+.summering dd {
+  margin: 0;
 }
 .atgard td {
   color: var(--ink-secondary);

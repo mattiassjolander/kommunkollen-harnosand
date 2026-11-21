@@ -818,17 +818,54 @@ export interface Atgardstackning {
   /** Ramen ändras men förslaget anger inga åtgärder. */
   saknas: boolean
 }
+/** Hänvisningen till behandlingen där förslaget ställdes. */
+export interface Behandlingshanvisning {
+  organ: string
+  /** ÅÅÅÅ-MM-DD. */
+  datum: string
+  paragraf: number
+}
+/** Ett svar i summeringen: vad förslaget säger, med sidorna, eller att förslaget inte tar upp frågan. */
+export type Summeringssvar = { text: string; sidor?: number[] } | { anges_inte: true }
 /** Uppgifterna för budgetåret. */
 export interface Budgetuppgifter {
   skattesats: Skattesats
   resultat: Budgetresultat | null
   ramar: Budgetram[]
+  behandling?: Behandlingshanvisning
+  /** Ett svar per fråga i mallen (#48). */
+  summering?: Record<string, Summeringssvar>
 }
+/** Behandlingen där förslaget ställdes, med partiets yrkande och voteringarna. Yrkandet och sidan i
+ * voteringen är automatiskt kopplade. */
+export interface Behandlingskoppling extends Behandlingshanvisning {
+  /** False när behandlingen inte finns i plattformen. */
+  hittad: boolean
+  sammantrade_id: number | null
+  rubrik: string | null
+  yrkanden: { text: string; personer: { namn: string; parti: string | null; ledamot_id: number | null }[] }[]
+  voteringar: {
+    nummer: number
+    ja_forslag: string | null
+    nej_forslag: string | null
+    vinnare: 'ja' | 'nej' | null
+    lista: { ja: number; nej: number; avstar: number; franvarande: number }
+    /** Sidan förslaget stod på, när förslagsställarens namn står i voteringen. */
+    sida: 'ja' | 'nej' | null
+  }[]
+}
+export interface Summeringsfraga {
+  id: string
+  fraga: string
+}
+export type Summeringsrad = Summeringsfraga & { text?: string; sidor?: number[]; anges_inte?: true }
 /** Det som skickas vid rättning: ramar kan anges som förändring, skatten som förändring i öre. */
 export interface Budgetuppgifterin {
   skattesats: Skattesats
   resultat: Budgetresultat | null
   ramar: (Omit<Budgetram, 'mnkr'> & { mnkr?: number; forandring?: number })[]
+  behandling?: Partial<Behandlingshanvisning>
+  summering?: Record<string, Summeringssvar>
 }
 /** Det som räknas fram ur förslaget och planförutsättningarna. */
 export interface Budgetberakning {
@@ -868,6 +905,9 @@ export interface Budgetforslag {
   /** Länk till originaldokumentet. Lägg till `#page=N` för en sida. */
   original: string
   publicerad: string | null
+  behandling: Behandlingskoppling | null
+  /** Summeringen i mallens ordning, märkt Analys. Null om förslaget inte har någon. */
+  summering: Summeringsrad[] | null
   differens?: {
     /** Öre. */
     skattesats: number | null
@@ -882,6 +922,8 @@ export interface Budgetutkast extends Budgetforslag {
   publicerad_av: string | null
   andrad: string
   inlast: Budgetuppgifter
+  /** Summeringens frågor, för att skriva en summering. */
+  mall: Summeringsfraga[]
 }
 export interface Kalla {
   text: string
@@ -925,6 +967,8 @@ export interface Budgetjamforelse {
   organ: string[]
   antagen: number | null
   planforutsattningar: Planforutsattningar | null
+  /** Summeringens frågor, samma för alla förslag. */
+  mall: Summeringsfraga[]
   forslag: Budgetforslag[]
 }
 

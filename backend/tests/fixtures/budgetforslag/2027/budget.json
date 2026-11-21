@@ -1,4 +1,9 @@
 {
+  "behandling": {
+    "organ": "KF",
+    "datum": "2026-06-15",
+    "paragraf": 108
+  },
   "forslag": {
     "majoritet.pdf": {
       "partier": [
@@ -200,7 +205,48 @@
           ]
         }
       ],
-      "anmarkning": "Förslaget anger ramarna som förändringar mot planförutsättningarna. Skattesänkningen är 10 öre."
+      "anmarkning": "Förslaget anger ramarna som förändringar mot planförutsättningarna. Skattesänkningen är 10 öre.",
+      "summering": {
+        "prioriteringar": {
+          "text": "Skolnämnden +15 mnkr för mindre barngrupper, stödundervisning, elevhälsoteam och lugn och ro i skolan. Socialnämnden +13 mnkr för anpassade arbetsscheman och en hållbar arbetsmiljö i hemtjänsten.",
+          "sidor": [
+            1,
+            2
+          ]
+        },
+        "besparingar": {
+          "text": "Budgetminskning med 20 % i kommunstyrelseförvaltningen, −37 mnkr, med fokus på styrning, uppföljning och samordning.",
+          "sidor": [
+            1
+          ]
+        },
+        "skatt_och_avgifter": {
+          "text": "Skattesatsen sänks med 10 öre (−6 mnkr). Härnösandskortet höjs med 300 kr (+3 mnkr) och kulturskolan får en avgift på 300 kr per termin (+0,4 mnkr).",
+          "sidor": [
+            1
+          ]
+        },
+        "resultat": {
+          "text": "Resultatet budgeteras till 2,5 %. Förslaget anger att det är för lågt och att minst 3 % behövs för en långsiktigt hållbar ekonomi.",
+          "sidor": [
+            2
+          ]
+        },
+        "investeringar": {
+          "text": "Investeringsnivån sänks med 16 mnkr, i samhällsnämnden.",
+          "sidor": [
+            1,
+            2
+          ]
+        },
+        "ovrigt": {
+          "text": "Försäljning av mark, bland annat på Hemsön (+0,6 mnkr), och en översyn av hela organisationen på djupet.",
+          "sidor": [
+            1,
+            2
+          ]
+        }
+      }
     },
     "SD.pdf": {
       "titel": "Sverigedemokraternas budgetförslag 2027",
