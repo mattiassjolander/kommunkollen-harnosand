@@ -26,6 +26,7 @@ from datetime import date
 
 import psycopg
 
+from . import ledamoter
 from .arenden import LIKHETSGRANS, NIVA, likhet
 from .behandlingstyper import klassa
 from .rattelser import Publicerade
@@ -110,7 +111,7 @@ def _las(conn: psycopg.Connection) -> list[dict]:
     for r in rader:
         b = pub.behandling(r["sammantrade_id"], {k: r[k] for k in ("paragraf", "rubrik", "beslut", "diarienummer")})
         ut.append(r | {"rubrik": b["rubrik"], "beslut": b["beslut"], "diarienummer": b["diarienummer"],
-                       "typ": b["typ"]})
+                       "typ": b["typ"], "motionarer_rattelse": pub.motionarer(r["sammantrade_id"], r["paragraf"])})
     ut.sort(key=lambda r: (r["datum"], NIVA.get(r["organ"], 0), r["paragraf"]))
     return ut
 
@@ -186,7 +187,14 @@ def _i_urvalet(f: dict, fran: int, till: int, organ: str | None) -> bool:
 
 def motioner_och_forslag(conn: psycopg.Connection, fran: int, till: int, organ: str | None = None,
                          idag: date | None = None) -> dict:
-    return berakna(_las(conn), fran, till, organ, idag or date.today())
+    ut = berakna(_las(conn), fran, till, organ, idag or date.today())
+    # Personsidan för varje namngiven motionär. Rättade har redan person_id, tolkade slås upp på namnet.
+    lista = ut["motioner"]["lista"]
+    personer = ledamoter.personer_for(conn, [p["namn"] for m in lista for p in m["motionarer"]
+                                            if p["namn"] and p.get("person_id") is None])
+    for m in lista:
+        m["motionarer"] = [p | {"person_id": p.get("person_id") or personer.get(p["namn"] or "")} for p in m["motionarer"]]
+    return ut
 
 
 def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: date) -> dict:
@@ -232,7 +240,21 @@ def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: da
         f = _forlopp(bs, idag, vackt, {"KF"})
         if not _i_urvalet(f, fran, till, organ):
             continue
-        motioner.append({"arende_id": arende_id, "rubrik": next(b["rubrik"] for b in bs if b["organ"] == "KF" or b is bs[-1]), "motionarer": _motionarer(bs)} | f)
+        # En rättelse av motionärerna hör till behandlingen där motionen väcktes, annars till ärendets
+        # första behandling (#78). Den ersätter tolkningens motionärer helt.
+        if vackt and vackt["grund"] == "beslut":
+            mal = {"sammantrade_id": vackt["sammantrade_id"], "paragraf": vackt["paragraf"]}
+        else:
+            mal = {"sammantrade_id": bs[0]["sammantrade_id"], "paragraf": bs[0]["paragraf"]}
+        tolkade = _motionarer(bs)
+        rattad = next((b["motionarer_rattelse"] for b in bs if b.get("motionarer_rattelse")
+                       and (b["sammantrade_id"], b["paragraf"]) == (mal["sammantrade_id"], mal["paragraf"])), None)
+        m = {"arende_id": arende_id, "rubrik": next(b["rubrik"] for b in bs if b["organ"] == "KF" or b is bs[-1]),
+             "motionarer": tolkade, "rattelsemal": mal}
+        if rattad:
+            m["motionarer"] = rattad["nytt"]
+            m["rattelser"] = {"motionarer": rattad | {"ursprungligt": tolkade}}
+        motioner.append(m | f)
 
     forslag = []
     for arende_id, bs in _arenden(rader, "medborgarforslag").items():

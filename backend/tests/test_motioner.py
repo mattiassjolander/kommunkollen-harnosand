@@ -125,7 +125,7 @@ def test_motioner_ur_protokollen(api):  # noqa: F811
     assert (ar["ar"], ar["vackta"], ar["besvarade"], ar["utfall"]["delvis"]) == (2026, 11, 1, 1)
     friskvard = next(m for m in s["motioner"]["lista"] if "friskvårdsbidraget" in m["rubrik"])
     assert friskvard["vackt"]["datum"] == "2026-03-23"
-    assert friskvard["motionarer"] == [{"namn": "Olle Löfgren", "parti": "L"}]
+    assert [(p["namn"], p["parti"]) for p in friskvard["motionarer"]] == [("Olle Löfgren", "L")]
     assert (friskvard["besvarad"], friskvard["over_ett_ar"]) == (None, False)
     assert friskvard["behandlingar"][0]["sammantrade"]["id"] == friskvard["vackt"]["sammantrade_id"]
     assert next(p for p in s["motioner"]["per_parti"] if p["parti"] == "L")["vackta"] == 3

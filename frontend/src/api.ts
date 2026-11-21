@@ -452,7 +452,12 @@ export interface Motionsstatistik {
   motioner: {
     per_ar: { ar: number; vackta: number; besvarade: number; utfall: Record<Motionsutfall, number> }[]
     per_parti: { parti: string; vackta: number; besvarade: number; utfall: Record<Motionsutfall, number> }[]
-    lista: (Forlopp & { motionarer: { namn: string | null; parti: string | null }[] })[]
+    lista: (Forlopp & {
+      motionarer: Motionar[]
+      /** Behandlingen som en rättelse av motionärerna hör till (#78). */
+      rattelsemal: { sammantrade_id: number; paragraf: number }
+      rattelser?: { motionarer?: Rattelsemarkering }
+    })[]
     utan_vackt: number
   }
   medborgarforslag: { lista: Forlopp[] }
@@ -601,6 +606,24 @@ function intervallparametrar(fran?: string, till?: string, organ?: string) {
 }
 export const hamtaBehandlingarAvTyp = (typ: string, fran?: string, till?: string, organ?: string) =>
   hamta<Statistikbehandling[]>(`/api/statistik/behandlingar/${typ}?${intervallparametrar(fran, till, organ)}`)
+/** En motionär: en person i registret med parti, eller ett parti utan namn (en partigrupp). */
+export interface Motionar {
+  person_id: number | null
+  namn: string | null
+  parti: string | null
+}
+
+/** Förslag på parti för en motionär vid sammanträdet där motionen väcktes, med källa (#78). */
+export interface Partiforslag {
+  parti: string | null
+  kalla: {
+    grund: 'narvaro' | 'samma_protokoll' | 'annat_protokoll'
+    sammantrade: { id: number; datum: string | null; organ: Organ } | null
+  } | null
+}
+export const hamtaMotionarParti = (personId: number, sammantradeId: number) =>
+  hamta<Partiforslag>(`/api/motionarer/parti?person_id=${personId}&sammantrade_id=${sammantradeId}`)
+
 export const hamtaMotionsstatistik = (fran?: string, till?: string, organ?: string) =>
   hamta<Motionsstatistik>(`/api/statistik/motioner?${intervallparametrar(fran, till, organ)}`)
 export const hamtaAterkommande = (fran?: string, till?: string, organ?: string) =>
@@ -763,7 +786,7 @@ export interface NyRattelse {
   paragraf?: number
   votering?: number
   namn?: string
-  falt: 'rubrik' | 'beslut' | 'diarienummer' | 'typ' | 'rost' | 'parti'
+  falt: 'rubrik' | 'beslut' | 'diarienummer' | 'typ' | 'rost' | 'parti' | 'motionarer'
   nytt: unknown
   motivering: string
 }

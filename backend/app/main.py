@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, protokoll, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -324,16 +324,22 @@ def create_app(
         return _rattelse(rattelser.lista, status)
 
     @app.post("/api/rattelser", status_code=201)
-    def skapa_rattelse(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
-        """En rättelse som utkast: {sammantrade_id, objekt, paragraf, votering, namn, falt, nytt, motivering}."""
+    def skapa_rattelse(data: dict, anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
+        """En rättelse som utkast: {sammantrade_id, objekt, paragraf, votering, namn, falt, nytt, motivering}.
+
+        Motionärer (#78) kan också skrivas av en utgivare. Övriga uppgifter rättas av en redaktör."""
+        if "redaktor" not in anv.roller and data.get("falt") != "motionarer":
+            raise HTTPException(403, "Kräver rollen redaktör")
         return _rattelse(rattelser.skapa, data, anv.epost)
 
+    # Ändra och ta bort: bara den som skrev utkastet (rattelser.py kontrollerar det).
     @app.patch("/api/rattelser/{rattelse_id}")
-    def andra_rattelse(rattelse_id: int, data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+    def andra_rattelse(rattelse_id: int, data: dict,
+                       anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
         return _rattelse(rattelser.andra, rattelse_id, data, anv.epost)
 
     @app.delete("/api/rattelser/{rattelse_id}", status_code=204)
-    def ta_bort_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> Response:
+    def ta_bort_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> Response:
         _rattelse(rattelser.ta_bort, rattelse_id, anv.epost)
         return Response(status_code=204)
 
@@ -420,6 +426,15 @@ def create_app(
     @app.post("/api/planforutsattningar/{pf_id}/publicering")
     def publicera_planforutsattningar(pf_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         return _budget(planforutsattningar.publicera, pf_id, anv.epost, datetime.now(timezone.utc))
+
+    @app.get("/api/motionarer/parti", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def motionarens_parti(person_id: int, sammantrade_id: int) -> dict:
+        """Förslag på parti för en motionär vid sammanträdet där motionen väcktes (#78), med källa."""
+        with db.connect(database_url) as conn:
+            try:
+                return motionarer.parti_for(conn, person_id, sammantrade_id)
+            except motionarer.Ogiltig as e:
+                raise HTTPException(404, str(e)) from e
 
     @app.get("/api/ledamoter", dependencies=[Depends(krav_roll("lasare"))])
     def lista_ledamoter(q: str | None = None, parti: str | None = None, organ: str | None = None) -> list[dict]:
