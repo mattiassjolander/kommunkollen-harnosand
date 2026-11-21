@@ -796,10 +796,27 @@ export interface Budgetresultat {
   procent: number
   sida?: number
 }
+/** En åtgärd eller satsning som förslaget anger för en ram (#57), nära originalets text. */
+export interface Budgetatgard {
+  text: string
+  /** Ramens förändring i mnkr, när förslaget anger ett belopp. */
+  mnkr?: number
+  /** Sidan i PDF:en. Saknas för ett Word-dokument. */
+  sida?: number
+}
 export interface Budgetram {
   organ: string
   mnkr: number
   sida?: number
+  atgarder?: Budgetatgard[]
+}
+/** Hur stor del av ramens förändring åtgärderna förklarar. */
+export interface Atgardstackning {
+  antal: number
+  /** Summan av åtgärdernas belopp, null om inget belopp anges. */
+  mnkr: number | null
+  /** Ramen ändras men förslaget anger inga åtgärder. */
+  saknas: boolean
 }
 /** Uppgifterna för budgetåret. */
 export interface Budgetuppgifter {
@@ -819,7 +836,7 @@ export interface Budgetberakning {
   skattesats: { procent: number | null; ore: number | null; plan: number | null }
   /** Skatteintäkternas förändring i mnkr. */
   skattejustering: number | null
-  ramar: { organ: string; mnkr: number; plan: number | null; forandring: number | null }[]
+  ramar: { organ: string; mnkr: number; plan: number | null; forandring: number | null; atgarder: Atgardstackning }[]
   /** Summan av förändringarna per nämnd. */
   forandring: number | null
   resultat: { procent: number; mnkr: number | null } | null

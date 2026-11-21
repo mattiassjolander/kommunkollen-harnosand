@@ -127,7 +127,8 @@ def test_l_2027_saknar_finansiering_for_20_mnkr():
         {"organ": "Kommungemensam verksamhet", "mnkr": 105, "sida": 8}, {"organ": "Samhällsnämnden", "mnkr": 235, "sida": 8},
         {"organ": "Skolnämnden", "mnkr": 703, "sida": 8}, {"organ": "Socialnämnden", "mnkr": 928, "sida": 8}]})
     assert b["skattesats"] == {"procent": 23.34, "ore": 0, "plan": 23.34}
-    assert {"organ": "Kommunstyrelsen", "mnkr": 150.0, "plan": 187.0, "forandring": -37.0} in b["ramar"]
+    assert {"organ": "Kommunstyrelsen", "mnkr": 150.0, "plan": 187.0, "forandring": -37.0,
+            "atgarder": {"antal": 0, "mnkr": None, "saknas": True}} in b["ramar"]
     assert (b["forandring"], b["beraknat"], b["resultat"]["mnkr"], b["differens"]) == (-10.0, 60.0, 80.0, 20.0)
     # Resultatet i mnkr räknas om till procent av skatter och bidrag (80 / 2 217).
     assert b["resultat"]["procent"] == 3.608
@@ -170,7 +171,8 @@ def test_ar_utan_planforutsattningar_visas_utan_forandring():
     assert u == {"skattesats": {"procent": 23.34}, "resultat": {"procent": 2.0},
                  "ramar": [{"organ": "Skolnämnden", "mnkr": 616.2}]}
     b = budgetforslag.berakning(u, None)
-    assert b["ramar"] == [{"organ": "Skolnämnden", "mnkr": 616.2, "plan": None, "forandring": None}]
+    assert b["ramar"] == [{"organ": "Skolnämnden", "mnkr": 616.2, "plan": None, "forandring": None,
+                           "atgarder": {"antal": 0, "mnkr": None, "saknas": False}}]
     assert (b["planforutsattningar"], b["beraknat"], b["differens"], b["resultat"]) == (False, None, None, {"procent": 2.0, "mnkr": None})
     # En förändring kan inte räknas om utan planförutsättningar.
     with pytest.raises(budgetforslag.Ogiltig, match="förändringen räknas bara om när planförutsättningarna för 2022 finns"):

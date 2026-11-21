@@ -156,7 +156,7 @@ _Avoid_: Anmärkning, påpekande
 Ett organs yttrande över en revisionsrapports rekommendationer.
 
 **Åtgärd**:
-Något ett organ har beslutat att göra med anledning av en rekommendation, med status beslutad, påbörjad, genomförd eller ej genomförd.
+Något ett organ har beslutat att göra med anledning av en rekommendation, med status beslutad, påbörjad, genomförd eller ej genomförd. Skilt från *åtgärd i ett budgetförslag*.
 
 ## Budget
 
@@ -185,6 +185,13 @@ _Avoid_: Utgångsläge, plan
 **Förändring**:
 Skillnaden mellan ett budgetförslags ram och planförutsättningarnas ram för samma organ och budgetår, i mnkr.
 _Avoid_: Politisk prioritering (som eget begrepp)
+
+**Åtgärd i ett budgetförslag**:
+En besparing eller satsning som ett budgetförslag anger för en ram, med text nära originalet, belopp i mnkr när förslaget anger det och sidan där den står. Den är förslagets egen uppgift och har ingen status. Skilt från revisionens *åtgärd*.
+_Avoid_: Satsning, besparing, prioritering (som egna begrepp)
+
+**Täckning**:
+Hur stor del av förändringen av en ram som åtgärderna i budgetförslaget förklarar: summan av åtgärdernas belopp mot förändringen. En ram som ändras utan några åtgärder markeras "Inga åtgärder anges".
 
 **Budgeterat resultat**:
 Det resultat ett budgetförslag budgeterar för budgetåret, i procent av skatteintäkter och generella bidrag och utjämning.
