@@ -58,6 +58,45 @@ inte publikt. Anger inget beslut datumen, t.ex. "att anta förslag till sammantr
 
 Planerade sammanträden räknas inte i statistiken och listas inte bland sammanträdena med protokoll.
 
+## Kalender och ics-flöden
+
+Sidan **Kalender** (`/kalender`, #68) visar sammanträdena för de fem organen:
+- kommande sammanträden i en lista, och de senaste 12 månaderna under "Tidigare sammanträden";
+- en månadsvy;
+- filter per organ;
+- inställda och borttagna sammanträden överstrukna.
+
+Organ, vy, månad och valt sammanträde står i URL:en.
+
+**Flöden** (`app/kalender.py`), öppna utan inloggning eftersom kalenderappar inte kan logga in:
+
+| Adress | Innehåll |
+| --- | --- |
+| `/kalender/alla.ics` | Alla fem organen |
+| `/kalender/kommunfullmaktige.ics`, `kommunstyrelsen`, `samhallsnamnden`, `socialnamnden`, `skolnamnden` | Ett organ |
+| `/kalender/sammantraden/<id>.ics` | Ett sammanträde, som fil att ladda ner |
+
+Flödena innehåller de kommande sammanträdena och de senaste 12 månaderna. Ett sammanträde utan datum (en
+månad som bara anges som inställd) ingår inte. Händelserna:
+
+- **UID:** `sammantrade-<id>@kommunkollen-harnosand`, stabilt eftersom sammanträdet behåller sitt id när
+  planen ändras och när protokollet kopplas.
+- **SEQUENCE:** planens version minus ett, plus ett när protokollet har kommit. En ändrad tid ger alltså ny
+  DTSTART och högre SEQUENCE med samma UID.
+- **Tid:** DTSTART och DTEND med `TZID=Europe/Stockholm` och en VTIMEZONE. Ett hållet sammanträde har
+  protokollets start- och sluttid. Ett planerat sammanträde har planens starttid, och sluttiden är starttiden
+  plus medianlängden för organets sammanträden enligt protokollen (3 timmar för fullmäktige och 4 för övriga
+  utan historik). Beskrivningen säger då att sluttiden är ungefärlig. Utan starttid blir det en heldag.
+- **Plats:** protokollets, annars platsen i organets senaste protokoll, och beskrivningen säger att den är antagen.
+- **Status:** ett inställt eller borttaget sammanträde finns kvar med `STATUS:CANCELLED` och "Inställt:" eller
+  "Borttaget ur planen:" i titeln.
+- **Beskrivning och URL:** länk till protokollet i Kommunkollen efter sammanträdet, annars till sammanträdet i
+  kalendern, samt till sammanträdesplanen på harnosand.se. Kallelse och webb-tv kommer i #68 del 3.
+
+Raderna avslutas med CRLF och viks vid 75 oktetter utan att dela ett UTF-8-tecken. Testerna läser flödena med
+biblioteket icalendar. I e2e-tester och lokalt låser `KOMMUNKOLLEN_IDAG` dagens datum. nginx och Vite skickar
+`/kalender/….ics` till backend.
+
 ## Paragrafprotokoll
 
 Ett paragrafprotokoll (filnamn med §, "utdrag", "direktjustering" eller "omedelbar justering") innehåller de paragrafer som justerades direkt. Hela protokollet är det primära:

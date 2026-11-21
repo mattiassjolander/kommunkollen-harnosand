@@ -1151,3 +1151,34 @@ export async function hamtaSammantradesplaner(): Promise<Sammantradesplan[]> {
   if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
   return svar.json()
 }
+
+// Kalendern över sammanträden (#68). Flödena ligger på /kalender/<flode>.ics och är öppna utan inloggning.
+export interface Kalenderhandelse {
+  id: number
+  uid: string
+  organ: { id: string; namn: string; flode: string }
+  datum: string
+  starttid: string | null
+  sluttid: string | null
+  sluttid_ungefarlig: boolean
+  plats: string | null
+  plats_antagen: boolean
+  status: 'planerat' | 'installt' | 'borttaget' | 'hallet'
+  protokoll: boolean
+  sekvens: number
+  andrad: string | null
+  plan_url: string | null
+}
+
+export interface Kalender {
+  idag: string
+  floden: { organ: string; namn: string; flode: string }[]
+  handelser: Kalenderhandelse[]
+}
+
+export async function hamtaKalender(): Promise<Kalender> {
+  const svar = await fetch('/api/kalender')
+  if (svar.status === 401) throw new EjInloggad()
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}

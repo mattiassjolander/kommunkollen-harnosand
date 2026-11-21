@@ -16,6 +16,7 @@ import BudgetutkastView from './views/politik/BudgetutkastView.vue'
 import BehandlingView from './views/politik/BehandlingView.vue'
 import KopplingarView from './views/politik/KopplingarView.vue'
 import SammantradesplanerView from './views/politik/SammantradesplanerView.vue'
+import KalenderView from './views/KalenderView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
 import LedamoterView from './views/politik/LedamoterView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
@@ -47,6 +48,7 @@ const router = createRouter({
     { path: '/politik/budgetutkast', component: BudgetutkastView, meta: { titel: 'Budgetutkast' } },
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
+    { path: '/kalender', component: KalenderView, meta: { titel: 'Kalender' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
   ],
 })
