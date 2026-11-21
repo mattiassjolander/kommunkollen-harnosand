@@ -47,6 +47,10 @@ test('diagrammet har en linje per cirkulär, tabellvy och CSV', async ({ page })
 
   await diagram.getByText('Visa som tabell').click()
   await expect(diagram.getByTestId('cirkulartabell').locator('tbody tr')).toHaveCount(5)
+  // Inklusive avräkning: för 2026 syns den ändrade slutavräkningen, fast summa intäkter är densamma.
+  const tabell = diagram.getByTestId('cirkulartabell')
+  await expect(tabell.locator('tr[data-cirkular="26:12"] td').first()).toHaveText(/2\s136,5 mnkr/)
+  await expect(tabell.locator('tr[data-cirkular="26:28"] td').first()).toHaveText(/2\s123,2 mnkr/)
 
   const nedladdning = page.waitForEvent('download')
   await diagram.getByTestId('exportera').click()
