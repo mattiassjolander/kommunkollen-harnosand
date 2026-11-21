@@ -247,6 +247,36 @@ export interface Flodesval {
   verksamhet?: string
 }
 
+/** En rad i SKR:s prognosunderlag, i tkr per år. */
+export interface Prognosrad {
+  id: string
+  etikett: string
+  tkr: Record<string, number>
+}
+/** SKR:s skatteunderlagsprognos för kommunen, publicerad med ett cirkulär (#61). */
+export interface Skatteunderlagsprognos {
+  cirkular: string
+  version: number
+  publicerad: string
+  /** Filen på SKR:s sida, källhänvisningen. */
+  url: string
+  filnamn: string
+  /** Skattesatsen prognosen räknar med, i procent. */
+  skattesats: number
+  ar: number[]
+  rader: Prognosrad[]
+  /** Antal invånare i kommunen enligt riksprognosen. */
+  invanare: Record<string, number>
+  hamtad: string
+}
+export interface Skatteunderlagsprognoser {
+  kommun: string
+  senaste: Skatteunderlagsprognos | null
+  /** Sorterade efter publiceringsdatum. */
+  prognoser: Skatteunderlagsprognos[]
+}
+export const hamtaSkatteunderlagsprognoser = () => hamta<Skatteunderlagsprognoser>('/api/skatteunderlagsprognoser')
+
 export function hamtaFloden(val: Flodesval = {}) {
   const q = new URLSearchParams(Object.entries(val).filter(([, v]) => v) as [string, string][])
   return hamta<Flodesmodell>(`/api/floden${q.size ? `?${q}` : ''}`)

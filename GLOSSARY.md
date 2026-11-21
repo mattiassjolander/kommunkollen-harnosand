@@ -193,6 +193,13 @@ _Avoid_: Satsning, besparing, prioritering (som egna begrepp)
 **Täckning**:
 Hur stor del av förändringen av en ram som åtgärderna i budgetförslaget förklarar: summan av åtgärdernas belopp mot förändringen. En ram som ändras utan några åtgärder markeras "Inga åtgärder anges".
 
+**Skatteunderlagsprognos**:
+SKR:s prognos av kommunens skatteintäkter och generella bidrag och utjämning per år, publicerad med ett cirkulär. Varje cirkulär är en egen prognos.
+_Avoid_: Skatteprognos, SKR-prognos
+
+**Cirkulär**:
+SKR:s numrerade utskick, t.ex. 26:28 (år 2026, nummer 28). Med varje skatteunderlagsprognos följer ett prognosunderlag för alla kommuner.
+
 **Budgeterat resultat**:
 Det resultat ett budgetförslag budgeterar för budgetåret, i procent av skatteintäkter och generella bidrag och utjämning.
 

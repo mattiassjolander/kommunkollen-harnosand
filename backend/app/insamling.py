@@ -13,6 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
+from . import skatteunderlag
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -109,8 +110,21 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
             fel.append(dokumentfel)
     if dokument_andrade:
         koppla(conn)
+    prognosdatum = []
+    for p in hamtning.prognosfiler:
+        utfall, prognosfel, publicerad = skatteunderlag.lagra(conn, p, korning_id, hamtad)
+        if utfall == "ny":
+            res.antal_nya += 1
+        elif utfall == "andrad":
+            res.antal_andrade += 1
+        elif not prognosfel:
+            res.antal_oforandrade += 1
+        if prognosfel:
+            fel.append(prognosfel)
+        if publicerad:
+            prognosdatum.append(publicerad)
     publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
-                                 *(u.kallans_publicering for u in hamtning.uppgifter)) if d]
+                                 *(u.kallans_publicering for u in hamtning.uppgifter), *prognosdatum) if d]
     res.senaste_publicering = max(publiceringar, default=None)
     if fel:
         res.status = "delvis_fel"

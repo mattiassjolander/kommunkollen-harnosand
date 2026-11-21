@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { EjInloggad, hamtaEkonomi, type Nyckeltalsgrupp } from '../api'
 import { STOR_FORANDRING, csv, laddaNer } from '../analys'
 import Nyckeltalskort from '../components/Nyckeltalskort.vue'
+import EkonomiFlikar from '../components/EkonomiFlikar.vue'
 
 const STANDARD_FRAN = 2022 // standardvisning enligt kravspec avsnitt 18
 
@@ -92,6 +93,7 @@ function exportera() {
       inflation. Kronor per invånare gör åren lättare att jämföra.
     </p>
   </header>
+  <EkonomiFlikar />
 
   <p v-if="laddar">Hämtar uppgifter…</p>
   <p v-else-if="fel" class="fel">Kunde inte hämta uppgifter: {{ fel }}</p>

@@ -29,6 +29,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       TESSDATA_PREFIX: /opt/tessdata
       KRAV_OCR: "1"
+      KRAV_LIBREOFFICE: "1"
     defaults:
       run:
         working-directory: backend
@@ -43,6 +44,9 @@ jobs:
           sudo curl -sSL -o /opt/tessdata/swe.traineddata https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/e12c65a915945e4c28e237a9b52bc4a8f39a0cec/swe.traineddata
           echo "360303308aa5d4a912ac3b3637691152b7532d9bd6e960639db1affb83db7ea9  /opt/tessdata/swe.traineddata" | sha256sum -c
           tesseract --list-langs | grep -x swe
+      # Omräkning av SKR:s skatteunderlagsprognos (#61), samma som i imagen.
+      - name: LibreOffice Calc
+        run: sudo apt-get install -y --no-install-recommends libreoffice-calc-nogui && soffice --version
       - run: uv sync --locked
       - run: uv run pytest -q
 
@@ -72,6 +76,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: uv sync --locked
         working-directory: backend
+      # Omräkning av SKR:s skatteunderlagsprognos (#61).
+      - name: LibreOffice Calc
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-calc-nogui
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
