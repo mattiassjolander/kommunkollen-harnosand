@@ -197,7 +197,7 @@ Skillnaden mellan ett budgetförslags ram och planförutsättningarnas ram för 
 _Avoid_: Politisk prioritering (som eget begrepp)
 
 **Åtgärd i ett budgetförslag**:
-En besparing eller satsning som ett budgetförslag anger för en ram, med text nära originalet, belopp i mnkr när förslaget anger det och sidan där den står. Den är förslagets egen uppgift och har ingen status. Skilt från revisionens *åtgärd*.
+En besparing eller satsning som ett budgetförslag anger för en ram, med text nära originalet, belopp i mnkr när förslaget anger det och sidan där den står. Ett negativt belopp är en besparing och ett positivt en satsning. Den är förslagets egen uppgift och har ingen status. Att ett förslag inte anger några åtgärder för en ram är också en avläst uppgift, skild från att åtgärderna inte är avlästa. Skilt från revisionens *åtgärd*.
 _Avoid_: Satsning, besparing, prioritering (som egna begrepp)
 
 **Täckning**:

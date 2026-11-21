@@ -76,6 +76,8 @@ En ram kan ha en lista `atgarder` med de besparingar och satsningar förslaget a
 | `mnkr` | Ramens förändring i mnkr för åtgärden, när förslaget anger ett belopp. Utelämnas annars. Negativt för en besparing. |
 | `sida` | Sidan i PDF:en. Krävs för en PDF och anges inte för ett Word-dokument. |
 
+**Avläst eller inte.** `"atgarder": []` betyder att redaktören har läst förslaget och att det inte anger några åtgärder för nämnden. Saknas fältet är åtgärderna inte avlästa, och det står så för läsaren. Läs därför av varje nämnd som förslaget tar upp, också en oförändrad.
+
 Åtgärderna står oftare i löptext än i tabeller, så avläsningen är mer tolkning än för ramarna. Därför krävs sidan. En åtgärd som inte går att knyta till en nämnd, till exempel en avgiftshöjning som inte anges per nämnd, tas inte med. En ogiltig åtgärd (utan text, med okänt fält, utan sida i en PDF) stoppar inläsningen med fil och fel.
 
 ### Summering
@@ -109,7 +111,7 @@ Applikationen räknar fram:
 - **Skatteintäkternas förändring:** skatteintäkterna × öre / 100 / skattesatsen. 10 öre 2027 är cirka −6,4 mnkr.
 - **Resultat i mnkr:** procenten av förslagets bas.
 - **Beräknat resultat:** planförutsättningarnas resultat − summan av förändringarna + skatteintäkternas förändring.
-- **Täckning** per nämnd: antalet åtgärder och summan av deras belopp, mot förändringen. En ram som ändras utan åtgärder markeras "Inga åtgärder anges".
+- **Täckning** per nämnd: antalet åtgärder och summan av deras belopp, mot förändringen. En ram som ändras utan åtgärder, enligt avläsningen, markeras "Inga åtgärder anges". En förändring under 0,05 mnkr är avrundning och räknas inte som en ändrad ram.
 - **Differens:** förslagets resultat i mnkr − det beräknade. Skiljer de sig saknar förslaget finansiering för skillnaden, eller redovisar den inte. Exempel 2027, mot kommunens planförutsättningar (resultat 50,3 mnkr, nämnderna 2 144,7 mnkr): L budgeterar cirka 80 mnkr men sparar bara 10,7 mnkr netto på ramarna (beräknat 61,0, differens 18,9), och SD räknar resultatet som skatter och bidrag minus ramar och utelämnar kostnaderna utanför nämnderna (beräknat 22,2, differens 22,2). M sänker skatten med 10 öre och går nästan ihop (differens −1,3).
 
 ## Inläsning
@@ -126,7 +128,7 @@ Kommandot läser först planförutsättningarna och sedan förslagen, och skapar
 
 Planförutsättningarna rättas i Excelfilen och läses in igen. Under Politik och beslut → Budgetutkast visas alla tabeller med källa och länk till sidan i förslaget, och kontrollsummorna: det angivna beloppet minus summan av posterna (±0 betyder att tabellen går ihop).
 
-En redaktör rättar ett förslags utkast på samma sida. En ram kan anges i mnkr eller som förändring. Under varje ram lägger redaktören till, ändrar och tar bort åtgärder, och utgivaren ser dem med belopp, sidlänk och täckning innan granskningen. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem (utkast → granskad → publicerad, kravspec 18, ADR-0002). Ändras ett granskat förslag blir det utkast igen.
+En redaktör rättar ett förslags utkast på samma sida. En ram kan anges i mnkr eller som förändring. Under varje ram lägger redaktören till, ändrar och tar bort åtgärder, och kryssar i Avläst när förslaget inte anger några för nämnden, och utgivaren ser dem med belopp, sidlänk och täckning innan granskningen. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem (utkast → granskad → publicerad, kravspec 18, ADR-0002). Ändras ett granskat förslag blir det utkast igen.
 
 ## Koppling till behandlingen
 
@@ -145,7 +147,14 @@ Förändringar och beräknat resultat visas först när årets planförutsättni
 
 **Behandling och summering:** sist i tabellen står behandlingen med länk till paragrafen, yrkandet och voteringarna. Under tabellen visas summeringarna bredvid varandra, en rad per fråga, märkta Analys.
 
-**Åtgärder:** läsaren öppnar en nämnd och ser, per förslag, åtgärderna med belopp och länk till sidan i originalet, och täckningen, till exempel "åtgärder för −3,0 av −3,0 mnkr". Ett förslag som ändrar ramen utan att ange åtgärder markeras "Inga åtgärder anges".
+**Åtgärder:** varje nämnd kan öppnas, en i taget eller alla på en gång med Visa alla åtgärder. Per förslag visas åtgärderna uppdelade i besparingar (negativt belopp), satsningar (positivt belopp) och åtgärder utan belopp, med länk till sidan i originalet, och täckningen, till exempel "åtgärder för −3,0 av −3,0 mnkr". Annars står varför det saknas åtgärder:
+
+| Text | Betyder |
+|---|---|
+| Inga åtgärder anges | Förslaget ändrar ramen men anger inga åtgärder för den. |
+| Inga besparingar eller satsningar anges | Förslaget anger inga åtgärder för nämnden och ändrar inte ramen. |
+| Åtgärderna är inte avlästa | Redaktionen har inte läst av åtgärderna för nämnden. |
+| Tar inte upp nämnden | Förslaget har ingen ram för nämnden. |
 
 **Differensanalys:** när den antagna budgeten för året finns visas skillnaden mot den per nämnd i kronor och procent, för resultatet i mnkr och för skattesatsen i öre.
 

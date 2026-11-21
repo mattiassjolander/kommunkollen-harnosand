@@ -2,8 +2,10 @@
 // Partiernas budgetförslag (#48) mot gemensamma planförutsättningar (#58): förslagen för ett budgetår
 // bredvid varandra, med ram och förändring per nämnd, skattesats, resultat och beräknat resultat.
 // Budgetåret speglas i URL:en (design.md, Filter). Varje siffra länkar till sidan i originalet.
-// Partier står i alfabetisk ordning (design.md). En nämnd kan öppnas och visar då förslagens åtgärder
-// och satsningar för ramen, med belopp, sidlänk och hur stor del av förändringen de förklarar (#57).
+// Partier står i alfabetisk ordning (design.md). Varje nämnd kan öppnas och visar då förslagens åtgärder
+// för ramen, uppdelade i besparingar och satsningar, med belopp, sidlänk och hur stor del av förändringen
+// de förklarar (#57). Anger ett förslag inga åtgärder för nämnden står det, och är åtgärderna inte avlästa
+// står det också.
 // Varje förslag länkar till behandlingen i fullmäktige där det ställdes, med partiets yrkande och
 // voteringarna, och summeringarna med samma frågor för alla förslag visas märkta Analys (#48).
 import { computed, inject, onMounted, ref, watch } from 'vue'
@@ -12,6 +14,7 @@ import {
   EjInloggad,
   hamtaBudget,
   hamtaBudgetar,
+  type Budgetatgard,
   type Budgetforslag,
   type Budgetjamforelse,
   type Differens,
@@ -82,8 +85,26 @@ function vaxla(o: string) {
   else ny.add(o)
   oppna.value = ny
 }
-const harAtgarder = (o: string) =>
-  forslag.value.some((f) => ram(f, o)?.atgarder?.length || berakning(f, o)?.atgarder.saknas)
+const allaOppna = computed(() => !!j.value?.organ.length && j.value.organ.every((o) => oppna.value.has(o)))
+function vaxlaAlla() {
+  oppna.value = allaOppna.value ? new Set() : new Set(j.value?.organ ?? [])
+}
+// Åtgärderna uppdelade efter beloppets tecken. En åtgärd utan belopp står för sig.
+function grupper(f: Budgetforslag, o: string): { rubrik: string; atgarder: Budgetatgard[] }[] {
+  const a = ram(f, o)?.atgarder ?? []
+  return [
+    { rubrik: 'Besparingar', atgarder: a.filter((x) => x.mnkr !== undefined && x.mnkr < 0) },
+    { rubrik: 'Satsningar', atgarder: a.filter((x) => x.mnkr !== undefined && x.mnkr > 0) },
+    { rubrik: 'Utan belopp', atgarder: a.filter((x) => !x.mnkr) },
+  ].filter((g) => g.atgarder.length)
+}
+// Varför en nämnd saknar åtgärder i förslaget. En ändrad ram utan åtgärder står i täckningen.
+function atgardsstatus(f: Budgetforslag, o: string): string | null {
+  const r = ram(f, o)
+  if (!r) return 'Tar inte upp nämnden'
+  if (r.atgarder?.length || berakning(f, o)?.atgarder.saknas) return null
+  return r.atgarder ? 'Inga besparingar eller satsningar anges' : 'Åtgärderna är inte avlästa'
+}
 // "åtgärder för −3,0 av −3,0 mnkr", eller att förslaget ändrar ramen utan att ange några.
 function tackningstext(f: Budgetforslag, o: string): string | null {
   const b = berakning(f, o)
@@ -161,6 +182,12 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
           Planförutsättningarna för {{ j.budgetar }} finns inte här, så förslagens ramar visas utan förändring och utan
           beräknat resultat.
         </p>
+        <p class="forklaring">
+          Öppna en nämnd för att se förslagens besparingar och satsningar för ramen, med belopp och sida i originalet.
+          <button type="button" class="vaxla" data-testid="visa-alla-atgarder" :aria-pressed="allaOppna" @click="vaxlaAlla">
+            {{ allaOppna ? 'Dölj alla åtgärder' : 'Visa alla åtgärder' }}
+          </button>
+        </p>
 
         <div class="rulla">
           <table class="tabell" data-testid="budgetjamforelse">
@@ -186,7 +213,6 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
               <tr :data-organ="o">
                 <th scope="row">
                   <button
-                    v-if="harAtgarder(o)"
                     type="button"
                     class="vaxla"
                     :aria-expanded="oppna.has(o)"
@@ -196,7 +222,6 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
                   >
                     <span aria-hidden="true">{{ oppna.has(o) ? '▾' : '▸' }}</span> {{ o }}
                   </button>
-                  <template v-else>{{ o }}</template>
                 </th>
                 <td v-if="plan" class="num plan">{{ planram(o) ? tal(planram(o)!.mnkr, 'mnkr') : '–' }}</td>
                 <td v-for="f in j.forslag" :key="f.id" class="num">
@@ -209,16 +234,20 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
                 </td>
               </tr>
               <tr v-if="oppna.has(o)" :id="`atgarder-${o}`" class="atgarder" :data-atgarder="o">
-                <th scope="row" class="atgardsrubrik">Åtgärder</th>
+                <th scope="row" class="atgardsrubrik">Besparingar och satsningar</th>
                 <td v-if="plan" class="plan" />
                 <td v-for="f in j.forslag" :key="f.id" data-testid="atgarder">
-                  <ul v-if="ram(f, o)?.atgarder?.length" class="atgardslista">
-                    <li v-for="(a, i) in ram(f, o)!.atgarder" :key="i">
-                      <span class="atgardstext">{{ a.text }}</span>
-                      <span v-if="a.mnkr !== undefined" class="atgardsbelopp">{{ talforandring(a.mnkr, 'mnkr') }}</span>
-                      <a v-if="a.sida" v-bind="lank(f, a.sida)" class="sidlank">s. {{ a.sida }}</a>
-                    </li>
-                  </ul>
+                  <template v-for="g in grupper(f, o)" :key="g.rubrik">
+                    <span class="atgardsgrupp" data-testid="atgardsgrupp">{{ g.rubrik }}</span>
+                    <ul class="atgardslista">
+                      <li v-for="(a, i) in g.atgarder" :key="i">
+                        <span class="atgardstext">{{ a.text }}</span>
+                        <span v-if="a.mnkr !== undefined" class="atgardsbelopp">{{ talforandring(a.mnkr, 'mnkr') }}</span>
+                        <a v-if="a.sida" v-bind="lank(f, a.sida)" class="sidlank">s. {{ a.sida }}</a>
+                      </li>
+                    </ul>
+                  </template>
+                  <span v-if="atgardsstatus(f, o)" class="saknas" data-testid="atgardsstatus">{{ atgardsstatus(f, o) }}</span>
                   <span
                     v-if="tackningstext(f, o)"
                     :class="berakning(f, o)?.atgarder.saknas ? 'saknas' : 'diff'"
@@ -592,6 +621,12 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
 .atgardsrubrik {
   font-weight: 400 !important;
   color: var(--ink-secondary);
+}
+.atgardsgrupp {
+  display: block;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin-bottom: 2px;
 }
 .atgardslista {
   list-style: none;

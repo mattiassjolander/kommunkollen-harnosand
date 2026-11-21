@@ -139,12 +139,14 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
   await expect(visa).toHaveAttribute('aria-expanded', 'true')
   const atg = tabell.locator('tr[data-atgarder="Kommunstyrelsen"] [data-testid="atgarder"]')
   await expect(atg).toHaveCount(4)
+  await expect(atg.nth(2).getByTestId('atgardsgrupp')).toHaveText(['Besparingar'])
   await expect(atg.nth(2)).toContainText('Budgetminskning med 20 % Kommunstyrelseförvaltningen')
   await expect(atg.nth(2)).toContainText('−37,0 mnkr')
   await expect(atg.nth(2).getByRole('link', { name: 's. 1' })).toHaveAttribute('href', /\/api\/budgetforslag\/\d+\/original#page=1$/)
   await expect(atg.nth(2).getByTestId('tackning')).toHaveText('åtgärder för −37,0 av −37,0 mnkr')
-  // Liberalerna ändrar ramen utan att ange åtgärder.
-  await expect(atg.nth(1).getByTestId('tackning')).toHaveText('Inga åtgärder anges')
+  // Liberalernas åtgärder är inte avlästa, och det står i stället för att ramen saknar åtgärder.
+  await expect(atg.nth(1).getByTestId('atgardsstatus')).toHaveText('Åtgärderna är inte avlästa')
+  await expect(atg.nth(1).getByTestId('tackning')).toHaveCount(0)
   if (rattad) {
     await tabell.locator('tr[data-organ="Kommungemensam verksamhet"]').getByTestId('visa-atgarder').click()
     await expect(tabell.locator('tr[data-atgarder="Kommungemensam verksamhet"] [data-testid="atgarder"]').nth(2))
@@ -152,9 +154,21 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
   }
   // Socialnämnden: Moderaternas åtgärd har inget belopp.
   await tabell.locator('tr[data-organ="Socialnämnden"]').getByTestId('visa-atgarder').click()
-  await expect(tabell.locator('tr[data-atgarder="Socialnämnden"] [data-testid="tackning"]').nth(2)).toHaveText('1 åtgärd utan belopp')
+  const soc = tabell.locator('tr[data-atgarder="Socialnämnden"] [data-testid="atgarder"]').nth(2)
+  await expect(soc.getByTestId('atgardsgrupp')).toHaveText(['Utan belopp'])
+  await expect(soc.getByTestId('tackning')).toHaveText('1 åtgärd utan belopp')
   await visa.click()
   await expect(tabell.locator('tr[data-atgarder="Kommunstyrelsen"]')).toHaveCount(0)
+
+  // Alla nämnder kan öppnas på en gång. Moderaterna ändrar inte Kommunfullmäktiges ram och anger inga
+  // åtgärder för den, och SD tar upp alla nämnder men har inga avlästa åtgärder.
+  await page.getByTestId('visa-alla-atgarder').click()
+  await expect(tabell.locator('tr.atgarder')).toHaveCount(await tabell.locator('tr[data-organ]').count())
+  const kf = tabell.locator('tr[data-atgarder="Kommunfullmäktige"] [data-testid="atgarder"]')
+  await expect(kf.nth(2).getByTestId('atgardsstatus')).toHaveText('Inga besparingar eller satsningar anges')
+  await expect(kf.nth(3).getByTestId('atgardsstatus')).toHaveText('Åtgärderna är inte avlästa')
+  await page.getByTestId('visa-alla-atgarder').click()
+  await expect(tabell.locator('tr.atgarder')).toHaveCount(0)
 
   // Behandlingen där förslagen ställdes. Protokollet är inte insamlat här, så hänvisningen står utan länk.
   const beh = tabell.locator('tr[data-rad="behandling"] [data-testid="behandling"]')

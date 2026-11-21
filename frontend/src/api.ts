@@ -896,7 +896,9 @@ export interface Atgardstackning {
   antal: number
   /** Summan av åtgärdernas belopp, null om inget belopp anges. */
   mnkr: number | null
-  /** Ramen ändras men förslaget anger inga åtgärder. */
+  /** Redaktören har läst av åtgärderna för ramen. En tom lista betyder att förslaget inte anger några. */
+  avlast: boolean
+  /** Ramen ändras men förslaget anger enligt avläsningen inga åtgärder. */
   saknas: boolean
 }
 /** Hänvisningen till behandlingen där förslaget ställdes. */

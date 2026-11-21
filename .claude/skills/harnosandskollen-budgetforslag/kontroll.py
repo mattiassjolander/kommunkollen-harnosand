@@ -6,8 +6,9 @@ Läser mappen på samma sätt som inläsningen (`app.budgetforslag.las_mapp`), s
 inläsningen stoppar också kontrollen. Skriver per budgetår:
 
 - kontrollsummorna i planförutsättningarna,
-- per förslag: skattesats, budgeterat och beräknat resultat med differens, ram och förändring per nämnd,
-  åtgärdernas täckning, och vilken version av planförutsättningarna förslaget räknat från.
+- per förslag: skattesats, budgeterat och beräknat resultat med skillnaden, ram och förändring per nämnd,
+  åtgärdernas täckning (en nämnd vars åtgärder inte är avlästa avviker), och vilken version av
+  planförutsättningarna förslaget räknat från.
 
 Rader som behöver en anmärkning eller en rättelse märks AVVIKER.
 """
@@ -97,10 +98,14 @@ def forslaget(f: bf.Forslag, ra: dict, nt: dict | None) -> None:
     print("  ramar (mnkr, plan, förändring, åtgärder):")
     for r in b["ramar"]:
         t = r["atgarder"]
-        tackning = "inga åtgärder anges" if t["saknas"] else (
-            f"{t['antal']} {'åtgärd' if t['antal'] == 1 else 'åtgärder'} för {_tal(t['mnkr'])}" if t["antal"] else "")
-        print(f"    {r['organ']}: {_tal(r['mnkr'])}, {_tal(r['plan'])}, {_tal(r['forandring'])}"
-              f"{', ' + tackning if tackning else ''}{_flagga(nt is not None and r['plan'] is None)}")
+        if not t["avlast"]:
+            tackning = "åtgärderna är inte avlästa"
+        elif t["antal"]:
+            tackning = (f"{t['antal']} {'åtgärd' if t['antal'] == 1 else 'åtgärder'} " + (f"för {_tal(t['mnkr'])}" if t['mnkr'] is not None else "utan belopp"))
+        else:
+            tackning = "inga åtgärder anges"
+        print(f"    {r['organ']}: {_tal(r['mnkr'])}, {_tal(r['plan'])}, {_tal(r['forandring'])}, {tackning}"
+              f"{_flagga((nt is not None and r['plan'] is None) or not t['avlast'])}")
     if nt is not None:
         tas_inte_upp = [o for o in nt["ramar"] if o not in {r["organ"] for r in b["ramar"]}]
         if tas_inte_upp:

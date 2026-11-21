@@ -83,7 +83,7 @@ def test_verkliga_forslag_lases_in_som_utkast(api, database_url, monkeypatch, ca
     # Ett förslag som bara anger förändringar lagras med ramarna i mnkr, skatten i öre.
     m = f["M"]["uppgifter"]
     assert m["skattesats"] == {"ore": -10, "sida": 1}
-    assert {"organ": "Kommungemensam verksamhet", "mnkr": 143.0, "sida": 1} in m["ramar"]
+    assert {"organ": "Kommungemensam verksamhet", "mnkr": 143.0, "sida": 1, "atgarder": []} in m["ramar"]
     # Ett resultat i mnkr lagras i procent av planförutsättningarnas skatter och bidrag.
     assert f["L"]["uppgifter"]["resultat"] == {"procent": 3.608, "sida": 1}
     # Redaktionen ser beräkningen mot planförutsättningarna redan som utkast.
@@ -162,7 +162,7 @@ def test_redaktor_rattar_och_ingen_godkanner_sitt_eget(api, database_url, monkey
     assert (ny["status"], ny["redaktorer"]) == ("utkast", ["test-utgivare@kommunkollen.test", "test-redaktor+utgivare@kommunkollen.test"])
     assert {"organ": "Skolnämnden", "mnkr": 704.0, "sida": 1} in ny["uppgifter"]["ramar"]
     assert {"organ": "Skolnämnden", "mnkr": 704.0, "plan": 663.0, "forandring": 41.0,
-            "atgarder": {"antal": 0, "mnkr": None, "saknas": True}} in ny["berakning"]["ramar"]
+            "atgarder": {"antal": 0, "mnkr": None, "avlast": False, "saknas": False}} in ny["berakning"]["ramar"]
     # Det som lästes in finns kvar att jämföra med.
     assert {"organ": "Skolnämnden", "mnkr": 703.0, "sida": 1} in ny["inlast"]["ramar"]
     egen = api.post(f"/api/budgetforslag/{lid}/granskning")
@@ -221,7 +221,7 @@ def test_lasaren_ser_forandringarna_forst_nar_planforutsattningarna_ar_publicera
     # L budgeterar 80 mnkr men ramarna sparar bara 10 mnkr: cirka 20 mnkr saknar finansiering.
     b = l["berakning"]
     assert {"organ": "Kommunstyrelsen", "mnkr": 150.0, "plan": 187.0, "forandring": -37.0,
-            "atgarder": {"antal": 0, "mnkr": None, "saknas": True}} in b["ramar"]
+            "atgarder": {"antal": 0, "mnkr": None, "avlast": False, "saknas": False}} in b["ramar"]
     assert (b["forandring"], b["plan_resultat"], b["beraknat"], b["resultat"]["mnkr"], b["differens"]) == (-10.0, 50.0, 60.0, 80.0, 20.0)
     # SD utelämnar kostnaderna utanför nämnderna: cirka 22 mnkr.
     assert sd["berakning"]["beraknat"] == 21.2
@@ -402,14 +402,19 @@ def test_atgarder_per_namnd(api, database_url, monkeypatch, capsys):
     assert ramar["Kommunstyrelsen"]["atgarder"] == [{
         "text": "Budgetminskning med 20 % Kommunstyrelseförvaltningen. Fokus på styrning, uppföljning och samordning.",
         "mnkr": -37.0, "sida": 1}]
-    # En åtgärd utan belopp, och en ram utan åtgärder lagras utan fältet.
+    # En åtgärd utan belopp. En ram där förslaget inte anger några åtgärder har en tom lista, och en ram
+    # vars åtgärder inte är avlästa saknar fältet.
     assert ramar["Socialnämnden"]["atgarder"][0].keys() == {"text", "sida"}
-    assert "atgarder" not in ramar["Kommungemensam verksamhet"]
+    assert ramar["Kommungemensam verksamhet"]["atgarder"] == []
+    l_ramar = {r["organ"]: r for r in utkast(api)["L"]["uppgifter"]["ramar"]}
+    assert "atgarder" not in l_ramar["Kommunstyrelsen"]
     # Utgivaren ser åtgärderna och täckningen redan i utkastet, före granskningen.
     tack = {r["organ"]: r["atgarder"] for r in m["berakning"]["ramar"]}
-    assert tack["Kommunstyrelsen"] == {"antal": 1, "mnkr": -37.0, "saknas": False}
-    assert tack["Socialnämnden"] == {"antal": 1, "mnkr": None, "saknas": False}
-    assert tack["Kommungemensam verksamhet"] == {"antal": 0, "mnkr": None, "saknas": True}
+    assert tack["Kommunstyrelsen"] == {"antal": 1, "mnkr": -37.0, "avlast": True, "saknas": False}
+    assert tack["Socialnämnden"] == {"antal": 1, "mnkr": None, "avlast": True, "saknas": False}
+    assert tack["Kommungemensam verksamhet"] == {"antal": 0, "mnkr": None, "avlast": True, "saknas": True}
+    # Moderaterna ändrar inte Kommunfullmäktiges ram och anger inga åtgärder för den.
+    assert tack["Kommunfullmäktige"] == {"antal": 0, "mnkr": None, "avlast": True, "saknas": False}
 
     # Redaktören lägger till, ändrar och tar bort åtgärder.
     logga_in(api, "redaktor")
@@ -425,9 +430,10 @@ def test_atgarder_per_namnd(api, database_url, monkeypatch, capsys):
     svar = api.patch(f"/api/budgetforslag/{m['id']}", json={"uppgifter": {**m["uppgifter"], "ramar": ny_ramar}})
     assert svar.status_code == 200, svar.text
     tack = {r["organ"]: r["atgarder"] for r in svar.json()["berakning"]["ramar"]}
-    assert tack["Kommungemensam verksamhet"] == {"antal": 1, "mnkr": -3.0, "saknas": False}
+    assert tack["Kommungemensam verksamhet"] == {"antal": 1, "mnkr": -3.0, "avlast": True, "saknas": False}
     assert tack["Kommunstyrelsen"]["mnkr"] == -30.0
-    assert tack["Samhällsnämnden"] == {"antal": 0, "mnkr": None, "saknas": True}
+    # Utan fältet är åtgärderna inte längre avlästa.
+    assert tack["Samhällsnämnden"] == {"antal": 0, "mnkr": None, "avlast": False, "saknas": False}
     fel = api.patch(f"/api/budgetforslag/{m['id']}", json={"uppgifter": {"ramar": [
         {"organ": "Skolnämnden", "forandring": 1, "sida": 1, "atgarder": [{"text": " ", "sida": 1}]}]}})
     assert (fel.status_code, fel.json()["detail"]) == (422, "ram 1 (Skolnämnden), åtgärd 1: text saknas")
@@ -438,7 +444,7 @@ def test_atgarder_per_namnd(api, database_url, monkeypatch, capsys):
     [skola] = [r for r in m["uppgifter"]["ramar"] if r["organ"] == "Skolnämnden"]
     assert skola["atgarder"][0]["mnkr"] == 15.0 and skola["atgarder"][0]["sida"] == 1
     [b] = [r for r in m["berakning"]["ramar"] if r["organ"] == "Skolnämnden"]
-    assert (b["forandring"], b["atgarder"]) == (15.0, {"antal": 1, "mnkr": 15.0, "saknas": False})
+    assert (b["forandring"], b["atgarder"]) == (15.0, {"antal": 1, "mnkr": 15.0, "avlast": True, "saknas": False})
 
 
 def test_summering_med_samma_mall(api, database_url, monkeypatch, capsys):

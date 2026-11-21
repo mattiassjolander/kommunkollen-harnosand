@@ -46,7 +46,8 @@ interface Formular {
   anmarkning: string
   skatt: { ore: string; sida: string }
   resultat: { procent: string; sida: string }
-  ramar: { organ: string; mnkr: string; forandring: string; sida: string; atgarder: Atgardsfalt[] }[]
+  // `avlast`: åtgärderna är avlästa. Utan åtgärder betyder det att förslaget inte anger några.
+  ramar: { organ: string; mnkr: string; forandring: string; sida: string; avlast: boolean; atgarder: Atgardsfalt[] }[]
   behandling: { organ: string; datum: string; paragraf: string }
   summering: Record<string, Svarsfalt>
 }
@@ -99,6 +100,7 @@ function oppna(f: Budgetutkast) {
       mnkr: s(r.mnkr),
       forandring: '',
       sida: s(r.sida),
+      avlast: r.atgarder !== undefined,
       atgarder: (r.atgarder ?? []).map((a) => ({ text: a.text, mnkr: s(a.mnkr), sida: s(a.sida) })),
     })),
     behandling: { organ: u.behandling?.organ ?? 'KF', datum: u.behandling?.datum ?? '', paragraf: s(u.behandling?.paragraf) },
@@ -128,7 +130,7 @@ function uppgifter(f: Formular, u: Budgetutkast['uppgifter']): Budgetuppgifterin
       const ram = r.mnkr.trim()
         ? { organ: r.organ, mnkr: tal(r.mnkr), sida: tal(r.sida) }
         : { organ: r.organ, forandring: tal(r.forandring), sida: tal(r.sida) }
-      return atgarder.length ? { ...ram, atgarder } : ram
+      return atgarder.length || r.avlast ? { ...ram, atgarder } : ram
     }),
     // Behandlingen skickas när datum eller paragraf är ifyllt, summeringen när något svar är ifyllt.
     ...(f.behandling.datum.trim() || f.behandling.paragraf.trim()
@@ -324,6 +326,8 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
                     <td class="kalla" data-testid="tackning">
                       <template v-if="tackning(f, r.organ)?.saknas">Inga åtgärder anges</template>
                       <template v-else-if="tackning(f, r.organ)?.mnkr != null">åtgärder för {{ fr(tackning(f, r.organ)!.mnkr!) }} mnkr</template>
+                      <template v-else-if="r.atgarder === undefined">Åtgärderna är inte avlästa</template>
+                      <template v-else-if="!r.atgarder.length">Inga besparingar eller satsningar anges</template>
                     </td>
                   </tr>
                   <tr v-for="(a, i) in r.atgarder ?? []" :key="`${r.organ}-${i}`" class="atgard" data-testid="atgard">
@@ -389,7 +393,8 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
             <table class="redigera">
               <caption>
                 Ramar per nämnd {{ f.budgetar }}. Ange mnkr, eller lämna tomt och ange förändringen mot planförutsättningarna.
-                Åtgärderna skrivs nära originalets text, med beloppet om förslaget anger det.
+                Åtgärderna skrivs nära originalets text, med beloppet om förslaget anger det. Kryssa i Avläst när
+                förslaget inte anger några åtgärder för nämnden.
               </caption>
               <thead><tr><th>Nämnd</th><th>Mnkr</th><th>Förändring, mnkr</th><th>Sida</th><th /></tr></thead>
               <tbody>
@@ -400,6 +405,7 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
                     <td><input v-model="r.forandring" inputmode="decimal" :disabled="!!r.mnkr.trim()" /></td>
                     <td><input v-model="r.sida" class="kort-falt" /></td>
                     <td>
+                      <label class="kryss"><input v-model="r.avlast" type="checkbox" :disabled="r.atgarder.length > 0" data-testid="avlast" /> Avläst</label>
                       <button type="button" @click="form.ramar.splice(i, 1)">Ta bort</button>
                       <button type="button" data-testid="lagg-till-atgard" @click="r.atgarder.push({ text: '', mnkr: '', sida: '' })">Lägg till åtgärd</button>
                     </td>
@@ -414,7 +420,7 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
                 </template>
               </tbody>
             </table>
-            <button type="button" @click="form.ramar.push({ organ: '', mnkr: '', forandring: '', sida: '', atgarder: [] })">Lägg till ram</button>
+            <button type="button" @click="form.ramar.push({ organ: '', mnkr: '', forandring: '', sida: '', avlast: false, atgarder: [] })">Lägg till ram</button>
 
             <fieldset class="grupp">
               <legend>Behandling där förslaget ställdes</legend>
