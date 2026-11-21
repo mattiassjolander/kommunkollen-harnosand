@@ -37,7 +37,7 @@ const router = createRouter({
       meta: { titel: 'Behandling' },
     },
     { path: '/politik/arenden/:id', component: ArendeView, meta: { titel: 'Ärende' } },
-    { path: '/politik/kopplingar', component: KopplingarView, meta: { titel: 'Kopplingsförslag' } },
+    { path: '/politik/kopplingar', component: KopplingarView, meta: { titel: 'Kopplingar' } },
     { path: '/politik/rattelser', component: RattelserView, meta: { titel: 'Rättelser' } },
     { path: '/politik/statistik', component: StatistikView, meta: { titel: 'Statistik' } },
     { path: '/politik/avvikelser', component: AvvikelserView, meta: { titel: 'Avvikelser i protokollen' } },
