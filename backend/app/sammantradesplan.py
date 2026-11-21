@@ -353,3 +353,45 @@ def skillnader(sammantraden: list[dict], beslutade: dict[date, str | None]) -> l
         elif s and beslut[d] and s["starttid"] and s["starttid"] != beslut[d]:
             ut.append({"datum": d, "typ": "tid", "sidan": s["starttid"], "beslutet": beslut[d]})
     return ut
+
+
+# Kallelser och webbsändningar (#68, del 3)
+
+
+def lagra_kallelser(conn: psycopg.Connection, kallelser: list, webbsandningar: list, korning_id: int | None,
+                    hamtad: datetime) -> dict[str, int]:
+    """Sparar kallelser och webbsändningar. En kallelse som lästs behåller sin plats även när den inte läses igen."""
+    antal = {"nya": 0, "andrade": 0, "oforandrade": 0}
+    for k in kallelser:
+        fore = conn.execute("SELECT tid, plats, pdf_last FROM kallelse WHERE url = %s", (k.url,)).fetchone()
+        if fore is None:
+            conn.execute(
+                """
+                INSERT INTO kallelse (organ, datum, tid, typ, titel, url, storlek, plats, pdf_last, forst_sedd,
+                                      senast_sedd, korning_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (k.organ, k.datum, k.tid, k.typ, k.titel, k.url, k.storlek, k.plats, k.pdf_last, hamtad, hamtad,
+                 korning_id),
+            )
+            antal["nya"] += 1
+            continue
+        if k.pdf_last and not fore["pdf_last"]:
+            conn.execute("UPDATE kallelse SET tid = %s, plats = %s, pdf_last = true, senast_sedd = %s WHERE url = %s",
+                         (k.tid or fore["tid"], k.plats, hamtad, k.url))
+            antal["andrade"] += 1
+        else:
+            conn.execute("UPDATE kallelse SET senast_sedd = %s WHERE url = %s", (hamtad, k.url))
+            antal["oforandrade"] += 1
+    for w in webbsandningar:
+        rad = conn.execute(
+            """
+            INSERT INTO webbsandning (organ, datum, url, titel, forst_sedd, senast_sedd, korning_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (url) DO UPDATE SET senast_sedd = EXCLUDED.senast_sedd
+            RETURNING (xmax = 0) AS ny
+            """,
+            (w.organ, w.datum, w.url, w.titel, hamtad, hamtad, korning_id),
+        ).fetchone()
+        antal["nya" if rad["ny"] else "oforandrade"] += 1
+    return antal

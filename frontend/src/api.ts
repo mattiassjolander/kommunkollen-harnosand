@@ -1163,7 +1163,11 @@ export interface Kalenderhandelse {
   sluttid_ungefarlig: boolean
   plats: string | null
   plats_antagen: boolean
+  plats_kalla: 'protokoll' | 'kallelse' | 'antagen' | null
   status: 'planerat' | 'installt' | 'borttaget' | 'hallet'
+  kallelse: { titel: string; url: string; typ: 'kungorelse' | 'kallelse' } | null
+  handlingar: { titel: string; url: string; storlek: number | null }[]
+  webbsandning: { url: string; inspelning: boolean } | null
   protokoll: boolean
   sekvens: number
   andrad: string | null

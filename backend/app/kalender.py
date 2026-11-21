@@ -22,7 +22,9 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from .sammantradesplan import narmast
 from .sources.harnosand import ORGAN
+from .sources.kallelser import WEBB_TV
 
 TZ = ZoneInfo("Europe/Stockholm")
 SLUG = {
@@ -107,7 +109,8 @@ def handelser(conn: psycopg.Connection, organ: str | None = None, sammantrade_id
         if sluttid is None and (start := _minuter(starttid)) is not None:
             slut = min(start + langd.get(r["organ"], STANDARDLANGD_MINUTER.get(r["organ"], 240)), 23 * 60 + 59)
             sluttid = f"{slut // 60:02d}:{slut % 60:02d}"
-        plats, antagen = (r["plats"], False) if hallet and r["plats"] else (platser.get(r["organ"]), True)
+        # Platsen: protokollets, annars kallelsens (se _koppla_kallelser), annars organets senaste protokoll.
+        plats, kalla = (r["plats"], "protokoll") if hallet and r["plats"] else (platser.get(r["organ"]), "antagen")
         status = r["plan_status"] if r["plan_status"] in ("installt", "borttaget") and not hallet else (
             "hallet" if hallet else "planerat")
         andrad = max((t for t in (r["plan_andrad"], r["protokoll_hamtad"]) if t), default=None)
@@ -120,14 +123,59 @@ def handelser(conn: psycopg.Connection, organ: str | None = None, sammantrade_id
             "sluttid": sluttid if starttid else None,
             "sluttid_ungefarlig": bool(starttid) and ungefarlig,
             "plats": plats,
-            "plats_antagen": bool(plats) and antagen,
+            "plats_antagen": bool(plats) and kalla == "antagen",
+            "plats_kalla": kalla if plats else None,
             "status": status,
             "protokoll": hallet,
             "sekvens": max((r["plan_version"] or 1) - 1, 0) + (1 if hallet and r["plan_nyckel"] else 0),
             "andrad": andrad.isoformat() if andrad else None,
             "plan_url": r["plan_url"],
+            "kallelse": None,
+            "handlingar": [],
+            "webbsandning": None,
         })
+    _koppla_kallelser(conn, ut)
     return ut
+
+
+def _koppla_kallelser(conn: psycopg.Connection, handelser_: list[dict]) -> None:
+    """Kallelser, handlingar och webbsändningar till sammanträdena: samma organ och datum. Har organet flera
+    sammanträden samma dag går en kallelse med klockslag till det som ligger närmast i tid."""
+    if not handelser_:
+        return
+    per_dag: dict[tuple[str, str], list[dict]] = {}
+    for h in handelser_:
+        per_dag.setdefault((h["organ"]["id"], h["datum"]), []).append(h)
+    datum = sorted({date.fromisoformat(h["datum"]) for h in handelser_})
+    for k in conn.execute(
+        """
+        SELECT organ, datum, tid, typ, titel, url, storlek, plats FROM kallelse
+        WHERE datum BETWEEN %s AND %s ORDER BY forst_sedd, id
+        """,
+        (datum[0], datum[-1]),
+    ):
+        dagens = per_dag.get((k["organ"], k["datum"].isoformat()), [])
+        mal = [narmast(k["tid"], dagens)] if k["tid"] and len(dagens) > 1 else dagens
+        for h in (x for x in mal if x is not None):
+            if k["typ"] == "handlingar":
+                h["handlingar"].append({"titel": k["titel"], "url": k["url"], "storlek": k["storlek"]})
+                continue
+            # Den senast publicerade kallelsen gäller.
+            h["kallelse"] = {"titel": k["titel"], "url": k["url"], "typ": k["typ"]}
+            if k["plats"] and h["plats_kalla"] != "protokoll":
+                h["plats"], h["plats_kalla"], h["plats_antagen"] = k["plats"], "kallelse", False
+    inspelningar = {r["datum"].isoformat(): r["url"] for r in conn.execute(
+        "SELECT datum, url FROM webbsandning WHERE organ = 'KF' AND datum BETWEEN %s AND %s ORDER BY forst_sedd",
+        (datum[0], datum[-1]),
+    )}
+    for h in handelser_:
+        if h["organ"]["id"] != "KF" or h["status"] in ("installt", "borttaget"):
+            continue
+        # Före sammanträdet: sidan för webb-tv. Efter: inspelningen, när den finns.
+        if inspelning := inspelningar.get(h["datum"]):
+            h["webbsandning"] = {"url": inspelning, "inspelning": True}
+        else:
+            h["webbsandning"] = {"url": WEBB_TV, "inspelning": False}
 
 
 # ics enligt RFC 5545
@@ -207,6 +255,14 @@ def _vevent(h: dict, bas: str) -> list[str]:
         beskrivning.append("Sluttiden är ungefärlig, beräknad utifrån hur länge organets sammanträden brukar pågå.")
     if h["plats_antagen"]:
         beskrivning.append("Platsen är antagen utifrån organets senaste protokoll.")
+    if h["kallelse"]:
+        namn_k = "Kungörelse" if h["kallelse"]["typ"] == "kungorelse" else "Kallelse"
+        beskrivning.append(f"{namn_k}: {h['kallelse']['url']}")
+    for x in h["handlingar"]:
+        beskrivning.append(f"Handlingar: {x['url']}")
+    if h["webbsandning"]:
+        etikett = "Inspelning" if h["webbsandning"]["inspelning"] else "Webbsänds, webb-tv"
+        beskrivning.append(f"{etikett}: {h['webbsandning']['url']}")
     if h["protokoll"]:
         beskrivning.append(f"Protokoll: {sida}")
     else:

@@ -16,6 +16,7 @@ from urllib.parse import urljoin
 
 import httpx
 
+from . import kallelser as kallelsemodul
 from .base import Hamtning
 from .harnosand import BAS, ORGAN
 
@@ -187,14 +188,32 @@ def tolka_sida(organ: str, url: str, sida: str) -> Sammantradesplan:
 
 
 class Sammantradesplaner:
-    """Sammanträdesplanerna för kommunfullmäktige, kommunstyrelsen och de tre nämnderna."""
+    """Sammanträdesplanerna för kommunfullmäktige, kommunstyrelsen och de tre nämnderna, med kallelserna
+    som sidorna länkar till och fullmäktiges webbsändningar (se `kallelser`).
+
+    `kanda_kallelser`: kallelser som redan är lästa (fylls i av insamlingen). De hämtas inte igen,
+    eftersom Sitevision ger en fil en ny adress när den byts ut.
+    """
 
     id = "harnosand-sammantradesplaner"
-    titel = "Härnösands kommun – sammanträdesplaner"
+    titel = "Härnösands kommun – sammanträdesplaner, kallelser och webb-tv"
     url = urljoin(BAS, "/kommun--styrning/politik-och-demokrati.html")
 
     def __init__(self, anrop_per_sekund: float | None = 2.0) -> None:
         self.anrop_per_sekund = anrop_per_sekund
+        self.kanda_kallelser: set[str] = set()
+
+    def _kallelser(self, client: httpx.Client, organ: str, sida: str, resultat: Hamtning) -> None:
+        for k in kallelsemodul.kallelser_pa_sidan(organ, sida):
+            if (k.typ != "handlingar" and k.url not in self.kanda_kallelser and k.storlek is not None
+                    and k.storlek <= kallelsemodul.MAX_STORLEK_FOR_PLATS):
+                try:
+                    pdf = client.get(k.url)
+                    pdf.raise_for_status()
+                    k = kallelsemodul.las_kallelse(k, pdf.content)
+                except httpx.HTTPError as e:
+                    resultat.fel.append(f"{k.titel}: {type(e).__name__}: {e}")
+            resultat.kallelser.append(k)
 
     def hamta(self, client: httpx.Client, sedan: datetime | None) -> Hamtning:
         resultat = Hamtning()
@@ -212,6 +231,15 @@ class Sammantradesplaner:
                 continue
             resultat.fel.extend(plan.fel)
             resultat.sammantradesplaner.append(plan)
+            self._kallelser(client, organ.id, svar.text, resultat)
+        try:
+            svar = client.get(kallelsemodul.WEBB_TV)
+            svar.raise_for_status()
+            resultat.webbsandningar = kallelsemodul.webbsandningar(svar.text)
+            if not resultat.webbsandningar:
+                resultat.fel.append("Webb-tv: sidan har inga länkar till sammanträden")
+        except httpx.HTTPError as e:
+            resultat.fel.append(f"Webb-tv: {type(e).__name__}: {e}")
         if not resultat.sammantradesplaner:
             raise httpx.HTTPError("Ingen sammanträdesplan kunde läsas: " + "; ".join(resultat.fel))
         return resultat

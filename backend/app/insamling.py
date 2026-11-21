@@ -128,6 +128,11 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         res.antal_nya += antal["nya"]
         res.antal_andrade += antal["andrade"]
         res.antal_oforandrade += antal["oforandrade"]
+    if hamtning.kallelser or hamtning.webbsandningar:
+        antal = sammantradesplan.lagra_kallelser(conn, hamtning.kallelser, hamtning.webbsandningar, korning_id, hamtad)
+        res.antal_nya += antal["nya"]
+        res.antal_andrade += antal["andrade"]
+        res.antal_oforandrade += antal["oforandrade"]
     publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
                                  *(u.kallans_publicering for u in hamtning.uppgifter), *prognosdatum) if d]
     res.senaste_publicering = max(publiceringar, default=None)
@@ -211,6 +216,8 @@ def _kor(
             (kalla.id, kalla.titel, kalla.url),
         )
         try:
+            if hasattr(kalla, "kanda_kallelser"):
+                kalla.kanda_kallelser = {r["url"] for r in conn.execute("SELECT url FROM kallelse WHERE pdf_last")}
             if hasattr(kalla, "kanda_dokument"):
                 # Källor med dokument får veta vilka adresser som redan är hämtade.
                 kalla.kanda_dokument = {r["url"] for r in conn.execute(
