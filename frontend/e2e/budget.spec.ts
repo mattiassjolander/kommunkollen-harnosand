@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { API_PORT } from '../playwright.config'
 
 // Söm 2 (#48, #58): planförutsättningarna och budgetförslagen för 2027 är inlästa som utkast när
 // servern startar (`--budgetforslag tests/fixtures/budgetforslag`). Utgivaren granskar och publicerar
@@ -179,4 +180,30 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
   await expect(pf.locator('table')).toHaveCount(4)
   await expect(pf.locator('[data-tabell="investeringar"] tr', { hasText: 'Totalt' })).toContainText('147,0 mnkr')
   await expect(pf.locator('[data-tabell="kassaflode"] tr', { hasText: 'Totalt kassaflöde' })).toContainText('47,0 mnkr')
+})
+
+test('planförutsättningarna jämförs med SKR:s skatteunderlagsprognoser (#62)', async ({ page, request }) => {
+  test.setTimeout(300_000) // LibreOffice räknar om prognosfilerna om de inte redan är insamlade
+  const api = `http://127.0.0.1:${API_PORT}`
+  expect((await request.post(`${api}/api/auth/test/redaktor`)).ok()).toBeTruthy()
+  expect((await request.post(`${api}/api/insamlingar?kalla=skr-skatteunderlagsprognos`, { timeout: 300_000 })).ok()).toBeTruthy()
+
+  // Planförutsättningarna publicerades i testet ovan.
+  await page.goto('/politik/budget')
+  const skr = page.getByTestId('skr-jamforelse')
+  await expect(skr.getByRole('heading', { name: 'Jämfört med SKR:s prognoser' })).toBeVisible()
+  // 1 483 + 734 mnkr.
+  await expect(skr.getByTestId('skr-plan')).toContainText(/2\s217,0 mnkr/)
+
+  const rader = skr.getByTestId('skr-tabell').locator('tbody tr')
+  await expect(rader).toHaveCount(5)
+  // Sorterade efter publiceringsdatum, senaste cirkuläret sist.
+  await expect(rader.first()).toHaveAttribute('data-cirkular', '26:12')
+  const c28 = skr.locator('tr[data-cirkular="26:28"]')
+  await expect(c28).toContainText('6 okt 2026')
+  await expect(c28).toContainText(/2\s222,1 mnkr/)
+  await expect(c28).toContainText('+5,1 mnkr')
+  await expect(c28).toContainText('+0,2 %')
+  await expect(c28.getByRole('link', { name: '26:28' })).toHaveAttribute('href', /26028\.xlsm$/)
+  await expect(skr.getByTestId('skr-forklaring')).toContainText('En differens behöver därför inte vara ett fel')
 })

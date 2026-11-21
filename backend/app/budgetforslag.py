@@ -46,7 +46,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from . import planforutsattningar as pf
-from . import protokoll
+from . import protokoll, skatteunderlag
 from .planforutsattningar import EjTillatet, Konflikt, Ogiltig
 
 __all__ = ["EjTillatet", "Konflikt", "Ogiltig"]
@@ -735,9 +735,11 @@ def jamforelse(conn: psycopg.Connection, ar: int) -> dict:
             "resultat": _differens((u["resultat"] or {}).get("mnkr"), (a["resultat"] or {}).get("mnkr")),
             "ramar": [{"organ": x["organ"], **d} for x in u["ramar"] if (d := _differens(x["mnkr"], ram_a.get(x["organ"])))],
         }
+    # Planförutsättningarnas skatteintäkter och generella bidrag och utjämning mot SKR:s prognoser (#62).
+    skr = skatteunderlag.jamforelse(conn, ar, round(nt[ar]["skatteintakter"] + nt[ar]["bidrag"], 3) if nt else None)
     return {"budgetar": ar, "organ": organ, "antagen": antagen["id"] if antagen else None,
             "planforutsattningar": plan, "mall": [{"id": f, "fraga": fraga} for f, fraga in MALL],
-            "forslag": forslag}
+            "forslag": forslag, "skr": skr}
 
 
 # Kommandot

@@ -148,3 +148,20 @@ Förändringar och beräknat resultat visas först när årets planförutsättni
 **Åtgärder:** läsaren öppnar en nämnd och ser, per förslag, åtgärderna med belopp och länk till sidan i originalet, och täckningen, till exempel "åtgärder för −3,0 av −3,0 mnkr". Ett förslag som ändrar ramen utan att ange åtgärder markeras "Inga åtgärder anges".
 
 **Differensanalys:** när den antagna budgeten för året finns visas skillnaden mot den per nämnd i kronor och procent, för resultatet i mnkr och för skattesatsen i öre.
+
+## Jämfört med SKR:s prognoser
+
+Sidan för budgetåret har ett avsnitt "Jämfört med SKR:s prognoser" (#62). Där står planförutsättningarnas
+skatteintäkter och generella bidrag och utjämning (summan av de två posterna i resultatbudgeten, i mnkr)
+bredvid raden "Summa intäkter (inkl avräkning och fastighetsavgift)" för budgetåret i varje
+[skatteunderlagsprognos](skatteunderlag.md), omräknad från tkr till mnkr.
+
+- En rad per prognos som har en siffra för året, sorterade efter publiceringsdatum, med cirkulär, datum och länk
+  till filen.
+- Differensen är SKR − planförutsättningar, i mnkr (en decimal) och procent. Ingen prognos pekas ut som den rätta.
+- Bara summorna jämförs, eftersom kommunen och SKR delar upp posterna olika. En fast text förklarar att
+  kommunen kan räkna in generella statsbidrag som SKR:s underlag inte innehåller, och tvärtom.
+- Bara publicerade planförutsättningar jämförs. Saknas de, eller har ingen prognos en siffra för året, står
+  det kort varför (SKR:s prognoser finns från 2026). Budgetförslagen påverkas inte.
+
+API: fältet `skr` i `GET /api/budget/{år}`.

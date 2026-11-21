@@ -43,3 +43,5 @@ cirkulär sparas ändå.
 
 `/ekonomi/skatteunderlag` visar den senaste prognosen i mnkr och ett linjediagram över summa intäkter med en
 linje per cirkulär, så att det syns hur prognosen för samma år har ändrats. API: `GET /api/skatteunderlagsprognoser`.
+
+Sidan för budgetåret jämför planförutsättningarna med varje prognos, se [budgetforslag.md](budgetforslag.md#jämfört-med-skrs-prognoser).
