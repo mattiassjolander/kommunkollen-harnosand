@@ -31,18 +31,23 @@ const summor = new Set(['summa_intakter', 'summa_inkl'])
 const tvadecimaler = new Intl.NumberFormat('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const heltal = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 })
 
+// Diagrammet visar summa intäkter inklusive avräkning och fastighetsavgift. För innevarande år ändras inte
+// summa intäkter mellan cirkulären, eftersom de preliminära utbetalningarna är fastställda. Ändringen
+// hamnar i slutavräkningen, som bara den här raden räknar in. Samma rad jämförs med planförutsättningarna (#62).
+const DIAGRAMRAD = 'summa_inkl'
+
 const serier = computed(() =>
   (data.value?.prognoser ?? []).map((p) => ({
     namn: `Cirkulär ${p.cirkular} (${datum(p.publicerad)})`,
-    punkter: p.ar.map((a) => ({ ar: a, varde: (p.rader.find((r) => r.id === 'summa_intakter')?.tkr[String(a)] ?? 0) / 1000 })),
+    punkter: p.ar.map((a) => ({ ar: a, varde: (p.rader.find((r) => r.id === DIAGRAMRAD)?.tkr[String(a)] ?? 0) / 1000 })),
   })),
 )
 
-// Tabellvy och CSV för diagrammet: summa intäkter per cirkulär och år.
+// Tabellvy för diagrammet: summa intäkter inklusive avräkning per cirkulär och år.
 const allaAr = computed(() => [...new Set((data.value?.prognoser ?? []).flatMap((p) => p.ar))].sort((a, b) => a - b))
 const summa = (cirkular: string, a: number) => {
   const p = data.value?.prognoser.find((x) => x.cirkular === cirkular)
-  const v = p?.rader.find((r) => r.id === 'summa_intakter')?.tkr[String(a)]
+  const v = p?.rader.find((r) => r.id === DIAGRAMRAD)?.tkr[String(a)]
   return v === undefined ? null : v
 }
 function exportera() {
@@ -108,18 +113,19 @@ function exportera() {
 
     <section class="kort" aria-labelledby="andring-rubrik" data-testid="prognosdiagram">
       <div class="rubrikrad">
-        <h2 id="andring-rubrik">Summa intäkter per cirkulär</h2>
+        <h2 id="andring-rubrik">Summa intäkter inklusive avräkning per cirkulär</h2>
         <button type="button" data-testid="exportera" @click="exportera">Ladda ner CSV</button>
       </div>
       <p class="forklaring">
-        Skatteintäkter och generella bidrag och utjämning, före slutavräkningar och fastighetsavgift. En linje per
-        cirkulär visar hur prognosen för samma år har ändrats.
+        Skatteintäkter och generella bidrag och utjämning, inklusive slutavräkningar och fastighetsavgift. En linje
+        per cirkulär visar hur prognosen för samma år har ändrats. För innevarande år är utbetalningarna redan
+        fastställda, så en ändrad prognos syns i slutavräkningen och kommer med här.
       </p>
       <Linjediagram
         :serier="serier"
         enhet="mnkr"
         kalla="SKR, skatteunderlagsprognoser"
-        etikett="Summa intäkter per år enligt varje cirkulär från SKR, i mnkr"
+        etikett="Summa intäkter inklusive avräkning och fastighetsavgift per år enligt varje cirkulär från SKR, i mnkr"
       />
       <details class="tabellvy">
         <summary>Visa som tabell</summary>

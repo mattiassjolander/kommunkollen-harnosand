@@ -41,7 +41,11 @@ cirkulär sparas ändå.
 
 ## Visning
 
-`/ekonomi/skatteunderlag` visar den senaste prognosen i mnkr och ett linjediagram över summa intäkter med en
-linje per cirkulär, så att det syns hur prognosen för samma år har ändrats. API: `GET /api/skatteunderlagsprognoser`.
+`/ekonomi/skatteunderlag` visar den senaste prognosen i mnkr och ett linjediagram över summa intäkter inklusive
+avräkning och fastighetsavgift med en linje per cirkulär, så att det syns hur prognosen för samma år har ändrats. API: `GET /api/skatteunderlagsprognoser`.
+
+Diagrammet använder raden inklusive avräkning, inte "Summa intäkter". För innevarande år är de preliminära
+utbetalningarna fastställda, så "Summa intäkter" är densamma i alla cirkulär det året (2026: 2 067,0 mnkr). En
+ändrad prognos för året syns i stället i slutavräkningen, som bara raden inklusive avräkning räknar in.
 
 Sidan för budgetåret jämför planförutsättningarna med varje prognos, se [budgetforslag.md](budgetforslag.md#jämfört-med-skrs-prognoser).
