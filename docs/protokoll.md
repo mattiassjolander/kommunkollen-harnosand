@@ -110,11 +110,11 @@ Behandlingar i olika organ kopplas till samma ärende (ADR-0003). Ärendet är p
 - **Övriga hänvisningar**, till samma nivå, nedåt eller utan organ, blir förslag.
 - **Samlingspunkter och fasta punkter** (delegationsbeslut, meddelanden, ärenden för kännedom, val av justerare, valärenden, frågestund …) kopplas aldrig.
 
-Förslagen ligger i en kö (`/politik/kopplingar`), där en redaktör bekräftar eller avvisar dem (ADR-0002). Kopplingarna och ärendena räknas om efter varje insamling som gav nya eller ändrade protokoll, och efter `python -m app.tolka_om`. Redaktörens beslut står kvar, och ett ärende behåller sitt id. Kopplingarna pekar ut behandlingen med sammanträde och paragraf, eftersom behandlingarna skapas om vid omtolkning.
+Förslagen ligger i en kö (`/politik/kopplingar`), där en redaktör bekräftar eller avvisar dem (ADR-0002). Vyn har flikarna Förslag, Bekräftade och Avvisade och filtret Mina beslut. En redaktör kan ändra ett beslut åt alla håll, också tillbaka till förslag, med obligatorisk motivering. Ingen andra granskning behövs, eftersom kopplingar beslutas av en redaktör ensam. Varje beslut sparas i en historik som aldrig skrivs över (`kopplingsbeslut`, #77), och beslut från före historiken blev dess första post. Ärendevyn länkar redaktören från en koppling till dess beslut. Automatiska kopplingar bygger på diarienumret och beslutas inte. Kopplingarna och ärendena räknas om efter varje insamling som gav nya eller ändrade protokoll, och efter `python -m app.tolka_om`. Redaktörens beslut står kvar, och ett ärende behåller sitt id. Kopplingarna pekar ut behandlingen med sammanträde och paragraf, eftersom behandlingarna skapas om vid omtolkning.
 
 Slutligt beslut är det senaste beslutet i ärendet, om det inte föreslår kommunfullmäktige eller kommunstyrelsen något.
 
-API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{paragraf}` (`arende`), `/api/kopplingar?status=forslag` samt `POST /api/kopplingar/{id}/bekraftelse` och `/avvisning` (redaktör).
+API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{paragraf}` (`arende`), `/api/kopplingar?status=forslag` (med `&mina=true` bara egna beslut) samt `POST /api/kopplingar/{id}/bekraftelse`, `/avvisning` och `/beslut` med `{status, motivering}` för att ändra ett beslut (redaktör). Varje koppling har `historik`.
 
 ## Rättelser
 

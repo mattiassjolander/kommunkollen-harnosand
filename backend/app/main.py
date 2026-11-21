@@ -281,18 +281,21 @@ def create_app(
             raise HTTPException(404, f"Ärendet {arende_id} finns inte")
         return resultat
 
-    @app.get("/api/kopplingar", dependencies=[Depends(krav_roll("redaktor"))])
-    def kopplingar(status: str = Query("forslag", pattern="^(automatisk|forslag|bekraftad|avvisad)$")) -> list[dict]:
-        """Kön med förslag på kopplingar, eller kopplingarna med en annan status."""
+    @app.get("/api/kopplingar")
+    def kopplingar(status: str = Query("forslag", pattern="^(automatisk|forslag|bekraftad|avvisad)$"),
+                   mina: bool = False, anv: Anvandare = Depends(krav_roll("redaktor"))) -> list[dict]:
+        """Kön med förslag på kopplingar, eller kopplingarna med en annan status. `mina` = bara egna beslut."""
         with db.connect(database_url) as conn:
-            return arenden.lista_kopplingar(conn, status)
+            return arenden.lista_kopplingar(conn, status, anv.epost if mina else None)
 
-    def _besluta(koppling_id: int, status: str, anv: Anvandare) -> dict:
+    def _besluta(koppling_id: int, status: str, anv: Anvandare, motivering: str | None = None) -> dict:
         with db.connect(database_url) as conn:
             try:
-                return arenden.besluta(conn, koppling_id, status, anv.epost)
+                return arenden.besluta(conn, koppling_id, status, anv.epost, motivering)
             except LookupError as e:
                 raise HTTPException(404, str(e)) from e
+            except arenden.OgiltigtBeslut as e:
+                raise HTTPException(422, str(e)) from e
 
     @app.post("/api/kopplingar/{koppling_id}/bekraftelse")
     def bekrafta_koppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
@@ -301,6 +304,12 @@ def create_app(
     @app.post("/api/kopplingar/{koppling_id}/avvisning")
     def avvisa_koppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
         return _besluta(koppling_id, "avvisad", anv)
+
+    @app.post("/api/kopplingar/{koppling_id}/beslut")
+    def andra_kopplingsbeslut(koppling_id: int, data: dict,
+                              anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Ändrar ett beslut (#77): {status: forslag|bekraftad|avvisad, motivering}."""
+        return _besluta(koppling_id, str(data.get("status", "")), anv, data.get("motivering"))
 
     # Redaktionella rättelser (#33): redaktören skriver, en annan person med rollen utgivare granskar och publicerar.
 

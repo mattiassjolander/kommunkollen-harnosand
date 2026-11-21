@@ -312,7 +312,19 @@ def _kopplingar(conn: psycopg.Connection, villkor: str, parametrar: dict) -> lis
         """,
         parametrar,
     ).fetchall()
-    return [_koppling(r) for r in rader if r["fran_rubrik"] is not None and r["till_rubrik"] is not None]
+    ut = [_koppling(r) for r in rader if r["fran_rubrik"] is not None and r["till_rubrik"] is not None]
+    # Historiken över besluten, äldst först (#77).
+    historik: dict[int, list[dict]] = defaultdict(list)
+    if ut:
+        for h in conn.execute(
+            "SELECT koppling_id, status, redaktor, tid, motivering FROM kopplingsbeslut "
+            "WHERE koppling_id = ANY(%s) ORDER BY tid, id", ([k["id"] for k in ut],),
+        ):
+            historik[h["koppling_id"]].append({"status": h["status"], "redaktor": h["redaktor"], "tid": h["tid"],
+                                                "motivering": h["motivering"]})
+    for k in ut:
+        k["historik"] = historik[k["id"]]
+    return ut
 
 
 def _koppling(r: dict) -> dict:
@@ -325,18 +337,45 @@ def _koppling(r: dict) -> dict:
             "underlag": r["underlag"], "status": r["status"], "redaktor": r["redaktor"], "beslutad": r["beslutad"]}
 
 
-def lista_kopplingar(conn: psycopg.Connection, status: str) -> list[dict]:
-    return _kopplingar(conn, "WHERE k.status = %(s)s", {"s": status})
+def lista_kopplingar(conn: psycopg.Connection, status: str, redaktor: str | None = None) -> list[dict]:
+    """Kopplingarna med en status. Med `redaktor` bara de som den redaktören beslutade senast."""
+    if redaktor is None:
+        return _kopplingar(conn, "WHERE k.status = %(s)s", {"s": status})
+    return _kopplingar(conn, "WHERE k.status = %(s)s AND k.redaktor = %(r)s", {"s": status, "r": redaktor})
 
 
-def besluta(conn: psycopg.Connection, koppling_id: int, status: str, redaktor: str) -> dict:
-    """En redaktör bekräftar eller avvisar en koppling. Ärendena räknas om."""
-    rad = conn.execute(
-        "UPDATE koppling SET status = %s, redaktor = %s, beslutad = %s WHERE id = %s RETURNING id",
-        (status, redaktor, datetime.now(timezone.utc), koppling_id),
-    ).fetchone()
+class OgiltigtBeslut(ValueError):
+    """Beslutet går inte att fatta, t.ex. utan motivering eller för en automatisk koppling."""
+
+
+def besluta(conn: psycopg.Connection, koppling_id: int, status: str, redaktor: str,
+            motivering: str | None = None) -> dict:
+    """En redaktör bekräftar eller avvisar en koppling, eller ändrar ett tidigare beslut (#77).
+
+    Att ändra ett beslut (från bekräftad eller avvisad) kräver motivering och kan också lägga tillbaka
+    kopplingen som förslag. Varje beslut sparas i historiken. Ärendena räknas om."""
+    rad = conn.execute("SELECT status FROM koppling WHERE id = %s FOR UPDATE", (koppling_id,)).fetchone()
     if rad is None:
         raise LookupError(f"Kopplingen {koppling_id} finns inte")
+    fore = rad["status"]
+    motivering = (motivering or "").strip() or None
+    if fore == "automatisk":
+        raise OgiltigtBeslut("En automatisk koppling bygger på diarienumret och beslutas inte av en redaktör")
+    if status not in ("forslag", "bekraftad", "avvisad"):
+        raise OgiltigtBeslut(f"Okänt beslut: {status}")
+    if status == fore:
+        raise OgiltigtBeslut("Kopplingen har redan det beslutet")
+    if fore != "forslag" and motivering is None:
+        raise OgiltigtBeslut("Att ändra ett beslut kräver en motivering")
+    nu = datetime.now(timezone.utc)
+    if status == "forslag":
+        conn.execute("UPDATE koppling SET status = 'forslag', redaktor = NULL, beslutad = NULL WHERE id = %s",
+                     (koppling_id,))
+    else:
+        conn.execute("UPDATE koppling SET status = %s, redaktor = %s, beslutad = %s WHERE id = %s",
+                     (status, redaktor, nu, koppling_id))
+    conn.execute("INSERT INTO kopplingsbeslut (koppling_id, status, redaktor, tid, motivering) "
+                 "VALUES (%s, %s, %s, %s, %s)", (koppling_id, status, redaktor, nu, motivering))
     koppla(conn)
     [k] = _kopplingar(conn, "WHERE k.id = %(id)s", {"id": koppling_id})
     return k

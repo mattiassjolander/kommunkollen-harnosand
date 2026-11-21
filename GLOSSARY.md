@@ -69,6 +69,9 @@ _Avoid_: Länk, relation
 **Kopplingsförslag**:
 En koppling som plattformen inte kunnat göra säkert. Den ingår inte i ärendet förrän en redaktör har bekräftat den.
 
+**Kopplingsbeslut**:
+En redaktörs beslut att bekräfta eller avvisa en koppling, eller att lägga tillbaka den som förslag. Varje beslut sparas i kopplingens historik med redaktör, tid och, när ett tidigare beslut ändras, motivering. Kopplingens status är det senaste beslutet.
+
 **Behandlingstyp**:
 Vad en behandling är: ett beslut, ett förslag till ett annat organ, en motion, ett medborgarförslag, en interpellation eller fråga, ett informationsärende eller formalia.
 

@@ -708,8 +708,19 @@ export interface Koppling {
   /** Diarienumret, eller hänvisningen som den står i beslutsunderlaget. */
   underlag: string
   status: Kopplingsstatus
+  /** Redaktören som fattade det senaste beslutet, och när. */
   redaktor: string | null
   beslutad: string | null
+  /** Alla beslut om kopplingen, äldst först (#77). Skrivs aldrig över. */
+  historik: Kopplingsbeslut[]
+}
+
+export interface Kopplingsbeslut {
+  status: Exclude<Kopplingsstatus, 'automatisk'>
+  redaktor: string
+  tid: string
+  /** Krävs när ett tidigare beslut ändras. */
+  motivering: string | null
 }
 
 export interface Arende {
@@ -725,8 +736,8 @@ export interface Arende {
 
 export const hamtaArende = (id: number | string) => hamtaEllerSaknas<Arende>(`/api/arenden/${id}`)
 
-export async function hamtaKopplingar(status: Kopplingsstatus = 'forslag'): Promise<Koppling[]> {
-  const svar = await fetch(`/api/kopplingar?status=${status}`)
+export async function hamtaKopplingar(status: Kopplingsstatus = 'forslag', mina = false): Promise<Koppling[]> {
+  const svar = await fetch(`/api/kopplingar?status=${status}${mina ? '&mina=true' : ''}`)
   if (svar.status === 401) throw new EjInloggad()
   if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
   if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
@@ -742,6 +753,23 @@ async function beslutaKoppling(id: number, beslut: 'bekraftelse' | 'avvisning'):
 }
 export const bekraftaKoppling = (id: number) => beslutaKoppling(id, 'bekraftelse')
 export const avvisaKoppling = (id: number) => beslutaKoppling(id, 'avvisning')
+
+/** Ändrar ett tidigare beslut om en koppling, med motivering (#77). */
+export async function andraKopplingsbeslut(
+  id: number,
+  status: Exclude<Kopplingsstatus, 'automatisk'>,
+  motivering: string,
+): Promise<Koppling> {
+  const svar = await fetch(`/api/kopplingar/${id}/beslut`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, motivering }),
+  })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
 
 // Redaktionella rättelser (#33)
 

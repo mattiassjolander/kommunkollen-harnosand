@@ -1,15 +1,22 @@
 <script setup lang="ts">
 // Ärendespårning (vy 8): ärendets väg genom organen i tidsordning, med kopplingarna mellan
 // behandlingarna (ADR-0003).
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { EjInloggad, hamtaArende, Saknas, type Arende, type Koppling } from '../../api'
+import { EjInloggad, hamtaArende, Saknas, type Arende, type Jag, type Koppling } from '../../api'
 import { sammantradesdatum } from '../../format'
 import Kopplingsmarkering from '../../components/Kopplingsmarkering.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
+const jag = inject<Ref<Jag | null>>('jag', ref(null))
+const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
+
+/** Redaktörens väg till beslutet om en koppling, för att se historiken eller ändra det (#77). */
+function beslutslank(k: Koppling) {
+  return { path: '/politik/kopplingar', query: { ...(k.status === 'forslag' ? {} : { status: k.status }), koppling: String(k.id) } }
+}
 
 const a = ref<Arende | null>(null)
 const laddar = ref(true)
@@ -108,6 +115,9 @@ const ovriga = computed(() =>
             data-testid="vag-koppling"
           >
             <Kopplingsmarkering :koppling="k" />
+            <RouterLink v-if="arRedaktor && k.status !== 'automatisk'" :to="beslutslank(k)" class="beslutslank" data-testid="till-beslut">
+              Beslutet
+            </RouterLink>
           </p>
           <p class="steg">
             <strong>{{ b.sammantrade.organ.namn }}</strong>
@@ -137,6 +147,9 @@ const ovriga = computed(() =>
             {{ k.till.sammantrade.organ.namn }} {{ k.till.sammantrade.datum }} § {{ k.till.paragraf }}
           </RouterLink>
           <span class="anteckning"><Kopplingsmarkering :koppling="k" /></span>
+          <RouterLink v-if="arRedaktor" :to="beslutslank(k)" class="beslutslank" data-testid="till-beslut">
+            {{ k.status === 'forslag' ? 'Besluta' : 'Beslutet' }}
+          </RouterLink>
         </li>
       </ul>
     </section>
@@ -144,6 +157,11 @@ const ovriga = computed(() =>
 </template>
 
 <style scoped>
+.beslutslank {
+  font-size: 12px;
+  margin-left: 8px;
+  color: var(--accent);
+}
 .brodsmulor {
   display: flex;
   gap: 8px;
