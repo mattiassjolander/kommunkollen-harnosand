@@ -12,8 +12,15 @@ _Avoid_: Instans, beslutande organ
 Den tjänstepersonsorganisation som bereder ärenden åt ett organ. Förvaltningen är inget organ och gör inga behandlingar.
 
 **Sammanträde**:
-Ett möte i ett organ, dokumenterat i ett protokoll.
+Ett möte i ett organ. Före mötet är det planerat enligt sammanträdesplanen, efteråt dokumenteras det i ett protokoll. Ett planerat sammanträde och protokollet för det är samma sammanträde. Ett sammanträde som inte finns i planen, t.ex. ett extra sammanträde, har bara ett protokoll.
 _Avoid_: Möte
+
+**Sammanträdesplan**:
+Ett organs fastställda datum och tider för kommande sammanträden. Organet beslutar om planen i ett protokoll, och kommunen publicerar den som en tabell på organets webbsida. Ändringar i tabellen blir reviderade uppgifter.
+_Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
+
+**Inställt sammanträde**:
+Ett planerat sammanträde som inte blir av. Det finns kvar i planen, markerat som inställt. Ett sammanträde som försvinner från webbsidans plan utan att vara inställt är *borttaget ur planen* och finns också kvar.
 
 **Protokoll**:
 Den justerade dokumentationen av ett helt sammanträde: närvaro, behandlingar, yrkanden, voteringar och beslut. Protokollet är huvudkällan för allt som hände på sammanträdet.

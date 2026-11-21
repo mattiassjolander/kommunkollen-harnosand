@@ -15,6 +15,7 @@ import BudgetforslagView from './views/politik/BudgetforslagView.vue'
 import BudgetutkastView from './views/politik/BudgetutkastView.vue'
 import BehandlingView from './views/politik/BehandlingView.vue'
 import KopplingarView from './views/politik/KopplingarView.vue'
+import SammantradesplanerView from './views/politik/SammantradesplanerView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
 import LedamoterView from './views/politik/LedamoterView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
@@ -38,6 +39,7 @@ const router = createRouter({
     },
     { path: '/politik/arenden/:id', component: ArendeView, meta: { titel: 'Ärende' } },
     { path: '/politik/kopplingar', component: KopplingarView, meta: { titel: 'Kopplingar' } },
+    { path: '/politik/sammantradesplaner', component: SammantradesplanerView, meta: { titel: 'Sammanträdesplaner' } },
     { path: '/politik/rattelser', component: RattelserView, meta: { titel: 'Rättelser' } },
     { path: '/politik/statistik', component: StatistikView, meta: { titel: 'Statistik' } },
     { path: '/politik/avvikelser', component: AvvikelserView, meta: { titel: 'Avvikelser i protokollen' } },

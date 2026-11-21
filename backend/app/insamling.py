@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import skatteunderlag
+from . import sammantradesplan, skatteunderlag
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -123,6 +123,11 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
             fel.append(prognosfel)
         if publicerad:
             prognosdatum.append(publicerad)
+    for plan in hamtning.sammantradesplaner:
+        antal = sammantradesplan.lagra(conn, plan, korning_id, hamtad)
+        res.antal_nya += antal["nya"]
+        res.antal_andrade += antal["andrade"]
+        res.antal_oforandrade += antal["oforandrade"]
     publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
                                  *(u.kallans_publicering for u in hamtning.uppgifter), *prognosdatum) if d]
     res.senaste_publicering = max(publiceringar, default=None)
