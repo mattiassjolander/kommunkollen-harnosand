@@ -114,3 +114,48 @@ test('återkommande ärenden listas och går att öppna', async ({ page }) => {
     await expect(sektion).toContainText('Inga återkommande ärenden')
   }
 })
+
+test('redaktören rättar en motion utan motionär, utgivaren publicerar och läsaren ser motionären (#78)', async ({ page }) => {
+  // Redaktören hittar motionen i arbetslistan och väljer en person ur registret.
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik/statistik?organ=KF')
+  await page.getByTestId('utan-motionar').check()
+  const motion = page.getByTestId('motion').first()
+  await expect(motion.getByTestId('motionarer')).toContainText('Uppgift saknas')
+  const arende = await motion.getAttribute('data-arende')
+  await motion.getByTestId('ratta-motionarer').click()
+
+  const formular = page.getByTestId('motionarformular')
+  await formular.getByTestId('motionar-sok').fill('Olle Löf')
+  await formular.getByTestId('motionar-traff').filter({ hasText: 'Olle Löfgren' }).click()
+  const rad = formular.getByTestId('motionarrad').first()
+  await expect(rad).toContainText('Olle Löfgren')
+  // Partiet förifylls, med källan, och går att ändra.
+  await expect(rad.getByTestId('motionar-parti')).toHaveValue('L')
+  await expect(rad.getByTestId('parti-kalla')).toBeVisible()
+  await formular.getByTestId('motionar-motivering').fill('Motionen är undertecknad av Olle Löfgren (L).')
+  await formular.getByTestId('spara-motionarer').click()
+  await expect(page.getByTestId('motionarer-sparade')).toBeVisible()
+
+  // Utgivaren granskar och publicerar.
+  await page.request.post('/api/auth/test/utgivare')
+  await page.goto('/politik/rattelser')
+  const utkast = page.getByTestId('rattelser-utkast').getByTestId('rattelse').filter({ hasText: 'Motionärer' })
+  await expect(utkast.getByTestId('nytt')).toHaveText('Olle Löfgren (L)')
+  await utkast.getByTestId('granska').click()
+  await page.getByTestId('rattelser-granskad').getByTestId('rattelse').filter({ hasText: 'Motionärer' }).getByTestId('publicera').click()
+  await expect(page.getByTestId('rattelser-publicerad').getByTestId('rattelse').filter({ hasText: 'Motionärer' })).toHaveCount(1)
+
+  // Läsaren ser motionären med parti, länk till personsidan och rättelsemarkering.
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik/statistik?organ=KF')
+  const rattad = page.locator(`[data-testid="motion"][data-arende="${arende}"]`)
+  const celler = rattad.getByTestId('motionarer')
+  await expect(celler).toContainText('Olle Löfgren (L)')
+  await expect(celler).not.toContainText('Uppgift saknas')
+  const markering = celler.getByTestId('rattad')
+  await markering.locator('summary').click()
+  await expect(markering.getByTestId('ursprungligt')).toHaveText('inget')
+  await celler.getByRole('link', { name: 'Olle Löfgren' }).click()
+  await expect(page).toHaveURL(/\/politik\/ledamoter\/\d+$/)
+})

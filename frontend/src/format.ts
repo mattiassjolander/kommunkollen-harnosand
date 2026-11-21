@@ -118,3 +118,8 @@ const ROST = { ja: 'Ja', nej: 'Nej', avstar: 'Avstår', franvarande: 'Frånvaran
 export function rosttext(r: keyof typeof ROST): string {
   return ROST[r]
 }
+
+/** Motionärerna som text: "Monica Fahlén (S), partiet V". */
+export function motionarstext(m: { namn: string | null; parti: string | null }[]): string {
+  return m.map((p) => (p.namn ? (p.parti ? `${p.namn} (${p.parti})` : p.namn) : `partiet ${p.parti}`)).join(', ')
+}

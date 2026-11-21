@@ -79,7 +79,7 @@ Vad en behandling är: ett beslut, ett förslag till ett annat organ, en motion,
 Ett förslag från en eller flera ledamöter i kommunfullmäktige. Motionen väcks i fullmäktige, bereds och besvaras sedan med ett beslut i fullmäktige.
 
 **Motionär**:
-Den eller de ledamöter som har väckt en motion, med parti enligt protokollet.
+Den eller de ledamöter som har väckt en motion, med parti enligt protokollet, eller en partigrupp utan namn. En rättelse av motionärerna pekar på personer i ledamotsregistret.
 
 **Väckt motion**:
 En motion som kommunfullmäktige har överlämnat till kommunstyrelsen för beredning.

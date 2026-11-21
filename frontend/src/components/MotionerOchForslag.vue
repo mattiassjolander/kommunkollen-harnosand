@@ -1,11 +1,29 @@
 <script setup lang="ts">
 // Motioner och medborgarförslag (#45): väckta och besvarade per år, utfall per parti, och varje
 // motion och förslag med ledtid. Över ett år markeras sakligt (kommunallagen 5 kap. 35 §).
-import { computed } from 'vue'
-import type { Forlopp, Motionsstatistik } from '../api'
+import { computed, inject, ref, type Ref } from 'vue'
+import type { Forlopp, Jag, Motionsstatistik } from '../api'
 import { parti, sammantradesdatum, tal } from '../format'
+import Motionarformular from './Motionarformular.vue'
+import Rattelsemarkering from './Rattelsemarkering.vue'
 
 const props = defineProps<{ m: Motionsstatistik }>()
+
+// Rätta motionärer (#78): redaktörer och utgivare kan skriva en rättelse, och redaktören har en arbetslista.
+const jag = inject<Ref<Jag | null>>('jag', ref(null))
+const utloggad = inject<() => void>('utloggad', () => {})
+const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
+const kanRatta = computed(() => arRedaktor.value || (jag.value?.roller.includes('utgivare') ?? false))
+const utanMotionar = ref(false)
+const rattar = ref<number | null>(null)
+const sparad = ref<{ arende: number; id: number } | null>(null)
+const motioner = computed(() =>
+  utanMotionar.value ? props.m.motioner.lista.filter((f) => !f.motionarer.length) : props.m.motioner.lista,
+)
+function sparat(arende: number, id: number) {
+  rattar.value = null
+  sparad.value = { arende, id }
+}
 
 const utfallsnamn = computed(() => Object.fromEntries(props.m.utfall.map((u) => [u.id, u.namn])) as Record<string, string>)
 const summa = computed(() =>
@@ -81,6 +99,9 @@ const partinamn = (p: string) => (p === 'okant' ? 'Parti anges inte' : parti(p))
       <p class="kallrad">En motion med motionärer från flera partier räknas för varje parti.</p>
     </div>
 
+    <label v-if="arRedaktor && m.motioner.lista.length" class="filter">
+      <input v-model="utanMotionar" type="checkbox" data-testid="utan-motionar" /> Motioner utan motionär
+    </label>
     <p v-if="!m.motioner.lista.length" class="saknas">Inga motioner för perioden.</p>
     <div v-else class="rulla">
       <table class="tabell lista" data-testid="motionslista">
@@ -96,7 +117,8 @@ const partinamn = (p: string) => (p === 'okant' ? 'Parti anges inte' : parti(p))
           </tr>
         </thead>
         <tbody>
-          <tr v-for="f in m.motioner.lista" :key="f.arende_id" data-testid="motion">
+          <template v-for="f in motioner" :key="f.arende_id">
+          <tr data-testid="motion" :data-arende="f.arende_id">
             <td class="rubrik">
               <RouterLink :to="`/politik/arenden/${f.arende_id}`">{{ f.rubrik }}</RouterLink>
               <span v-if="f.aterremisser" class="not">Återremitterad {{ f.aterremisser }} gång{{ f.aterremisser > 1 ? 'er' : '' }}</span>
@@ -105,13 +127,21 @@ const partinamn = (p: string) => (p === 'okant' ? 'Parti anges inte' : parti(p))
                 ≈ Innehåller föreslagen koppling
               </span>
             </td>
-            <td>
+            <td data-testid="motionarer">
               <template v-if="f.motionarer.length">
                 <span v-for="(p, i) in f.motionarer" :key="i" class="person">
-                  {{ p.namn ?? 'Partiet' }}<template v-if="p.parti"> ({{ p.parti }})</template>
+                  <RouterLink v-if="p.person_id && p.namn" :to="`/politik/ledamoter/${p.person_id}`">{{ p.namn }}</RouterLink>
+                  <template v-else>{{ p.namn ?? 'Partiet' }}</template><template v-if="p.parti"> ({{ p.parti }})</template>
                 </span>
               </template>
               <span v-else class="saknas">Uppgift saknas</span>
+              <Rattelsemarkering v-if="f.rattelser?.motionarer" :rattelse="f.rattelser.motionarer" falt="motionarer" />
+              <button v-if="kanRatta && rattar !== f.arende_id" type="button" class="lank" data-testid="ratta-motionarer" @click="rattar = f.arende_id">
+                Rätta
+              </button>
+              <span v-if="sparad?.arende === f.arende_id" class="not" role="status" data-testid="motionarer-sparade">
+                Sparat som utkast. Publiceras efter granskning.
+              </span>
             </td>
             <td>
               <RouterLink v-if="f.vackt" :to="lank({ sammantrade: { id: f.vackt.sammantrade_id }, paragraf: f.vackt.paragraf })">
@@ -130,6 +160,19 @@ const partinamn = (p: string) => (p === 'okant' ? 'Parti anges inte' : parti(p))
               <span v-if="f.over_ett_ar" class="over" data-testid="over-ett-ar">{{ f.besvarad ? 'Mer än ett år' : 'Obesvarad mer än ett år' }}</span>
             </td>
           </tr>
+          <tr v-if="rattar === f.arende_id" class="rattelserad">
+            <td colspan="6">
+              <Motionarformular
+                :rubrik="f.rubrik"
+                :motionarer="f.motionarer"
+                :mal="f.rattelsemal"
+                @sparad="(id) => sparat(f.arende_id, id)"
+                @avbryt="rattar = null"
+                @utloggad="utloggad"
+              />
+            </td>
+          </tr>
+          </template>
         </tbody>
       </table>
       <p v-if="m.motioner.utan_vackt" class="kallrad">
@@ -181,6 +224,25 @@ const partinamn = (p: string) => (p === 'okant' ? 'Parti anges inte' : parti(p))
 </template>
 
 <style scoped>
+.filter {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin: 12px 0 4px;
+}
+.lank {
+  font: inherit;
+  font-size: 12px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 6px;
+}
+.rattelserad td {
+  background: var(--surface-raised);
+}
 .kort {
   background: var(--surface);
   border: 1px solid var(--line);
