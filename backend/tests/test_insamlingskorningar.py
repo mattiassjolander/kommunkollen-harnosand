@@ -59,8 +59,8 @@ def test_forsta_korningen_registreras_med_resultat_per_kalla(api):
     assert status["senaste_korning"]["utlosare"] == "manuell"
     assert status["senaste_korning"]["avslutad"]
     assert status["senaste_lyckade_korning"]["id"] == status["senaste_korning"]["id"]
-    assert status["kallor_kontrollerade"] == 7  # Kolada, SCB och protokollen från fem organ
-    assert status["kallor_utan_fel"] == 7
+    assert status["kallor_kontrollerade"] == 8  # Kolada, SCB, SKR och protokollen från fem organ
+    assert status["kallor_utan_fel"] == 8
     assert status["fullstandigt_uppdaterad"] is True
 
     kolada = kalla(api, "kolada")
@@ -72,7 +72,7 @@ def test_forsta_korningen_registreras_med_resultat_per_kalla(api):
 
     [korning] = api.get("/api/insamlingar").json()
     assert {r["datakalla_id"] for r in korning["kallor"]} == {
-        "kolada", "scb", *(f"harnosand-protokoll-{o}" for o in ("kf", "ks", "sam", "soc", "skol"))}
+        "kolada", "scb", "skr-skatteunderlagsprognos", *(f"harnosand-protokoll-{o}" for o in ("kf", "ks", "sam", "soc", "skol"))}
     [rad] = [r for r in korning["kallor"] if r["datakalla_id"] == "kolada"]
     assert rad["status"] == "lyckad"
     assert rad["antal_nya"] > 0

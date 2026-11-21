@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -22,6 +22,7 @@ from .sources.base import Datakalla
 from .sources.kolada import Kolada
 from .sources.harnosand import ORGAN, Protokollkalla
 from .sources.scb import Scb
+from .sources.skr import SkrSkatteunderlag
 
 KOMMUN = "2280"  # Härnösand
 FRAN_MILJO = object()  # create_app läser schemat från miljön om inget anges
@@ -43,6 +44,7 @@ def standardkallor() -> list[Datakalla]:
                anrop_per_sekund=_anropsgrans("KOLADA", 5)),
         Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
             anrop_per_sekund=_anropsgrans("SCB", 2)),
+        SkrSkatteunderlag(anrop_per_sekund=_anropsgrans("SKR", 1)),
         *(Protokollkalla(organ, urval=int(os.environ.get("PROTOKOLL_URVAL") or 0),
                          anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
     ]
@@ -147,6 +149,12 @@ def create_app(
                     })
                 grupper.append({"id": g.id, "titel": g.titel, "nyckeltal": nyckeltal})
         return {"omrade": omrade, "grupper": grupper}
+
+    @app.get("/api/skatteunderlagsprognoser", dependencies=[Depends(krav_roll("lasare"))])
+    def skatteunderlagsprognoser() -> dict:
+        """SKR:s skatteunderlagsprognoser för kommunen: den senaste och alla cirkulär (#61)."""
+        with db.connect(database_url) as conn:
+            return skatteunderlag.lista(conn)
 
     @app.get("/api/floden", dependencies=[Depends(krav_roll("lasare"))])
     def ekonomiska_floden(

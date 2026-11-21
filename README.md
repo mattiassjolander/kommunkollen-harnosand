@@ -50,7 +50,7 @@ npm test
 - **Söm 1** (`backend/tests`): HTTP-API:t mot riktig Postgres, med externa källor utbytta mot inspelade svar i `backend/tests/recordings`. Använder `TEST_DATABASE_URL` om den är satt, annars inbäddad Postgres.
 - **Söm 2** (`frontend/e2e`): Playwright mot riktig backend som hämtar från inspelningarna. Första gången: `npx --prefix frontend playwright install chromium`.
 
-Inspelningarna uppdateras från de riktiga källorna (Kolada, SCB och protokollen på harnosand.se) med:
+Inspelningarna uppdateras från de riktiga källorna (Kolada, SCB, SKR och protokollen på harnosand.se) med:
 
 ```bash
 PROTOKOLL_URVAL=2 uv run --directory backend python -m app.spela_in tests/recordings
@@ -64,6 +64,8 @@ Ledamotsregistret, partiet över tid och hur en redaktör slår ihop namn står 
 
 Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [docs/tackning-ekonomi.md](docs/tackning-ekonomi.md).
 
+Hur SKR:s skatteunderlagsprognos hämtas och räknas om för Härnösand står i [docs/skatteunderlag.md](docs/skatteunderlag.md). Omräkningen kräver LibreOffice (`soffice`).
+
 ## Konfiguration
 
 | Variabel | Vad |
@@ -72,7 +74,8 @@ Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [
 | `INSPELNINGAR` | Katalog med inspelade källsvar (bara för test och utveckling). |
 | `INSAMLING_DAGAR` | Dagar i månaden då insamlingen körs automatiskt, t.ex. `1,15` (standard). Tomt stänger av schemat. |
 | `INSAMLING_KLOCKAN` | Klockslag för den automatiska insamlingen, svensk tid (standard `03:00`). |
-| `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND`, `PROTOKOLL_ANROP_PER_SEKUND` | Högsta anropsfrekvens mot källan (standard 5, 2 respektive 1). `0` tar bort gränsen. |
+| `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND`, `SKR_ANROP_PER_SEKUND`, `PROTOKOLL_ANROP_PER_SEKUND` | Högsta anropsfrekvens mot källan (standard 5, 2, 1 respektive 1). `0` tar bort gränsen. |
+| `SOFFICE` | Sökväg till LibreOffice `soffice` om den inte finns i `PATH`. |
 | `PROTOKOLL_URVAL` | Högst så många protokoll per organsida och årsmapp. Bara för inspelningar och test, sätts inte i drift. |
 | `SESSION_SECRET` | Hemlighet för sessionskakan. Krävs på servern. Saknas den blir alla utloggade vid omstart. |
 | `SESSION_HTTPS_ONLY` | `true` när appen nås via https. |
