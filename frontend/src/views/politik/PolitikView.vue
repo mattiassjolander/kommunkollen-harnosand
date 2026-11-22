@@ -162,7 +162,10 @@ const paragrafer = (s: Sammantradesrad) =>
               § {{ t.paragraf }} {{ t.rubrik }}
             </RouterLink>
           </th>
-          <td class="tal">{{ t.diarienummer.join(', ') || '–' }}</td>
+          <td class="tal">
+            {{ t.diarienummer.join(', ') || '–' }}
+            <span v-if="t.diarienummer_ur_kallelsen" class="anteckning" data-testid="dnr-ur-kallelsen">ur kallelsen</span>
+          </td>
           <td>{{ t.sammantrade.organ.namn }}</td>
           <td class="tal">{{ t.sammantrade.datum ?? '–' }}</td>
         </tr>

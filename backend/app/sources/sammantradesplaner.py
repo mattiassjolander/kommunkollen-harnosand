@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import html
 import re
-from dataclasses import dataclass, field
+import tempfile
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
+from pathlib import Path
 from urllib.parse import urljoin
 
 import httpx
 
+from . import foredragningslista
 from . import kallelser as kallelsemodul
 from .base import Hamtning
 from .harnosand import BAS, ORGAN
@@ -202,15 +205,27 @@ class Sammantradesplaner:
     def __init__(self, anrop_per_sekund: float | None = 2.0) -> None:
         self.anrop_per_sekund = anrop_per_sekund
         self.kanda_kallelser: set[str] = set()
+        # Alla kallelser som redan finns. Föredragningslistan läses bara ur nya (#109).
+        self.alla_kallelser: set[str] = set()
 
     def _kallelser(self, client: httpx.Client, organ: str, sida: str, resultat: Hamtning) -> None:
         for k in kallelsemodul.kallelser_pa_sidan(organ, sida):
-            if (k.typ != "handlingar" and k.url not in self.kanda_kallelser and k.storlek is not None
-                    and k.storlek <= kallelsemodul.MAX_STORLEK_FOR_PLATS):
+            plats = (k.typ != "handlingar" and k.url not in self.kanda_kallelser and k.storlek is not None
+                     and k.storlek <= kallelsemodul.MAX_STORLEK_FOR_PLATS)
+            lista = k.url not in self.alla_kallelser and (k.storlek or 0) <= kallelsemodul.max_storlek_for_lista()
+            if plats or lista:
                 try:
-                    pdf = client.get(k.url)
-                    pdf.raise_for_status()
-                    k = kallelsemodul.las_kallelse(k, pdf.content)
+                    with tempfile.TemporaryDirectory(prefix="kallelse-") as katalog:
+                        fil = Path(katalog) / "kallelse.pdf"
+                        with client.stream("GET", k.url) as svar:
+                            svar.raise_for_status()
+                            with fil.open("wb") as f:
+                                for bit in svar.iter_bytes():
+                                    f.write(bit)
+                        if plats:
+                            k = kallelsemodul.las_kallelse(k, fil.read_bytes())
+                        if lista:
+                            k = replace(k, foredragningslista=foredragningslista.las(fil, organ))
                 except httpx.HTTPError as e:
                     resultat.fel.append(f"{k.titel}: {type(e).__name__}: {e}")
             resultat.kallelser.append(k)

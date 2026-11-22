@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaSammantrade, Saknas, type Jag, type Person, type Sammantrade } from '../../api'
 import { paragraftext, parti, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
+import Kallelsemarkering from '../../components/Kallelsemarkering.vue'
 import Periodmarkering from '../../components/Periodmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Rattelseformular from '../../components/Rattelseformular.vue'
@@ -105,6 +106,7 @@ const tid = computed(() =>
             <span class="rubrik">{{ b.rubrik || 'Rubrik saknas' }}</span>
           </RouterLink>
           <span v-if="b.diarienummer.length" class="dnr">{{ b.diarienummer.join(', ') }}</span>
+          <Kallelsemarkering v-if="b.diarienummer_kallelse" :kalla="b.diarienummer_kallelse" />
           <span v-if="b.antal_voteringar" class="etikett" data-testid="har-votering">
             {{ b.antal_voteringar > 1 ? `${b.antal_voteringar} voteringar` : 'Votering' }}
           </span>

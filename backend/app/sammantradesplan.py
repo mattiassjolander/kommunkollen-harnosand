@@ -475,22 +475,34 @@ def skillnader(sammantraden: list[dict], beslutade: dict[date, str | None]) -> l
 
 def lagra_kallelser(conn: psycopg.Connection, kallelser: list, webbsandningar: list, korning_id: int | None,
                     hamtad: datetime) -> dict[str, int]:
-    """Sparar kallelser och webbsändningar. En kallelse som lästs behåller sin plats även när den inte läses igen."""
-    antal = {"nya": 0, "andrade": 0, "oforandrade": 0}
+    """Sparar kallelser och webbsändningar. En kallelse som lästs behåller sin plats även när den inte läses igen.
+
+    `lasta_listor` i svaret: antalet kallelser vars föredragningslista lästes (#109), så att behandlingarna
+    kan kompletteras med diarienumren (`kallelsepunkter.komplettera`)."""
+    from .kallelsepunkter import lagra_punkter
+
+    antal = {"nya": 0, "andrade": 0, "oforandrade": 0, "lasta_listor": 0}
     for k in kallelser:
-        fore = conn.execute("SELECT tid, plats, pdf_last FROM kallelse WHERE url = %s", (k.url,)).fetchone()
+        fore = conn.execute("SELECT id, tid, plats, pdf_last, punkter_status FROM kallelse WHERE url = %s",
+                            (k.url,)).fetchone()
+        if k.foredragningslista is not None and (fore is None or fore["punkter_status"] == "ej_last"):
+            antal["lasta_listor"] += 1
         if fore is None:
-            conn.execute(
+            kallelse_id = conn.execute(
                 """
                 INSERT INTO kallelse (organ, datum, tid, typ, titel, url, storlek, plats, pdf_last, forst_sedd,
                                       senast_sedd, korning_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
                 """,
                 (k.organ, k.datum, k.tid, k.typ, k.titel, k.url, k.storlek, k.plats, k.pdf_last, hamtad, hamtad,
                  korning_id),
-            )
+            ).fetchone()["id"]
+            if k.foredragningslista is not None:
+                lagra_punkter(conn, kallelse_id, k.foredragningslista, hamtad)
             antal["nya"] += 1
             continue
+        if k.foredragningslista is not None and fore["punkter_status"] == "ej_last":
+            lagra_punkter(conn, fore["id"], k.foredragningslista, hamtad)
         if k.pdf_last and not fore["pdf_last"]:
             conn.execute("UPDATE kallelse SET tid = %s, plats = %s, pdf_last = true, senast_sedd = %s WHERE url = %s",
                          (k.tid or fore["tid"], k.plats, hamtad, k.url))

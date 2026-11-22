@@ -20,6 +20,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from . import arenden, ledamoter, partier, sammantradesplan
+from .kallelsepunkter import Kallelsenummer, efter_rattelser
 from .partitillhorighet import Gallande
 from .rattelser import Publicerade
 from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_vid, tolka
@@ -206,8 +207,8 @@ def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: in
 # Läsning
 
 _SAMMANTRADE = """
-    SELECT s.id, s.organ, s.datum, s.starttid, s.sluttid, s.plats, s.tolkning, s.avvikelser, s.tolkad, s.ocr,
-           d.id AS dokument_id, d.url AS dokument_url, d.filnamn, d.typ AS dokument_typ,
+    SELECT s.id, s.organ, s.datum, s.starttid, s.sluttid, s.plats, s.tolkning, s.avvikelser, s.kallelse_avvikelser,
+           s.tolkad, s.ocr, d.id AS dokument_id, d.url AS dokument_url, d.filnamn, d.typ AS dokument_typ,
            d.version AS dokument_version,
            d.sha256, d.storlek, d.hamtad, d.datakalla_id, k.titel AS datakalla_titel,
            (SELECT count(*) FROM behandling b WHERE b.sammantrade_id = s.id) AS antal_behandlingar,
@@ -231,7 +232,7 @@ def _sammantrade(rad: dict) -> dict:
         "sluttid": rad["sluttid"],
         "plats": rad["plats"],
         "tolkning": rad["tolkning"],
-        "avvikelser": rad["avvikelser"],
+        "avvikelser": rad["avvikelser"] + rad["kallelse_avvikelser"],
         "ocr": rad["ocr"],
         "antal_behandlingar": rad["antal_behandlingar"],
         "paragrafer": [rad["forsta_paragraf"], rad["sista_paragraf"]] if rad["forsta_paragraf"] is not None else None,
@@ -273,10 +274,15 @@ def sok_behandlingar(
     monster = "%" + q.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_") + "%"
     rader = conn.execute(
         """
-        SELECT b.paragraf, b.rubrik, b.diarienummer, s.id AS sammantrade_id, s.organ, s.datum, s.tolkning,
-               count(*) OVER () AS antal
+        SELECT b.paragraf, b.rubrik, d.diarienummer, d.ur_kallelsen, s.id AS sammantrade_id, s.organ, s.datum,
+               s.tolkning, count(*) OVER () AS antal
         FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-        WHERE (b.rubrik ILIKE %(m)s OR EXISTS (SELECT 1 FROM unnest(b.diarienummer) dnr WHERE dnr ILIKE %(m)s))
+        LEFT JOIN kallelse_diarienummer kd ON kd.sammantrade_id = b.sammantrade_id AND kd.paragraf = b.paragraf
+        -- Protokollets diarienummer, annars kallelsens (#109).
+        CROSS JOIN LATERAL (SELECT CASE WHEN cardinality(b.diarienummer) = 0 AND kd.diarienummer IS NOT NULL
+                                        THEN kd.diarienummer ELSE b.diarienummer END AS diarienummer,
+                                   cardinality(b.diarienummer) = 0 AND kd.diarienummer IS NOT NULL AS ur_kallelsen) d
+        WHERE (b.rubrik ILIKE %(m)s OR EXISTS (SELECT 1 FROM unnest(d.diarienummer) dnr WHERE dnr ILIKE %(m)s))
           AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
           AND (%(ar)s::int IS NULL OR extract(year FROM s.datum) = %(ar)s)
         ORDER BY s.datum DESC NULLS LAST, s.id DESC, b.ordning
@@ -289,6 +295,7 @@ def sok_behandlingar(
         "traffar": [
             {
                 "paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"],
+                "diarienummer_ur_kallelsen": r["ur_kallelsen"],
                 "sammantrade": {
                     "id": r["sammantrade_id"], "datum": r["datum"], "tolkning": r["tolkning"],
                     "organ": {"id": r["organ"], "namn": ORGAN[r["organ"]].namn if r["organ"] in ORGAN else r["organ"]},
@@ -348,10 +355,12 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
     narvaro = _las_narvaro(conn, sammantrade_id)
     personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
     pub = Publicerade(conn, [sammantrade_id])
+    kn = Kallelsenummer(conn, [sammantrade_id])
     gal = Gallande(conn, [x for n in narvaro for x in (n.namn, n.tjanstgor_for)])
     return _sammantrade(rad) | {
         "narvaro": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal, [_person(n, personer) for n in narvaro]),
-        "behandlingar": [pub.behandling(sammantrade_id, _behandling(b)) for b in behandlingar],
+        "behandlingar": [efter_rattelser(pub.behandling(sammantrade_id, kn.satt(sammantrade_id, _behandling(b))))
+                         for b in behandlingar],
     }
 
 
@@ -378,7 +387,9 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
     # partitillhorighet.py).
     pub = Publicerade(conn, [sammantrade_id])
     gal = Gallande(conn, [x for n in narvaro for x in (n.namn, n.tjanstgor_for)])
-    return pub.behandling(sammantrade_id, _behandling(b)) | _yrkanden_och_voteringar(conn, b, pub, rad["datum"]) | {
+    behandling = efter_rattelser(pub.behandling(
+        sammantrade_id, Kallelsenummer(conn, [sammantrade_id]).satt(sammantrade_id, _behandling(b))))
+    return behandling | _yrkanden_och_voteringar(conn, b, pub, rad["datum"]) | {
         "sammantrade": _sammantrade(rad),
         "beslutande": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal,
                                  [_person(n, personer) for n in beslutande_vid(narvaro, paragraf)]),

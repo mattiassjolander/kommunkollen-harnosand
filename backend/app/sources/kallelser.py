@@ -5,6 +5,9 @@ ibland klockslag, och filstorlek i länktexten. Kallelsen kopplas till sammantr�
 Platsen läses ur kallelsens första sida ("… kallas härmed till sammanträde 2026-10-26 kl. 11:00 - i Rådhuset -
 KF-salen."), men bara ur små filer: kallelser med handlingar kan vara flera hundra MB.
 
+Föredragningslistan läses ur nya kallelser, kungörelser och handlingar, för diarienumren (#109, se
+`foredragningslista`). Filen hämtas till en tillfällig fil, eftersom handlingarna kan vara mycket stora.
+
 Webbsändningar: sidan för webb-tv listar en länk per sammanträde i fullmäktige ("Sammanträde 2026-10-26"),
 till qcnl.tv från 2026 och play.quickchannel.com för 2024–2025. Ingen livelänk är känd i förväg.
 """
@@ -13,6 +16,7 @@ from __future__ import annotations
 
 import html
 import io
+import os
 import re
 from dataclasses import dataclass, replace
 from datetime import date
@@ -20,11 +24,18 @@ from urllib.parse import unquote, urljoin
 
 from pypdf import PdfReader
 
+from .foredragningslista import Foredragningslista
 from .harnosand import BAS, POLITIK
 
 WEBB_TV = urljoin(BAS, f"{POLITIK}/kommunfullmaktige/webb-tv.html")
 # Kallelser större än så hämtas inte för att läsa platsen.
 MAX_STORLEK_FOR_PLATS = 2_000_000
+
+
+def max_storlek_for_lista() -> int:
+    """Kallelser större än så hämtas inte för att läsa föredragningslistan (kommunstyrelsens största
+    handlingar 2026 var 316 MB)."""
+    return int(os.environ.get("KALLELSE_MAX_STORLEK_FOR_LISTA", 600_000_000))
 
 
 @dataclass(frozen=True)
@@ -38,6 +49,7 @@ class Kallelse:
     storlek: int | None  # byte, enligt sidan
     plats: str | None = None
     pdf_last: bool = False  # kallelsen är hämtad och läst (oavsett om platsen stod där)
+    foredragningslista: Foredragningslista | None = None  # None: inte läst
 
 
 @dataclass(frozen=True)

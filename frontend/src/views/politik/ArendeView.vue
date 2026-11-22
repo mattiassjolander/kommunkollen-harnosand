@@ -5,6 +5,7 @@ import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaArende, Saknas, type Arende, type Jag, type Koppling } from '../../api'
 import { sammantradesdatum } from '../../format'
+import Kallelsemarkering from '../../components/Kallelsemarkering.vue'
 import Kopplingsmarkering from '../../components/Kopplingsmarkering.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
@@ -126,7 +127,10 @@ const ovriga = computed(() =>
           <RouterLink :to="lank(b.sammantrade, b.paragraf)" class="stegrubrik">
             § {{ b.paragraf }} {{ b.rubrik }}
           </RouterLink>
-          <p v-if="b.diarienummer.length" class="anteckning">Diarienummer {{ b.diarienummer.join(', ') }}</p>
+          <p v-if="b.diarienummer.length" class="anteckning">
+            Diarienummer {{ b.diarienummer.join(', ') }}
+            <Kallelsemarkering v-if="b.diarienummer_kallelse" :kalla="b.diarienummer_kallelse" />
+          </p>
           <p v-if="b.beslut" class="utdrag">{{ b.beslut }}</p>
         </li>
       </ol>

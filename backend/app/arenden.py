@@ -13,6 +13,9 @@ Kopplingsreglerna, framtagna ur hela protokollarkivet:
   redaktör bekräftar eller avvisar (ADR-0002).
 - Samlingspunkter (delegationsbeslut, meddelanden, ärenden för kännedom …) kopplas aldrig.
 
+Diarienumren är protokollets, annars kallelsens (#109, `kallelsepunkter`), och en publicerad rättelse
+går före båda. Kopplingarna använder dem oavsett källa.
+
 Ett ärende är en sammanhängande grupp behandlingar via automatiska och bekräftade kopplingar.
 Varje behandling hör till ett ärende, ensam om inget kopplar den. Ärendena räknas om efter varje
 tolkning och behåller sina id så långt det går.
@@ -221,6 +224,8 @@ def _beh(r: dict) -> dict:
                         "tolkning": r["tolkning"]},
         "paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"], "beslut": r["beslut"],
         "typ": r["typ"],
+        # Diarienumret står i kallelsen, inte i protokollet (#109).
+        "diarienummer_kallelse": r.get("diarienummer_kallelse"),
     }
     if "rattelser" in r:
         b["rattelser"] = r["rattelser"]

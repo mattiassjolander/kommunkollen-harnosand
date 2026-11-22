@@ -54,3 +54,37 @@ test('redaktören ser sammanträdesplanerna med inställda möten, ändrade tide
     /socialnamnden\.html$/,
   )
 })
+
+test('diarienummer som protokollet saknar visas ur kallelsen med länk till sidan (#109)', async ({ page }) => {
+  // Kompletteringen ur kallelsen testas mot riktiga kallelser i backend (test_diarienummer_ur_kallelsen.py).
+  // Inspelningarna här har inte de kallelserna, så svaret får källan för den första behandlingen.
+  const kalla = {
+    titel: 'Handlingar kommunfullmäktige 2026-03-23',
+    typ: 'handlingar',
+    url: 'https://www.harnosand.se/handlingar.pdf#page=6',
+    sida: 6,
+  }
+  await page.request.post('/api/auth/test/lasare')
+  const sammantraden = await (await page.request.get('/api/sammantraden?organ=KF')).json()
+  const s = sammantraden.find((x: { datum: string }) => x.datum === '2026-03-23')
+  expect(s).toBeTruthy()
+  await page.route(/\/api\/sammantraden\/\d+$/, async (route) => {
+    const svar = await route.fetch()
+    const data = await svar.json()
+    const b = data.behandlingar[0]
+    b.diarienummer = ['KS/2026-533']
+    b.diarienummer_kallelse = kalla
+    await route.fulfill({ response: svar, json: data })
+  })
+
+  await page.goto(`/politik/sammantraden/${s.id}`)
+  const rad = page.locator('[data-testid="behandling"]').first()
+  await expect(rad.locator('.dnr')).toHaveText('KS/2026-533')
+  await expect(rad.getByTestId('dnr-ur-kallelsen')).toContainText('ur kallelsen')
+  await expect(page.locator('[data-testid="behandling"]').nth(1).getByTestId('dnr-ur-kallelsen')).toHaveCount(0)
+
+  await rad.getByTestId('dnr-ur-kallelsen').getByText('ur kallelsen').click()
+  const lank = rad.getByTestId('kallelselank')
+  await expect(lank).toHaveText('Handlingar kommunfullmäktige 2026-03-23, sidan 6')
+  await expect(lank).toHaveAttribute('href', kalla.url)
+})

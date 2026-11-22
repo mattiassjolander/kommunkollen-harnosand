@@ -42,6 +42,8 @@ def main() -> None:
             os.environ.setdefault(f"{kalla}_ANROP_PER_SEKUND", "0")
         # Inspelningarna har två protokoll per sida och årsmapp.
         os.environ.setdefault("PROTOKOLL_URVAL", "2")
+        # Föredragningslistan läses bara ur de små kallelserna, som finns i inspelningarna (#109).
+        os.environ.setdefault("KALLELSE_MAX_STORLEK_FOR_LISTA", "2000000")
 
     from .main import create_app
 

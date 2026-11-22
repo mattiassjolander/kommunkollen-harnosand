@@ -22,6 +22,9 @@ _Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
 **Kallelse**:
 Handlingen som kallar till ett sammanträde och listar ärendena. För kommunfullmäktige heter den *kungörelse*. Kallelsen publiceras ofta 1–3 dagar före sammanträdet, ibland tillsammans med handlingarna.
 
+**Föredragningslista**:
+Tabellen i kallelsen med ärendena i ordning: paragraf, rubrik och sida, ofta med diarienummer. När protokollet saknar ett diarienummer hämtas det härifrån och markeras "ur kallelsen" (#109). Kallelsens paragrafnummer kan skilja sig från protokollets.
+
 **Webbsändning**:
 Ett sammanträde i kommunfullmäktige som sänds och spelas in i kommunens webb-tv. Inspelningen får en egen länk efter sammanträdet.
 
