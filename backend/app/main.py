@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -468,6 +468,23 @@ def create_app(
         """Föreslagna perioder per person ur närvarolistorna, med belägg och krockar (#100, del 2)."""
         with db.connect(database_url) as conn:
             return partiforslag.forslag(conn)
+
+    @app.get("/api/partitillhorighet/krockar", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def partitillhorighet_krockar() -> list[dict]:
+        """Obekräftade krockar per person: närvarolistan anger ett annat parti än perioden (#100, del 3)."""
+        with db.connect(database_url) as conn:
+            return krockar.lista(conn)
+
+    @app.post("/api/partitillhorighet/krockar/bekraftelser", status_code=201)
+    def bekrafta_krockar(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> list[dict]:
+        """Bekräftar krockar som rättelser (utkast): {felet_i, motivering, krockar: [{sammantrade_id, namn}]}."""
+        return _rattelse(krockar.bekrafta, data, anv.epost)
+
+    @app.get("/api/partitillhorighet/personer", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def partitillhorighet_personer() -> list[dict]:
+        """Personerna med perioder, väntande och krockar, för filtren i fliken (#100, del 3)."""
+        with db.connect(database_url) as conn:
+            return krockar.personer(conn)
 
     @app.post("/api/partitillhorighet/batcher", status_code=201)
     def skapa_partitillhorighet_batch(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> list[dict]:
