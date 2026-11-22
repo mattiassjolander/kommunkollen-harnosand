@@ -25,6 +25,8 @@ VACKT = "Kommunfullmäktige beslutar\natt överlämna motionen till kommunstyrel
         ("Svar på motion - Utökade tider för serveringstillstånd", "utökade tider för serveringstillstånd"),
         ("Svar på motion - Slopa enprocentregeln", "slopa enprocentregeln"),
         ("Motion – Jämställdhetsstrategi (KS2022-206)", "jämställdhetsstrategi"),
+        ("Motion - Inför elektronisk körjournal (anmälan)", "inför elektronisk körjournal"),
+        ("Motion - Slopa enprocentregeln (Anmälan)", "slopa enprocentregeln"),
         ("Motion: Snabbladdare för elfordon", "snabbladdare för elfordon"),
         ("Yttrande över motionen om  Fler   laddplatser", "fler laddplatser"),
         ("Motion - Uppföljning av bifallna e-förslag, lex belysning", "uppföljning av bifallna e-förslag, lex belysning"),
@@ -61,6 +63,13 @@ def test_svaret_kopplas_automatiskt_till_den_vackta_motionen_och_ovriga_via_hanv
     # Utan hänvisningen kopplas KS-behandlingen på samma sätt.
     ks.hanvisningar = []
     assert kopplingar(kf, skol, ks)[((1, 133), (3, 162))] == ("motionstitel", "automatisk")
+
+
+def test_anmalan_i_kf_hindrar_inte_den_automatiska_kopplingen():
+    # KF 2026-06-15 § 117 och KS 2026-11-03 § 159, som blev ett förslag före rättelsen.
+    kf = beh((1, 117), "KF", "2026-06-15", "Motion - Inför elektronisk körjournal (anmälan)", [], VACKT)
+    ks = beh((2, 159), "KS", "2026-11-03", "Svar på motion - Inför elektronisk körjournal")
+    assert kopplingar(kf, ks) == {((1, 117), (2, 159)): ("motionstitel", "automatisk")}
 
 
 def test_liknande_titel_eller_flera_vackta_motioner_ger_forslag():

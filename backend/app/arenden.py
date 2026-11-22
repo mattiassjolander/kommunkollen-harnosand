@@ -68,7 +68,8 @@ _MOTIONSPREFIX = re.compile(
     r"(?:\s*[-–—:]\s*|\s+)(?:om\s+)?",
     re.I,
 )
-_DNR_PARENTES = re.compile(r"\s*\([^)]*\d[^)]*\)")
+# Diarienummer inom parentes, "(KS2022-206)", och "(anmälan)" som KF sätter efter rubriken när motionen väcks.
+_PARENTES = re.compile(r"\s*\((?:[^)]*\d[^)]*|anmälan)\)", re.I)
 
 
 def motionstitel(text: str | None) -> str | None:
@@ -79,7 +80,7 @@ def motionstitel(text: str | None) -> str | None:
     m = _MOTIONSPREFIX.match(text)
     if not m:
         return None
-    titel = _DNR_PARENTES.sub("", text[m.end():])
+    titel = _PARENTES.sub("", text[m.end():])
     titel = " ".join(titel.lower().split()).strip(" .,:;–—-")
     return titel or None
 
