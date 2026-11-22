@@ -144,3 +144,83 @@ def test_kopplingsreglerna_for_hanvisningar():
         ((1, 61), (4, 5)): "forslag",  # utan organ: alla behandlingar den dagen med den paragrafen
         ((3, 61), (4, 5)): "forslag",
     }
+
+
+def test_ett_beslut_om_en_koppling_kan_andras_med_motivering_och_historiken_bevaras(api, database_url):
+    """#77: en avvisad koppling bekräftas i efterhand, och de två behandlingarna hamnar i samma ärende."""
+    assert api.post("/api/auth/test/redaktor").status_code == 200
+    redaktor = "test-redaktor@kommunkollen.test"
+    ko = api.get("/api/kopplingar").json()
+    [nedat] = [k for k in ko if (k["fran"]["sammantrade"]["organ"]["id"], k["fran"]["paragraf"],
+                                 k["till"]["sammantrade"]["organ"]["id"], k["till"]["paragraf"]) == ("KF", 13, "KS", 38)]
+    assert nedat["historik"] == []
+
+    assert api.post(f"/api/kopplingar/{nedat['id']}/avvisning").json()["status"] == "avvisad"
+    assert ("KF", "2023-02-27", 13) not in vag(arende(api, "KS", "2025-03-04", 38))
+    [avvisad] = api.get("/api/kopplingar", params={"status": "avvisad"}).json()
+    assert [(h["status"], h["redaktor"], h["motivering"]) for h in avvisad["historik"]] == [("avvisad", redaktor, None)]
+    assert avvisad["beslutad"]
+    # Mina beslut: bara de som redaktören själv beslutade senast.
+    assert [k["id"] for k in api.get("/api/kopplingar", params={"status": "avvisad", "mina": True}).json()] == [nedat["id"]]
+
+    # Att ändra ett beslut kräver motivering, och samma beslut igen är inget beslut.
+    andra = f"/api/kopplingar/{nedat['id']}/beslut"
+    svar = api.post(andra, json={"status": "bekraftad"})
+    assert (svar.status_code, svar.json()["detail"]) == (422, "Att ändra ett beslut kräver en motivering")
+    assert api.post(andra, json={"status": "avvisad", "motivering": "Fel"}).status_code == 422
+    assert api.post(andra, json={"status": "okand", "motivering": "Fel"}).status_code == 422
+    assert api.post("/api/kopplingar/999999/beslut", json={"status": "bekraftad", "motivering": "x"}).status_code == 404
+
+    svar = api.post(andra, json={"status": "bekraftad", "motivering": "  Hänvisningen gäller samma motion.  "})
+    assert svar.status_code == 200, svar.text
+    k = svar.json()
+    assert (k["status"], k["redaktor"]) == ("bekraftad", redaktor)
+    assert [(h["status"], h["motivering"]) for h in k["historik"]] == [
+        ("avvisad", None), ("bekraftad", "Hänvisningen gäller samma motion.")]
+    # Ärendena räknas om: KF 2023-02-27 §13 och KS 2025-03-04 §38 är nu samma ärende.
+    a = arende(api, "KS", "2025-03-04", 38)
+    assert ("KF", "2023-02-27", 13) in vag(a)
+    assert a["id"] == arende(api, "KF", "2023-02-27", 13)["id"]
+    assert api.get("/api/kopplingar", params={"status": "avvisad"}).json() == []
+
+    # Tillbaka till förslag: kopplingen ligger i kön igen, utan beslutsfattare, och historiken står kvar.
+    k = api.post(andra, json={"status": "forslag", "motivering": "Osäker, behöver kontrolleras."}).json()
+    assert (k["status"], k["redaktor"], k["beslutad"]) == ("forslag", None, None)
+    assert [h["status"] for h in k["historik"]] == ["avvisad", "bekraftad", "forslag"]
+    assert nedat["id"] in {x["id"] for x in api.get("/api/kopplingar").json()}
+    assert ("KF", "2023-02-27", 13) not in vag(arende(api, "KS", "2025-03-04", 38))
+
+    # En omtolkning bevarar det senaste beslutet och historiken.
+    k = api.post(andra, json={"status": "bekraftad", "motivering": "Kontrollerat mot protokollet."}).json()
+    with db.connect(database_url) as conn:
+        tolka_om(conn, datetime.now(timezone.utc))
+        koppla(conn)
+    [k] = [x for x in api.get("/api/kopplingar", params={"status": "bekraftad"}).json() if x["id"] == nedat["id"]]
+    assert [h["status"] for h in k["historik"]] == ["avvisad", "bekraftad", "forslag", "bekraftad"]
+
+    # Automatiska kopplingar bygger på diarienumret och beslutas inte.
+    [auto, *_] = api.get("/api/kopplingar", params={"status": "automatisk"}).json()
+    assert api.post(f"/api/kopplingar/{auto['id']}/beslut", json={"status": "avvisad", "motivering": "x"}).status_code == 422
+
+    # Läsare får inte ändra beslut.
+    assert api.post("/api/auth/test/lasare").status_code == 200
+    assert api.post(andra, json={"status": "avvisad", "motivering": "x"}).status_code == 403
+
+
+def test_befintliga_beslut_blir_historikens_forsta_post(api, database_url):
+    """Migreringen 0015 lägger beslut som fattades före historiken som första post."""
+    from pathlib import Path
+
+    import app as app_paket
+
+    sql = (Path(app_paket.__file__).parent / "migrations" / "0015_kopplingsbeslut.sql").read_text(encoding="utf-8")
+    insert = sql[sql.index("INSERT INTO kopplingsbeslut"):]
+    with db.connect(database_url) as conn:
+        [k] = conn.execute("SELECT id FROM koppling WHERE status = 'forslag' ORDER BY id LIMIT 1").fetchall()
+        tid = datetime(2025, 5, 1, tzinfo=timezone.utc)
+        conn.execute("UPDATE koppling SET status = 'bekraftad', redaktor = 'tidigare@kommunkollen.test', beslutad = %s "
+                     "WHERE id = %s", (tid, k["id"]))
+        conn.execute(insert)
+        [h] = conn.execute("SELECT status, redaktor, tid, motivering FROM kopplingsbeslut WHERE koppling_id = %s",
+                           (k["id"],)).fetchall()
+    assert (h["status"], h["redaktor"], h["tid"], h["motivering"]) == ("bekraftad", "tidigare@kommunkollen.test", tid, None)

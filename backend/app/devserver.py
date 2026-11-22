@@ -38,7 +38,7 @@ def main() -> None:
     if a.inspelningar:
         os.environ["INSPELNINGAR"] = str(a.inspelningar.resolve())
         # Inspelade svar behöver ingen anropsgräns.
-        for kalla in ("KOLADA", "SCB", "PROTOKOLL"):
+        for kalla in ("KOLADA", "SCB", "SKR", "PROTOKOLL"):
             os.environ.setdefault(f"{kalla}_ANROP_PER_SEKUND", "0")
         # Inspelningarna har två protokoll per sida och årsmapp.
         os.environ.setdefault("PROTOKOLL_URVAL", "2")

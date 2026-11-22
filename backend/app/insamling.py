@@ -13,6 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
+from . import sammantradesplan, skatteunderlag
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -109,8 +110,31 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
             fel.append(dokumentfel)
     if dokument_andrade:
         koppla(conn)
+    prognosdatum = []
+    for p in hamtning.prognosfiler:
+        utfall, prognosfel, publicerad = skatteunderlag.lagra(conn, p, korning_id, hamtad)
+        if utfall == "ny":
+            res.antal_nya += 1
+        elif utfall == "andrad":
+            res.antal_andrade += 1
+        elif not prognosfel:
+            res.antal_oforandrade += 1
+        if prognosfel:
+            fel.append(prognosfel)
+        if publicerad:
+            prognosdatum.append(publicerad)
+    for plan in hamtning.sammantradesplaner:
+        antal = sammantradesplan.lagra(conn, plan, korning_id, hamtad)
+        res.antal_nya += antal["nya"]
+        res.antal_andrade += antal["andrade"]
+        res.antal_oforandrade += antal["oforandrade"]
+    if hamtning.kallelser or hamtning.webbsandningar:
+        antal = sammantradesplan.lagra_kallelser(conn, hamtning.kallelser, hamtning.webbsandningar, korning_id, hamtad)
+        res.antal_nya += antal["nya"]
+        res.antal_andrade += antal["andrade"]
+        res.antal_oforandrade += antal["oforandrade"]
     publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
-                                 *(u.kallans_publicering for u in hamtning.uppgifter)) if d]
+                                 *(u.kallans_publicering for u in hamtning.uppgifter), *prognosdatum) if d]
     res.senaste_publicering = max(publiceringar, default=None)
     if fel:
         res.status = "delvis_fel"
@@ -192,6 +216,8 @@ def _kor(
             (kalla.id, kalla.titel, kalla.url),
         )
         try:
+            if hasattr(kalla, "kanda_kallelser"):
+                kalla.kanda_kallelser = {r["url"] for r in conn.execute("SELECT url FROM kallelse WHERE pdf_last")}
             if hasattr(kalla, "kanda_dokument"):
                 # Källor med dokument får veta vilka adresser som redan är hämtade.
                 kalla.kanda_dokument = {r["url"] for r in conn.execute(

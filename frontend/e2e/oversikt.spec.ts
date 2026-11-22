@@ -33,7 +33,7 @@ test('översikten visar datainsamlingens status: senaste och nästa uppdatering 
   await expect(status).toContainText('Fullständigt uppdaterad')
   await expect(status.getByTestId('senaste-insamling')).toContainText(/\d{1,2} [a-zä]+ \d{4}, \d{2}:\d{2}/)
   await expect(status.getByTestId('nasta-insamling')).toContainText(/(1|15) [a-zä]+ \d{4}, 03:00/)
-  await expect(status.getByTestId('kallstatus')).toContainText('7 av 7 kontrollerade utan fel')
+  await expect(status.getByTestId('kallstatus')).toContainText('9 av 9 kontrollerade utan fel')
 })
 
 test('genvägarna leder till rätt vyer', async ({ page }) => {

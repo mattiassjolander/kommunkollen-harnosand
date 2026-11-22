@@ -21,6 +21,8 @@ export default defineConfig({
     {
       command: `uv run --directory ../backend kommunkollen-dev --port ${API_PORT} --inspelningar tests/recordings --databas .e2e-db --budgetforslag tests/fixtures/budgetforslag`,
       url: `http://127.0.0.1:${API_PORT}/api/halsa`,
+      // Kalendern visar kommande sammanträden. Dagens datum låses så att testerna inte beror på när de körs.
+      env: { KOMMUNKOLLEN_IDAG: '2026-11-20' },
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
     },

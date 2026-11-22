@@ -17,7 +17,7 @@ test('statusindikatorn syns i sidhuvudet på alla sidor', async ({ page }) => {
     await expect(indikator).toContainText('Senaste insamling:')
     await expect(indikator).toContainText('Senast lyckad:')
     await expect(indikator.getByTestId('nasta-korning')).toContainText(/Nästa insamling: (1|15) [a-zä]+ \d{4}, 03:00/)
-    await expect(indikator).toContainText('7 av 7 kontrollerade utan fel') // Kolada, SCB och protokollen från fem organ
+    await expect(indikator).toContainText('9 av 9 kontrollerade utan fel') // Kolada, SCB, SKR, protokollen från fem organ och sammanträdesplanerna
   }
 })
 

@@ -15,6 +15,113 @@ Kommunfullmäktige (KF), kommunstyrelsen (KS), samhällsnämnden (SAM), socialn�
 - Varje protokoll sparas som plattformens egen kopia med SHA-256. Nytt innehåll under samma adress blir en ny version, och den tidigare finns kvar. Samma innehåll under en ny adress sparas inte igen.
 - Den första insamlingen hämtar alla protokoll sedan 2022, ungefär 270 filer och 200 MB. Med standardgränsen ett anrop per sekund tar det några minuter.
 
+## Sammanträdesplaner
+
+Datakällan "Sammanträdesplaner" (`harnosand-sammantradesplaner`, #68) läser tabellerna med sammanträdesdagar
+på de fem organens sidor. Varje tabell har kolumnerna Månad, Datum och Tid, och året står i tabellens rubrik
+eller i rubriken ovanför. Kommunstyrelsen har två tabeller (2026 och 2027).
+
+Fritexten i tabellerna tolkas:
+
+| Text | Tolkning |
+| --- | --- |
+| "Inställt" eller "Inställd" i Tid | Sammanträdet är inställt |
+| "Inställd" i Datum, utan dag | Månadens sammanträde är inställt. Har sammanträdet tidigare haft ett datum behåller det datumet |
+| "OBS tiden: 11.00" | Ändrad starttid |
+| "(8/9 ställs in) 15, 29" | 8 september är inställt, 15 och 29 är planerade |
+| "5, 26" | Två sammanträden i månaden |
+| Annan text | Sparas som en anmärkning på raden och ger *delvis fel* |
+
+Varje rad blir ett planerat sammanträde i tabellen `sammantrade`, med plan_*-kolumnerna ifyllda och utan
+protokoll. Raden identifieras av organet och datumet. En ändrad tid eller status blir en ny version i
+`planversion` (en reviderad uppgift) och sammanträdet behåller sitt id. Ett sammanträde som försvinner från
+sidan, för ett år som sidan fortfarande visar, markeras som borttaget ur planen och finns kvar.
+
+**Koppling till protokollen.** När ett protokoll läses in kopplas det till det planerade sammanträdet med
+samma organ och datum, i stället för att skapa ett nytt. Har båda en starttid väljs det sammanträde vars tid
+ligger närmast, högst 60 minuter ifrån. Fullmäktige hade till exempel två sammanträden 2026-10-26: planens
+11.00 gäller protokollet som började 11.10, och protokollet från 13.15 blir ett eget sammanträde. Finns
+protokollet redan när planen läses kopplas planen till det på samma sätt.
+
+**Jämförelse med besluten.** Organen beslutar om planen i protokollen, med rubriker som "Sammanträdestider
+2027" eller "Socialnämndens sammanträdesdagar 2026". Ur besluten läses att-satser om organets egna sammanträden:
+
+- "att kommunstyrelsen sammanträder 08.15 följande datum: 2 februari, 6 april …" ger hela planen för året.
+  Förslag till ett annat organ och arbetsutskottets datum räknas inte.
+- "att sammanträdet den 17 juni ställs in" tar bort ett datum.
+- "att kommunstyrelsens sammanträde 8 september 2026 senareläggs till 15 september 2026" (även "flyttas" och
+  "tidigareläggs") flyttar ett datum.
+
+Besluten gäller i datumordning. Webbsidans planerade sammanträden jämförs med datumen enligt besluten, och
+skillnaderna (bara på webbsidan, bara i beslutet och annan tid) visas på sidan Planer för redaktionen. De visas
+inte publikt. Anger inget beslut datumen, t.ex. "att anta förslag till sammanträdestider", jämförs planen inte.
+
+Planerade sammanträden räknas inte i statistiken och listas inte bland sammanträdena med protokoll.
+
+## Kalender och ics-flöden
+
+Sidan **Kalender** (`/kalender`, #68) visar sammanträdena för de fem organen:
+- kommande sammanträden i en lista, och de senaste 12 månaderna under "Tidigare sammanträden";
+- en månadsvy;
+- filter per organ;
+- inställda och borttagna sammanträden överstrukna.
+
+Organ, vy, månad och valt sammanträde står i URL:en.
+
+**Flöden** (`app/kalender.py`), öppna utan inloggning eftersom kalenderappar inte kan logga in:
+
+| Adress | Innehåll |
+| --- | --- |
+| `/kalender/alla.ics` | Alla fem organen |
+| `/kalender/kommunfullmaktige.ics`, `kommunstyrelsen`, `samhallsnamnden`, `socialnamnden`, `skolnamnden` | Ett organ |
+| `/kalender/sammantraden/<id>.ics` | Ett sammanträde, som fil att ladda ner |
+
+Flödena innehåller de kommande sammanträdena och de senaste 12 månaderna. Ett sammanträde utan datum (en
+månad som bara anges som inställd) ingår inte. Händelserna:
+
+- **UID:** `sammantrade-<id>@kommunkollen-harnosand`, stabilt eftersom sammanträdet behåller sitt id när
+  planen ändras och när protokollet kopplas.
+- **SEQUENCE:** planens version minus ett, plus ett när protokollet har kommit. En ändrad tid ger alltså ny
+  DTSTART och högre SEQUENCE med samma UID.
+- **Tid:** DTSTART och DTEND med `TZID=Europe/Stockholm` och en VTIMEZONE. Ett hållet sammanträde har
+  protokollets start- och sluttid. Ett planerat sammanträde har planens starttid, och sluttiden är starttiden
+  plus medianlängden för organets sammanträden enligt protokollen (3 timmar för fullmäktige och 4 för övriga
+  utan historik). Beskrivningen säger då att sluttiden är ungefärlig. Utan starttid blir det en heldag.
+- **Plats:** protokollets, annars kallelsens, annars platsen i organets senaste protokoll. I det sista fallet
+  säger beskrivningen att platsen är antagen.
+- **Status:** ett inställt eller borttaget sammanträde finns kvar med `STATUS:CANCELLED` och "Inställt:" eller
+  "Borttaget ur planen:" i titeln.
+- **Beskrivning och URL:** beskrivningen har länkar till
+  - protokollet i Kommunkollen efter sammanträdet, annars till sammanträdet i kalendern;
+  - kallelsen eller kungörelsen och handlingarna;
+  - för fullmäktige webb-tv före sammanträdet och inspelningen efter;
+  - sammanträdesplanen på harnosand.se.
+
+Raderna avslutas med CRLF och viks vid 75 oktetter utan att dela ett UTF-8-tecken. Testerna läser flödena med
+biblioteket icalendar. I e2e-tester och lokalt låser `KOMMUNKOLLEN_IDAG` dagens datum. nginx och Vite skickar
+`/kalender/….ics` till backend.
+
+## Kallelser och webbsändningar
+
+Datakällan Sammanträdesplaner läser också kallelserna på organens sidor och fullmäktiges sida för webb-tv
+(`app/sources/kallelser.py`, #68).
+
+- **Kallelser:** länkarna till kungörelser (fullmäktige), kallelser (nämnderna) och handlingar
+  (kommunstyrelsen och fullmäktige). Datum och klockslag läses ur filnamnet, t.ex. "Kungörelse
+  kommunfullmäktige 2026-10-26 kl. 11.00" och "Handlingar kommunfullmäktige 2026-10-26, 11 00", och
+  filstorleken ur länktexten. Utskott och beredningar ingår inte.
+- **Plats:** läses ur kallelsens första sida ("… kallas härmed till sammanträde 2026-10-26 kl. 11:00 - i
+  Rådhuset - KF-salen."). Bara kallelser på högst 2 MB hämtas, eftersom kallelser med handlingar kan vara
+  flera hundra MB. En läst kallelse hämtas inte igen. En kallelse som byts ut får en ny adress och läses då.
+- **Koppling:** kallelser kopplas till sammanträdena när kalendern läses: samma organ och datum. Har organet
+  flera sammanträden samma dag går en kallelse med klockslag till det närmaste (fullmäktige 2026-10-26).
+  Den senast publicerade kallelsen gäller.
+- **Webbsändningar:** sidan för webb-tv har en länk per sammanträde i fullmäktige ("Sammanträde
+  2026-10-26"), till qcnl.tv från 2026 och play.quickchannel.com för 2024–2025. Länken kopplas till
+  fullmäktiges sammanträden samma datum. Före sammanträdet länkar kalendern till sidan för webb-tv.
+
+Ett extra sammanträde som bara finns som kallelse, utan plan eller protokoll, visas inte i kalendern än.
+
 ## Paragrafprotokoll
 
 Ett paragrafprotokoll (filnamn med §, "utdrag", "direktjustering" eller "omedelbar justering") innehåller de paragrafer som justerades direkt. Hela protokollet är det primära:
@@ -95,6 +202,7 @@ Fliken Avvikelser samlar alla protokoll med avvikelser eller publicerade rättel
 | Kategori | Avvikelser | Var felet troligen finns |
 |---|---|---|
 | Motsägelse i protokollet | Voteringslistan stämmer inte med protokollets text | I protokollet |
+| Felskrivet i protokollet | En paragrafrubrik är felskriven, t.ex. "Ko§ 168" | I protokollet |
 | Ofullständigt dokument | PDF:en saknar sidor eller text, eller bara paragrafprotokoll finns | I protokollet |
 | Paragraferna stämmer inte | Paragraferna stämmer inte med paragrafintervallet, eller samma paragraf förekommer flera gånger | I protokollet eller i tolkningen |
 | Kunde inte läsas av plattformen | Övrigt, t.ex. att närvarolistan eller en rubrik inte hittades | I tolkningen |
@@ -110,15 +218,15 @@ Behandlingar i olika organ kopplas till samma ärende (ADR-0003). Ärendet är p
 - **Övriga hänvisningar**, till samma nivå, nedåt eller utan organ, blir förslag.
 - **Samlingspunkter och fasta punkter** (delegationsbeslut, meddelanden, ärenden för kännedom, val av justerare, valärenden, frågestund …) kopplas aldrig.
 
-Förslagen ligger i en kö (`/politik/kopplingar`), där en redaktör bekräftar eller avvisar dem (ADR-0002). Kopplingarna och ärendena räknas om efter varje insamling som gav nya eller ändrade protokoll, och efter `python -m app.tolka_om`. Redaktörens beslut står kvar, och ett ärende behåller sitt id. Kopplingarna pekar ut behandlingen med sammanträde och paragraf, eftersom behandlingarna skapas om vid omtolkning.
+Förslagen ligger i en kö (`/politik/kopplingar`), där en redaktör bekräftar eller avvisar dem (ADR-0002). Vyn har flikarna Förslag, Bekräftade och Avvisade och filtret Mina beslut. En redaktör kan ändra ett beslut åt alla håll, också tillbaka till förslag, med obligatorisk motivering. Ingen andra granskning behövs, eftersom kopplingar beslutas av en redaktör ensam. Varje beslut sparas i en historik som aldrig skrivs över (`kopplingsbeslut`, #77), och beslut från före historiken blev dess första post. Ärendevyn länkar redaktören från en koppling till dess beslut. Automatiska kopplingar bygger på diarienumret och beslutas inte. Kopplingarna och ärendena räknas om efter varje insamling som gav nya eller ändrade protokoll, och efter `python -m app.tolka_om`. Redaktörens beslut står kvar, och ett ärende behåller sitt id. Kopplingarna pekar ut behandlingen med sammanträde och paragraf, eftersom behandlingarna skapas om vid omtolkning.
 
 Slutligt beslut är det senaste beslutet i ärendet, om det inte föreslår kommunfullmäktige eller kommunstyrelsen något.
 
-API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{paragraf}` (`arende`), `/api/kopplingar?status=forslag` samt `POST /api/kopplingar/{id}/bekraftelse` och `/avvisning` (redaktör).
+API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{paragraf}` (`arende`), `/api/kopplingar?status=forslag` (med `&mina=true` bara egna beslut) samt `POST /api/kopplingar/{id}/bekraftelse`, `/avvisning` och `/beslut` med `{status, motivering}` för att ändra ett beslut (redaktör). Varje koppling har `historik`.
 
 ## Rättelser
 
-En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut, diarienummer eller typ, en röst i en votering, eller partiet för en person i närvarolistan. Formuläret finns längst ned på behandlingen. Partiet kan också rättas från sammanträdet, för alla i närvarolistan. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
+En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut, diarienummer eller typ, en röst i en votering, partiet för en person i närvarolistan, eller en motions motionärer (som också en utgivare kan skriva, se Motioner nedan). Formuläret finns längst ned på behandlingen. Partiet kan också rättas från sammanträdet, för alla i närvarolistan. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
 
 Statusflödet är utkast → granskad → publicerad (kravspec 18). En utgivare som inte skrev rättelsen granskar och publicerar den under fliken Rättelser. Det gäller också den som har båda rollerna. Redaktören kan ändra och ta bort sitt eget utkast. En ny publicerad rättelse av samma uppgift ersätter den tidigare, som får status ersatt.
 
@@ -156,7 +264,7 @@ En motion följs genom ärendespårningen (`motioner.py`):
 - **Väckt**: kommunfullmäktiges beslut att överlämna motionen till kommunstyrelsen för beredning. Motioner som väcks i samlingspunkten "Tillkommande motioner, interpellationer och frågor" kopplas med diarienumret i beslutet ("Motion – Titel (KS2022-206)"), annars med rubriken. En koppling på rubriken visas som förslag (≈).
 - **Remissvar** i nämnderna har ofta nämndens eget diarienummer. Ett sådant ärende utan behandling i fullmäktige kopplas till den motion som har mest lik rubrik och väcktes före. Kopplingen visas som förslag.
 - **Besvarad**: fullmäktiges beslut i sak. Utfallet läses ur beslutet: delvis bifall (flera att-satser eller "delvis"), avslag, bifall, besvarad, annars annat beslut. Återremiss och bordläggning besvarar inte motionen men räknas.
-- **Motionärer**: personerna eller partiet före "har lämnat in en motion" (och liknande) under Bakgrund, Sammanfattning eller Ärendebeskrivning. "X och Y (SD)" ger båda partiet SD.
+- **Motionärer**: personerna eller partiet före "har lämnat in en motion" (och liknande) under Bakgrund, Sammanfattning eller Ärendebeskrivning. "X och Y (SD)" ger båda partiet SD. Saknas motionär eller har tolkningen läst fel kan en redaktör eller en utgivare rätta motionärerna i motionstabellen (#78). Rättelsen anger hela listan: personer ur ledamotsregistret (namnvarianter är ihopslagna, och namnet blir personens huvudnamn) och deras parti, eller ett parti utan namn när en partigrupp står bakom motionen. Partiet förifylls ur personens närvaro vid sammanträdet där motionen väcktes, annars härlett som för närvarolistan (`partier.harled`), och källan visas. Rättelsen hör till ärendets behandling i fullmäktige där motionen väcktes, annars till ärendets första behandling, och följer samma flöde som andra rättelser. Publicerade motionärer visas med rättelsemarkering och länk till personsidan, och partifördelningen räknas med dem. Redaktören har filtret *Motioner utan motionär*. API: `GET /api/motionarer/parti?person_id=…&sammantrade_id=…`, och rättelsen med `falt: "motionarer"`.
 - **Ledtid**: dagar från väckt till besvarad. Över ett år, obesvarad eller besvarad, markeras (kommunallagen 5 kap. 35 §).
 
 Väckta räknas på året de väcktes och besvarade på året de besvarades. Ett medborgarförslag (e-förslag) besvaras av nämnden eller kommunstyrelsen. När det lämnades står inte i protokollen, så tiden räknas från den första behandlingen.

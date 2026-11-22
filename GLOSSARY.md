@@ -12,8 +12,21 @@ _Avoid_: Instans, beslutande organ
 Den tjänstepersonsorganisation som bereder ärenden åt ett organ. Förvaltningen är inget organ och gör inga behandlingar.
 
 **Sammanträde**:
-Ett möte i ett organ, dokumenterat i ett protokoll.
+Ett möte i ett organ. Före mötet är det planerat enligt sammanträdesplanen, efteråt dokumenteras det i ett protokoll. Ett planerat sammanträde och protokollet för det är samma sammanträde. Ett sammanträde som inte finns i planen, t.ex. ett extra sammanträde, har bara ett protokoll.
 _Avoid_: Möte
+
+**Sammanträdesplan**:
+Ett organs fastställda datum och tider för kommande sammanträden. Organet beslutar om planen i ett protokoll, och kommunen publicerar den som en tabell på organets webbsida. Ändringar i tabellen blir reviderade uppgifter.
+_Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
+
+**Kallelse**:
+Handlingen som kallar till ett sammanträde och listar ärendena. För kommunfullmäktige heter den *kungörelse*. Kallelsen publiceras ofta 1–3 dagar före sammanträdet, ibland tillsammans med handlingarna.
+
+**Webbsändning**:
+Ett sammanträde i kommunfullmäktige som sänds och spelas in i kommunens webb-tv. Inspelningen får en egen länk efter sammanträdet.
+
+**Inställt sammanträde**:
+Ett planerat sammanträde som inte blir av. Det finns kvar i planen, markerat som inställt. Ett sammanträde som försvinner från webbsidans plan utan att vara inställt är *borttaget ur planen* och finns också kvar.
 
 **Protokoll**:
 Den justerade dokumentationen av ett helt sammanträde: närvaro, behandlingar, yrkanden, voteringar och beslut. Protokollet är huvudkällan för allt som hände på sammanträdet.
@@ -69,6 +82,9 @@ _Avoid_: Länk, relation
 **Kopplingsförslag**:
 En koppling som plattformen inte kunnat göra säkert. Den ingår inte i ärendet förrän en redaktör har bekräftat den.
 
+**Kopplingsbeslut**:
+En redaktörs beslut att bekräfta eller avvisa en koppling, eller att lägga tillbaka den som förslag. Varje beslut sparas i kopplingens historik med redaktör, tid och, när ett tidigare beslut ändras, motivering. Kopplingens status är det senaste beslutet.
+
 **Behandlingstyp**:
 Vad en behandling är: ett beslut, ett förslag till ett annat organ, en motion, ett medborgarförslag, en interpellation eller fråga, ett informationsärende eller formalia.
 
@@ -76,7 +92,7 @@ Vad en behandling är: ett beslut, ett förslag till ett annat organ, en motion,
 Ett förslag från en eller flera ledamöter i kommunfullmäktige. Motionen väcks i fullmäktige, bereds och besvaras sedan med ett beslut i fullmäktige.
 
 **Motionär**:
-Den eller de ledamöter som har väckt en motion, med parti enligt protokollet.
+Den eller de ledamöter som har väckt en motion, med parti enligt protokollet, eller en partigrupp utan namn. En rättelse av motionärerna pekar på personer i ledamotsregistret.
 
 **Väckt motion**:
 En motion som kommunfullmäktige har överlämnat till kommunstyrelsen för beredning.
@@ -156,7 +172,7 @@ _Avoid_: Anmärkning, påpekande
 Ett organs yttrande över en revisionsrapports rekommendationer.
 
 **Åtgärd**:
-Något ett organ har beslutat att göra med anledning av en rekommendation, med status beslutad, påbörjad, genomförd eller ej genomförd.
+Något ett organ har beslutat att göra med anledning av en rekommendation, med status beslutad, påbörjad, genomförd eller ej genomförd. Skilt från *åtgärd i ett budgetförslag*.
 
 ## Budget
 
@@ -178,11 +194,40 @@ Ett av åren efter budgetåret som en budget eller ett budgetförslag också ang
 De skattemedel en budget eller ett budgetförslag tilldelar ett organ för ett år.
 _Avoid_: Anslag, budgetram (som eget begrepp)
 
-**Utgångsläge**:
-Det ett budgetförslag räknar sina förändringar från, oftast kommunens planförutsättningar för budgetåret.
+**Planförutsättningar**:
+Kommunens gemensamma ekonomiska utgångspunkt för ett budgetår, före politiska prioriteringar: ramar per organ, skattesats samt resultat-, investerings- och balansbudget och kassaflöde. Alla budgetförslag för budgetåret utgår från samma planförutsättningar.
+_Avoid_: Utgångsläge, plan
+
+**Förändring**:
+Skillnaden mellan ett budgetförslags ram och planförutsättningarnas ram för samma organ och budgetår, i mnkr.
+_Avoid_: Politisk prioritering (som eget begrepp)
+
+**Åtgärd i ett budgetförslag**:
+En besparing eller satsning som ett budgetförslag anger för en ram, med text nära originalet, belopp i mnkr när förslaget anger det och sidan där den står. Ett negativt belopp är en besparing och ett positivt en satsning. Den är förslagets egen uppgift och har ingen status. Att ett förslag inte anger några åtgärder för en ram är också en avläst uppgift, skild från att åtgärderna inte är avlästa. Skilt från revisionens *åtgärd*.
+_Avoid_: Satsning, besparing, prioritering (som egna begrepp)
+
+**Täckning**:
+Hur stor del av förändringen av en ram som åtgärderna i budgetförslaget förklarar: summan av åtgärdernas belopp mot förändringen. En ram som ändras utan några åtgärder markeras "Inga åtgärder anges".
+
+**Skatteunderlagsprognos**:
+SKR:s prognos av kommunens skatteintäkter och generella bidrag och utjämning per år, publicerad med ett cirkulär. Varje cirkulär är en egen prognos.
+_Avoid_: Skatteprognos, SKR-prognos
+
+**Cirkulär**:
+SKR:s numrerade utskick, t.ex. 26:28 (år 2026, nummer 28). Med varje skatteunderlagsprognos följer ett prognosunderlag för alla kommuner.
+
+**Budgeterat resultat**:
+Det resultat ett budgetförslag budgeterar för budgetåret, i procent av skatteintäkter och generella bidrag och utjämning.
+
+**Beräknat resultat**:
+Det resultat ett budgetförslag får om planförutsättningarnas resultat justeras med förslagets förändringar av ramar och skatt. Skiljer det sig från det budgeterade resultatet saknar förslaget finansiering för skillnaden, eller redovisar den inte.
 
 **Differens**:
 Skillnaden mellan ett budgetförslags siffra och den antagna budgetens för samma år, i mnkr och procent.
+
+**Summering**:
+En sammanfattning av ett budgetförslag med samma frågor för alla förslag, med sidorna i originalet. Den är redaktionens analys, inte en uppgift ur förslaget, och märks Analys.
+_Avoid_: Bedömning, recension
 
 ## Redaktionellt arbete
 

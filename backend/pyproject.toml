@@ -13,12 +13,14 @@ dependencies = [
     "pypdf>=5",
     "pypdfium2>=5.15.2",
     "pillow>=13.0.0",
+    "openpyxl>=3.1",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
     "pgserver>=0.1.4",
+    "icalendar>=7.3.2",
 ]
 
 [project.scripts]

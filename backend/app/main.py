@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, kommande, rattelser, ekonomi, floden, ledamoter, motioner, protokoll, serier, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -21,7 +21,9 @@ from .schema import SVERIGE, Schema
 from .sources.base import Datakalla
 from .sources.kolada import Kolada
 from .sources.harnosand import ORGAN, Protokollkalla
+from .sources.sammantradesplaner import Sammantradesplaner
 from .sources.scb import Scb
+from .sources.skr import SkrSkatteunderlag
 
 KOMMUN = "2280"  # Härnösand
 FRAN_MILJO = object()  # create_app läser schemat från miljön om inget anges
@@ -43,8 +45,10 @@ def standardkallor() -> list[Datakalla]:
                anrop_per_sekund=_anropsgrans("KOLADA", 5)),
         Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
             anrop_per_sekund=_anropsgrans("SCB", 2)),
+        SkrSkatteunderlag(anrop_per_sekund=_anropsgrans("SKR", 1)),
         *(Protokollkalla(organ, urval=int(os.environ.get("PROTOKOLL_URVAL") or 0),
                          anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
+        Sammantradesplaner(anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)),
     ]
 
 
@@ -147,6 +151,12 @@ def create_app(
                     })
                 grupper.append({"id": g.id, "titel": g.titel, "nyckeltal": nyckeltal})
         return {"omrade": omrade, "grupper": grupper}
+
+    @app.get("/api/skatteunderlagsprognoser", dependencies=[Depends(krav_roll("lasare"))])
+    def skatteunderlagsprognoser() -> dict:
+        """SKR:s skatteunderlagsprognoser för kommunen: den senaste och alla cirkulär (#61)."""
+        with db.connect(database_url) as conn:
+            return skatteunderlag.lista(conn)
 
     @app.get("/api/floden", dependencies=[Depends(krav_roll("lasare"))])
     def ekonomiska_floden(
@@ -288,18 +298,67 @@ def create_app(
             raise HTTPException(404, f"Ärendet {arende_id} finns inte")
         return resultat
 
-    @app.get("/api/kopplingar", dependencies=[Depends(krav_roll("redaktor"))])
-    def kopplingar(status: str = Query("forslag", pattern="^(automatisk|forslag|bekraftad|avvisad)$")) -> list[dict]:
-        """Kön med förslag på kopplingar, eller kopplingarna med en annan status."""
-        with db.connect(database_url) as conn:
-            return arenden.lista_kopplingar(conn, status)
+    def _bas(request: Request) -> str:
+        return os.environ.get("PUBLIK_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
 
-    def _besluta(koppling_id: int, status: str, anv: Anvandare) -> dict:
+    @app.get("/api/kalender", dependencies=[Depends(krav_roll("lasare"))])
+    def kalender_api(organ: str | None = None) -> dict:
+        """Sammanträdena för sidan Kalender: kommande och de senaste 12 månaderna, med flödenas adresser."""
+        if organ is not None and organ not in ORGAN:
+            raise HTTPException(422, f"Organet {organ} finns inte")
+        with db.connect(database_url) as conn:
+            return {
+                "idag": kalender.idag().isoformat(),
+                "floden": [{"organ": o, "namn": ORGAN[o].namn, "flode": s} for o, s in kalender.SLUG.items()],
+                "handelser": kalender.handelser(conn, organ),
+            }
+
+    # Kalenderflödena är alltid öppna utan inloggning, eftersom kalenderappar inte kan logga in.
+    @app.get("/kalender/{flode}.ics", response_class=Response)
+    def kalenderflode(flode: str, request: Request) -> Response:
+        organ = kalender.organ_for_slug(flode)
+        if organ is None:
+            raise HTTPException(404, f"Kalenderflödet {flode} finns inte")
+        with db.connect(database_url) as conn:
+            innehall = kalender.ics(kalender.handelser(conn, organ or None), kalender.flodesnamn(organ), _bas(request))
+        return Response(innehall, media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition": f'inline; filename="{flode}.ics"'})
+
+    @app.get("/kalender/sammantraden/{sammantrade_id}.ics", response_class=Response)
+    def kalenderhandelse(sammantrade_id: int, request: Request) -> Response:
+        with db.connect(database_url) as conn:
+            handelser = kalender.handelser(conn, sammantrade_id=sammantrade_id)
+        if not handelser:
+            raise HTTPException(404, f"Sammanträdet {sammantrade_id} finns inte i kalendern")
+        h = handelser[0]
+        innehall = kalender.ics(handelser, kalender.flodesnamn(h["organ"]["id"]), _bas(request))
+        return Response(innehall, media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{h["organ"]["flode"]}-{h["datum"]}.ics"'})
+
+    @app.get("/api/sammantradesplaner", dependencies=[Depends(krav_roll("redaktor"))])
+    def sammantradesplaner() -> list[dict]:
+        """Organens sammanträdesplaner med versionerna, och skillnaderna mot besluten i protokollen.
+
+        Bara för redaktionen, eftersom skillnaderna inte visas publikt."""
+        with db.connect(database_url) as conn:
+            return sammantradesplan.lista(conn)
+
+    @app.get("/api/kopplingar")
+    def kopplingar(status: str = Query("forslag", pattern="^(automatisk|forslag|bekraftad|avvisad)$"),
+                   mina: bool = False, anv: Anvandare = Depends(krav_roll("redaktor"))) -> list[dict]:
+        """Kön med förslag på kopplingar, eller kopplingarna med en annan status. `mina` = bara egna beslut."""
+        with db.connect(database_url) as conn:
+            return arenden.lista_kopplingar(conn, status, anv.epost if mina else None)
+
+    def _besluta(koppling_id: int, status: str, anv: Anvandare, motivering: str | None = None) -> dict:
         with db.connect(database_url) as conn:
             try:
-                return arenden.besluta(conn, koppling_id, status, anv.epost)
+                return arenden.besluta(conn, koppling_id, status, anv.epost, motivering)
             except LookupError as e:
                 raise HTTPException(404, str(e)) from e
+            except arenden.OgiltigtBeslut as e:
+                raise HTTPException(422, str(e)) from e
 
     @app.post("/api/kopplingar/{koppling_id}/bekraftelse")
     def bekrafta_koppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
@@ -308,6 +367,12 @@ def create_app(
     @app.post("/api/kopplingar/{koppling_id}/avvisning")
     def avvisa_koppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
         return _besluta(koppling_id, "avvisad", anv)
+
+    @app.post("/api/kopplingar/{koppling_id}/beslut")
+    def andra_kopplingsbeslut(koppling_id: int, data: dict,
+                              anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Ändrar ett beslut (#77): {status: forslag|bekraftad|avvisad, motivering}."""
+        return _besluta(koppling_id, str(data.get("status", "")), anv, data.get("motivering"))
 
     # Redaktionella rättelser (#33): redaktören skriver, en annan person med rollen utgivare granskar och publicerar.
 
@@ -331,16 +396,22 @@ def create_app(
         return _rattelse(rattelser.lista, status)
 
     @app.post("/api/rattelser", status_code=201)
-    def skapa_rattelse(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
-        """En rättelse som utkast: {sammantrade_id, objekt, paragraf, votering, namn, falt, nytt, motivering}."""
+    def skapa_rattelse(data: dict, anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
+        """En rättelse som utkast: {sammantrade_id, objekt, paragraf, votering, namn, falt, nytt, motivering}.
+
+        Motionärer (#78) kan också skrivas av en utgivare. Övriga uppgifter rättas av en redaktör."""
+        if "redaktor" not in anv.roller and data.get("falt") != "motionarer":
+            raise HTTPException(403, "Kräver rollen redaktör")
         return _rattelse(rattelser.skapa, data, anv.epost)
 
+    # Ändra och ta bort: bara den som skrev utkastet (rattelser.py kontrollerar det).
     @app.patch("/api/rattelser/{rattelse_id}")
-    def andra_rattelse(rattelse_id: int, data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+    def andra_rattelse(rattelse_id: int, data: dict,
+                       anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
         return _rattelse(rattelser.andra, rattelse_id, data, anv.epost)
 
     @app.delete("/api/rattelser/{rattelse_id}", status_code=204)
-    def ta_bort_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> Response:
+    def ta_bort_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> Response:
         _rattelse(rattelser.ta_bort, rattelse_id, anv.epost)
         return Response(status_code=204)
 
@@ -374,7 +445,7 @@ def create_app(
 
     @app.get("/api/budget/{ar}", dependencies=[Depends(krav_roll("lasare"))])
     def budgetjamforelse(ar: int) -> dict:
-        """De publicerade förslagen för budgetåret bredvid varandra och mot den antagna budgeten."""
+        """De publicerade förslagen för budgetåret bredvid varandra, mot planförutsättningarna och den antagna budgeten."""
         return _budget(budgetforslag.jamforelse, ar)
 
     @app.get("/api/budgetforslag", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
@@ -407,6 +478,35 @@ def create_app(
         redaktion = bool(anv and anv.roller & {"redaktor", "utgivare"})
         innehall, typ, namn = _budget(budgetforslag.original, forslag_id, redaktion)
         return Response(innehall, media_type=typ, headers={"Content-Disposition": f'inline; filename="{namn}"'})
+
+    # Planförutsättningar per budgetår (#58): läses in som utkast tillsammans med förslagen.
+
+    @app.get("/api/planforutsattningar", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def lista_planforutsattningar(
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt)$"),
+    ) -> list[dict]:
+        return _budget(planforutsattningar.lista, status)
+
+    @app.get("/api/planforutsattningar/{pf_id}", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def las_planforutsattningar(pf_id: int) -> dict:
+        return _budget(planforutsattningar.las, pf_id)
+
+    @app.post("/api/planforutsattningar/{pf_id}/granskning")
+    def granska_planforutsattningar(pf_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(planforutsattningar.granska, pf_id, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/planforutsattningar/{pf_id}/publicering")
+    def publicera_planforutsattningar(pf_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(planforutsattningar.publicera, pf_id, anv.epost, datetime.now(timezone.utc))
+
+    @app.get("/api/motionarer/parti", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def motionarens_parti(person_id: int, sammantrade_id: int) -> dict:
+        """Förslag på parti för en motionär vid sammanträdet där motionen väcktes (#78), med källa."""
+        with db.connect(database_url) as conn:
+            try:
+                return motionarer.parti_for(conn, person_id, sammantrade_id)
+            except motionarer.Ogiltig as e:
+                raise HTTPException(404, str(e)) from e
 
     @app.get("/api/ledamoter", dependencies=[Depends(krav_roll("lasare"))])
     def lista_ledamoter(q: str | None = None, parti: str | None = None, organ: str | None = None) -> list[dict]:

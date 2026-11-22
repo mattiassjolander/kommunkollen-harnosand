@@ -14,7 +14,8 @@ from pathlib import Path
 import httpx
 
 
-TYPER = {".pdf": "application/pdf", ".html": "text/html; charset=utf-8"}
+TYPER = {".pdf": "application/pdf", ".html": "text/html; charset=utf-8",
+         ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12"}
 
 
 class InspeladTransport(httpx.BaseTransport):

@@ -3,7 +3,7 @@
 // Läsaren kan fälla ut vad den automatiska tolkningen sa och varför uppgiften rättades.
 import { computed } from 'vue'
 import { BEHANDLINGSTYPER, type Rattelsemarkering } from '../api'
-import { datum, parti, rosttext } from '../format'
+import { datum, motionarstext, parti, rosttext } from '../format'
 
 const props = defineProps<{ rattelse: Rattelsemarkering; falt: string }>()
 
@@ -11,6 +11,7 @@ function visa(v: unknown): string {
   if (v === null || v === undefined || (Array.isArray(v) && v.length === 0)) {
     return props.falt === 'parti' ? 'inget parti' : props.falt === 'typ' ? 'kunde inte klassas' : 'inget'
   }
+  if (props.falt === 'motionarer') return motionarstext(v as { namn: string | null; parti: string | null }[])
   if (props.falt === 'parti') return parti(v as string)
   if (props.falt === 'typ') return BEHANDLINGSTYPER.find((t) => t.id === v)?.namn ?? String(v)
   if (props.falt === 'rost') return rosttext(v as 'ja' | 'nej' | 'avstar' | 'franvarande')

@@ -6,6 +6,7 @@ import './styles/tokens.css'
 import App from './App.vue'
 import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
+import SkatteunderlagView from './views/SkatteunderlagView.vue'
 import FlodenView from './views/FlodenView.vue'
 import KommandeView from './views/KommandeView.vue'
 import OversiktView from './views/OversiktView.vue'
@@ -15,6 +16,8 @@ import BudgetforslagView from './views/politik/BudgetforslagView.vue'
 import BudgetutkastView from './views/politik/BudgetutkastView.vue'
 import BehandlingView from './views/politik/BehandlingView.vue'
 import KopplingarView from './views/politik/KopplingarView.vue'
+import SammantradesplanerView from './views/politik/SammantradesplanerView.vue'
+import KalenderView from './views/KalenderView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
 import LedamoterView from './views/politik/LedamoterView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
@@ -27,6 +30,7 @@ const router = createRouter({
   routes: [
     { path: '/', component: OversiktView, meta: { titel: 'Översikt' } },
     { path: '/ekonomi', component: EkonomiView, meta: { titel: 'Ekonomi' } },
+    { path: '/ekonomi/skatteunderlag', component: SkatteunderlagView, meta: { titel: 'Skatteunderlagsprognos' } },
     { path: '/floden', component: FlodenView, meta: { titel: 'Ekonomiska flöden' } },
     { path: '/politik', component: PolitikView, meta: { titel: 'Politik och beslut' } },
     { path: '/politik/sammantraden/:id', component: SammantradeView, meta: { titel: 'Sammanträde' } },
@@ -36,7 +40,8 @@ const router = createRouter({
       meta: { titel: 'Behandling' },
     },
     { path: '/politik/arenden/:id', component: ArendeView, meta: { titel: 'Ärende' } },
-    { path: '/politik/kopplingar', component: KopplingarView, meta: { titel: 'Kopplingsförslag' } },
+    { path: '/politik/kopplingar', component: KopplingarView, meta: { titel: 'Kopplingar' } },
+    { path: '/politik/sammantradesplaner', component: SammantradesplanerView, meta: { titel: 'Sammanträdesplaner' } },
     { path: '/politik/rattelser', component: RattelserView, meta: { titel: 'Rättelser' } },
     { path: '/politik/statistik', component: StatistikView, meta: { titel: 'Statistik' } },
     { path: '/politik/avvikelser', component: AvvikelserView, meta: { titel: 'Avvikelser i protokollen' } },
@@ -44,6 +49,7 @@ const router = createRouter({
     { path: '/politik/budgetutkast', component: BudgetutkastView, meta: { titel: 'Budgetutkast' } },
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
+    { path: '/kalender', component: KalenderView, meta: { titel: 'Kalender' } },
     { path: '/kommande', component: KommandeView, meta: { titel: 'Kommande' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
   ],

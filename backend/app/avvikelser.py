@@ -21,13 +21,15 @@ from .sources.harnosand import ORGAN
 # (kategori, regel). Den första regeln som passar avgör kategorin.
 KATEGORIER = {
     "motsagelse": "Motsägelse i protokollet",
+    "felskrivet": "Felskrivet i protokollet",
     "ofullstandigt": "Ofullständigt dokument",
     "paragrafer": "Paragraferna stämmer inte",
     "tolkning": "Kunde inte läsas av plattformen",
 }
-I_PROTOKOLLET = {"motsagelse", "ofullstandigt"}
+I_PROTOKOLLET = {"motsagelse", "felskrivet", "ofullstandigt"}
 _REGLER = [
     ("motsagelse", re.compile(r"voteringslistan har .* protokollets text", re.I)),
+    ("felskrivet", re.compile(r"felskriven i protokollet", re.I)),
     ("ofullstandigt", re.compile(r"PDF:en (?:har \d+ av|saknar text)|paragrafprotokoll", re.I)),
     ("paragrafer", re.compile(r"paragrafintervall|samma paragraf förekommer", re.I)),
 ]

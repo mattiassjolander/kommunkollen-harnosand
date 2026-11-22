@@ -9,6 +9,7 @@ bevarar rättelsen.
 Rättningsbara uppgifter:
 
 - en behandlings rubrik, beslut, diarienummer och typ (behandlingstyper.py),
+- motionärerna för en motion, på ärendets behandling där motionen väcktes (motionarer.py, #78),
 - en röst i en votering (rösten och partiet),
 - partiet för en person i närvarolistan.
 """
@@ -22,9 +23,10 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
+from . import motionarer
 from .behandlingstyper import TYPER, klassa
 
-FALT = {"behandling": ("rubrik", "beslut", "diarienummer", "typ"), "rost": ("rost", "parti"), "narvaro": ("parti",)}
+FALT = {"behandling": ("rubrik", "beslut", "diarienummer", "typ", "motionarer"), "rost": ("rost", "parti"), "narvaro": ("parti",)}
 ROSTER = ("ja", "nej", "avstar", "franvarande")
 _PARTI = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
 _DNR = re.compile(r"[\w/ .:-]{2,40}")
@@ -46,7 +48,7 @@ def _ursprungligt(conn: psycopg.Connection, m: dict) -> Any:
     """Tolkningens värde för uppgiften. LookupError om uppgiften inte finns."""
     if m["objekt"] == "behandling":
         rad = conn.execute(
-            "SELECT rubrik, beslut, diarienummer FROM behandling WHERE sammantrade_id = %s AND paragraf = %s "
+            "SELECT rubrik, beslut, diarienummer, motionarer FROM behandling WHERE sammantrade_id = %s AND paragraf = %s "
             "ORDER BY ordning LIMIT 1",
             (m["sammantrade_id"], m["paragraf"]),
         ).fetchone()
@@ -54,6 +56,8 @@ def _ursprungligt(conn: psycopg.Connection, m: dict) -> Any:
             raise LookupError(f"§ {m['paragraf']} finns inte i sammanträdet {m['sammantrade_id']}")
         if m["falt"] == "typ":
             return klassa(rad["rubrik"], rad["beslut"])
+        if m["falt"] == "motionarer":
+            return rad["motionarer"] or []
         return rad[m["falt"]]
     if m["objekt"] == "rost":
         rad = conn.execute(
@@ -99,7 +103,12 @@ def _mal(data: dict) -> dict:
     return m
 
 
-def _nytt(falt: str, varde: Any) -> Any:
+def _nytt(falt: str, varde: Any, conn: psycopg.Connection | None = None) -> Any:
+    if falt == "motionarer":
+        try:
+            return motionarer.normalisera(conn, varde)
+        except motionarer.Ogiltig as e:
+            raise Ogiltig(str(e)) from e
     if falt in ("rubrik", "beslut"):
         if not isinstance(varde, str) or not varde.strip():
             raise Ogiltig(f"Ange en text för {falt}")
@@ -133,7 +142,7 @@ def _motivering(data: dict) -> str:
 def skapa(conn: psycopg.Connection, data: dict, redaktor: str) -> dict:
     m = _mal(data)
     ursprungligt = _ursprungligt(conn, m)
-    nytt = _nytt(m["falt"], data.get("nytt"))
+    nytt = _nytt(m["falt"], data.get("nytt"), conn)
     if nytt == ursprungligt:
         raise Ogiltig("Det nya värdet är samma som tolkningen")
     rid = conn.execute(
@@ -163,7 +172,7 @@ def andra(conn: psycopg.Connection, rattelse_id: int, data: dict, redaktor: str)
         raise EjTillatet("Bara redaktören som skrev rättelsen kan ändra den")
     if r["status"] != "utkast":
         raise Konflikt("Bara ett utkast kan ändras")
-    nytt = _nytt(r["falt"], data.get("nytt", r["nytt"]))
+    nytt = _nytt(r["falt"], data.get("nytt", r["nytt"]), conn)
     motivering = _motivering(data) if "motivering" in data else r["motivering"]
     conn.execute("UPDATE rattelse SET nytt = %s, motivering = %s WHERE id = %s", (Jsonb(nytt), motivering, rattelse_id))
     return las(conn, rattelse_id)
@@ -283,6 +292,13 @@ class Publicerade:
         b["typ"] = klassa(b.get("rubrik"), b.get("beslut"))
         self._lagg_pa(b, nyckel, "typ")
         return b
+
+    def motionarer(self, sammantrade_id: int, paragraf: int) -> dict | None:
+        """Den publicerade rättelsen av motionärerna på behandlingen, eller None."""
+        r = self._rader.get((sammantrade_id, "behandling", paragraf, None, "", "motionarer"))
+        if r is None:
+            return None
+        return {"id": r["id"], "nytt": r["nytt"], "motivering": r["motivering"], "publicerad": r["publicerad"]}
 
     def rost(self, sammantrade_id: int, paragraf: int, votering: int, r: dict) -> dict:
         if r.get("namn"):

@@ -247,6 +247,36 @@ export interface Flodesval {
   verksamhet?: string
 }
 
+/** En rad i SKR:s prognosunderlag, i tkr per år. */
+export interface Prognosrad {
+  id: string
+  etikett: string
+  tkr: Record<string, number>
+}
+/** SKR:s skatteunderlagsprognos för kommunen, publicerad med ett cirkulär (#61). */
+export interface Skatteunderlagsprognos {
+  cirkular: string
+  version: number
+  publicerad: string
+  /** Filen på SKR:s sida, källhänvisningen. */
+  url: string
+  filnamn: string
+  /** Skattesatsen prognosen räknar med, i procent. */
+  skattesats: number
+  ar: number[]
+  rader: Prognosrad[]
+  /** Antal invånare i kommunen enligt riksprognosen. */
+  invanare: Record<string, number>
+  hamtad: string
+}
+export interface Skatteunderlagsprognoser {
+  kommun: string
+  senaste: Skatteunderlagsprognos | null
+  /** Sorterade efter publiceringsdatum. */
+  prognoser: Skatteunderlagsprognos[]
+}
+export const hamtaSkatteunderlagsprognoser = () => hamta<Skatteunderlagsprognoser>('/api/skatteunderlagsprognoser')
+
 export function hamtaFloden(val: Flodesval = {}) {
   const q = new URLSearchParams(Object.entries(val).filter(([, v]) => v) as [string, string][])
   return hamta<Flodesmodell>(`/api/floden${q.size ? `?${q}` : ''}`)
@@ -422,7 +452,12 @@ export interface Motionsstatistik {
   motioner: {
     per_ar: { ar: number; vackta: number; besvarade: number; utfall: Record<Motionsutfall, number> }[]
     per_parti: { parti: string; vackta: number; besvarade: number; utfall: Record<Motionsutfall, number> }[]
-    lista: (Forlopp & { motionarer: { namn: string | null; parti: string | null }[] })[]
+    lista: (Forlopp & {
+      motionarer: Motionar[]
+      /** Behandlingen som en rättelse av motionärerna hör till (#78). */
+      rattelsemal: { sammantrade_id: number; paragraf: number }
+      rattelser?: { motionarer?: Rattelsemarkering }
+    })[]
     utan_vackt: number
   }
   medborgarforslag: { lista: Forlopp[] }
@@ -451,7 +486,7 @@ export interface Aterkommande {
   summa: { arenden: number; aterremisser: number; bordlaggningar: number }
 }
 
-export type Avvikelsekategori = 'motsagelse' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
+export type Avvikelsekategori = 'motsagelse' | 'felskrivet' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
 
 export interface Avvikelser {
   fran: number
@@ -571,6 +606,24 @@ function intervallparametrar(fran?: string, till?: string, organ?: string) {
 }
 export const hamtaBehandlingarAvTyp = (typ: string, fran?: string, till?: string, organ?: string) =>
   hamta<Statistikbehandling[]>(`/api/statistik/behandlingar/${typ}?${intervallparametrar(fran, till, organ)}`)
+/** En motionär: en person i registret med parti, eller ett parti utan namn (en partigrupp). */
+export interface Motionar {
+  person_id: number | null
+  namn: string | null
+  parti: string | null
+}
+
+/** Förslag på parti för en motionär vid sammanträdet där motionen väcktes, med källa (#78). */
+export interface Partiforslag {
+  parti: string | null
+  kalla: {
+    grund: 'narvaro' | 'samma_protokoll' | 'annat_protokoll'
+    sammantrade: { id: number; datum: string | null; organ: Organ } | null
+  } | null
+}
+export const hamtaMotionarParti = (personId: number, sammantradeId: number) =>
+  hamta<Partiforslag>(`/api/motionarer/parti?person_id=${personId}&sammantrade_id=${sammantradeId}`)
+
 export const hamtaMotionsstatistik = (fran?: string, till?: string, organ?: string) =>
   hamta<Motionsstatistik>(`/api/statistik/motioner?${intervallparametrar(fran, till, organ)}`)
 export const hamtaAterkommande = (fran?: string, till?: string, organ?: string) =>
@@ -678,8 +731,19 @@ export interface Koppling {
   /** Diarienumret, eller hänvisningen som den står i beslutsunderlaget. */
   underlag: string
   status: Kopplingsstatus
+  /** Redaktören som fattade det senaste beslutet, och när. */
   redaktor: string | null
   beslutad: string | null
+  /** Alla beslut om kopplingen, äldst först (#77). Skrivs aldrig över. */
+  historik: Kopplingsbeslut[]
+}
+
+export interface Kopplingsbeslut {
+  status: Exclude<Kopplingsstatus, 'automatisk'>
+  redaktor: string
+  tid: string
+  /** Krävs när ett tidigare beslut ändras. */
+  motivering: string | null
 }
 
 export interface Arende {
@@ -695,8 +759,8 @@ export interface Arende {
 
 export const hamtaArende = (id: number | string) => hamtaEllerSaknas<Arende>(`/api/arenden/${id}`)
 
-export async function hamtaKopplingar(status: Kopplingsstatus = 'forslag'): Promise<Koppling[]> {
-  const svar = await fetch(`/api/kopplingar?status=${status}`)
+export async function hamtaKopplingar(status: Kopplingsstatus = 'forslag', mina = false): Promise<Koppling[]> {
+  const svar = await fetch(`/api/kopplingar?status=${status}${mina ? '&mina=true' : ''}`)
   if (svar.status === 401) throw new EjInloggad()
   if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
   if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
@@ -712,6 +776,23 @@ async function beslutaKoppling(id: number, beslut: 'bekraftelse' | 'avvisning'):
 }
 export const bekraftaKoppling = (id: number) => beslutaKoppling(id, 'bekraftelse')
 export const avvisaKoppling = (id: number) => beslutaKoppling(id, 'avvisning')
+
+/** Ändrar ett tidigare beslut om en koppling, med motivering (#77). */
+export async function andraKopplingsbeslut(
+  id: number,
+  status: Exclude<Kopplingsstatus, 'automatisk'>,
+  motivering: string,
+): Promise<Koppling> {
+  const svar = await fetch(`/api/kopplingar/${id}/beslut`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, motivering }),
+  })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
 
 // Redaktionella rättelser (#33)
 
@@ -733,7 +814,7 @@ export interface NyRattelse {
   paragraf?: number
   votering?: number
   namn?: string
-  falt: 'rubrik' | 'beslut' | 'diarienummer' | 'typ' | 'rost' | 'parti'
+  falt: 'rubrik' | 'beslut' | 'diarienummer' | 'typ' | 'rost' | 'parti' | 'motionarer'
   nytt: unknown
   motivering: string
 }
@@ -781,36 +862,109 @@ export const publiceraRattelse = (id: number) =>
   skrivRattelse(`/api/rattelser/${id}/publicering`, 'POST') as Promise<Rattelse>
 export const taBortRattelse = (id: number) => skrivRattelse(`/api/rattelser/${id}`, 'DELETE')
 
-// Partiernas budgetförslag (#48)
+// Partiernas budgetförslag (#48) mot gemensamma planförutsättningar (#58)
 
 export interface Skattesats {
+  /** Förändring mot planförutsättningarnas skattesats i öre (0 om förslaget inte ändrar den). */
+  ore?: number
+  /** Skattesatsen i procent, bara för ett år utan planförutsättningar. */
   procent?: number
-  /** Procentenheter, t.ex. −0,10 för "10 öre lägre". */
-  forandring?: number
   /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
   sida?: number
 }
 export interface Budgetresultat {
-  ar: number
+  /** Andel av skatteintäkter, generella bidrag och utjämning. */
+  procent: number
+  sida?: number
+}
+/** En åtgärd eller satsning som förslaget anger för en ram (#57), nära originalets text. */
+export interface Budgetatgard {
+  text: string
+  /** Ramens förändring i mnkr, när förslaget anger ett belopp. */
   mnkr?: number
-  /** Andel av skatteintäkter, generella statsbidrag och utjämning. */
-  procent?: number
-  /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
+  /** Sidan i PDF:en. Saknas för ett Word-dokument. */
   sida?: number
 }
 export interface Budgetram {
   organ: string
-  ar: number
-  mnkr?: number
-  forandring?: number
-  /** Sidan i PDF:en. Saknas för ett Word-dokument, som inte har fasta sidor. */
+  mnkr: number
   sida?: number
+  atgarder?: Budgetatgard[]
 }
+/** Hur stor del av ramens förändring åtgärderna förklarar. */
+export interface Atgardstackning {
+  antal: number
+  /** Summan av åtgärdernas belopp, null om inget belopp anges. */
+  mnkr: number | null
+  /** Redaktören har läst av åtgärderna för ramen. En tom lista betyder att förslaget inte anger några. */
+  avlast: boolean
+  /** Ramen ändras men förslaget anger enligt avläsningen inga åtgärder. */
+  saknas: boolean
+}
+/** Hänvisningen till behandlingen där förslaget ställdes. */
+export interface Behandlingshanvisning {
+  organ: string
+  /** ÅÅÅÅ-MM-DD. */
+  datum: string
+  paragraf: number
+}
+/** Ett svar i summeringen: vad förslaget säger, med sidorna, eller att förslaget inte tar upp frågan. */
+export type Summeringssvar = { text: string; sidor?: number[] } | { anges_inte: true }
+/** Uppgifterna för budgetåret. */
 export interface Budgetuppgifter {
-  skattesats: Skattesats | null
-  resultat: Budgetresultat[]
+  skattesats: Skattesats
+  resultat: Budgetresultat | null
   ramar: Budgetram[]
-  utgangslage: string | null
+  behandling?: Behandlingshanvisning
+  /** Ett svar per fråga i mallen (#48). */
+  summering?: Record<string, Summeringssvar>
+}
+/** Behandlingen där förslaget ställdes, med partiets yrkande och voteringarna. Yrkandet och sidan i
+ * voteringen är automatiskt kopplade. */
+export interface Behandlingskoppling extends Behandlingshanvisning {
+  /** False när behandlingen inte finns i plattformen. */
+  hittad: boolean
+  sammantrade_id: number | null
+  rubrik: string | null
+  yrkanden: { text: string; personer: { namn: string; parti: string | null; ledamot_id: number | null }[] }[]
+  voteringar: {
+    nummer: number
+    ja_forslag: string | null
+    nej_forslag: string | null
+    vinnare: 'ja' | 'nej' | null
+    lista: { ja: number; nej: number; avstar: number; franvarande: number }
+    /** Sidan förslaget stod på, när förslagsställarens namn står i voteringen. */
+    sida: 'ja' | 'nej' | null
+  }[]
+}
+export interface Summeringsfraga {
+  id: string
+  fraga: string
+}
+export type Summeringsrad = Summeringsfraga & { text?: string; sidor?: number[]; anges_inte?: true }
+/** Det som skickas vid rättning: ramar kan anges som förändring, skatten som förändring i öre. */
+export interface Budgetuppgifterin {
+  skattesats: Skattesats
+  resultat: Budgetresultat | null
+  ramar: (Omit<Budgetram, 'mnkr'> & { mnkr?: number; forandring?: number })[]
+  behandling?: Partial<Behandlingshanvisning>
+  summering?: Record<string, Summeringssvar>
+}
+/** Det som räknas fram ur förslaget och planförutsättningarna. */
+export interface Budgetberakning {
+  planforutsattningar: boolean
+  skattesats: { procent: number | null; ore: number | null; plan: number | null }
+  /** Skatteintäkternas förändring i mnkr. */
+  skattejustering: number | null
+  ramar: { organ: string; mnkr: number; plan: number | null; forandring: number | null; atgarder: Atgardstackning }[]
+  /** Summan av förändringarna per nämnd. */
+  forandring: number | null
+  resultat: { procent: number; mnkr: number | null } | null
+  plan_resultat: number | null
+  /** Planförutsättningarnas resultat − förändringarna + skatteförändringen. */
+  beraknat: number | null
+  /** Förslagets resultat − det beräknade. */
+  differens: number | null
 }
 export interface Differens {
   mnkr: number
@@ -829,13 +983,19 @@ export interface Budgetforslag {
   anmarkning: string
   status: Budgetstatus
   uppgifter: Budgetuppgifter
+  /** Saknas för ett ersatt förslag i formatet före #58. */
+  berakning: Budgetberakning | null
   /** Länk till originaldokumentet. Lägg till `#page=N` för en sida. */
   original: string
   publicerad: string | null
+  behandling: Behandlingskoppling | null
+  /** Summeringen i mallens ordning, märkt Analys. Null om förslaget inte har någon. */
+  summering: Summeringsrad[] | null
   differens?: {
+    /** Öre. */
     skattesats: number | null
-    resultat: (Differens & { ar: number })[]
-    ramar: (Differens & { organ: string; ar: number })[]
+    resultat: Differens | null
+    ramar: (Differens & { organ: string })[]
   } | null
 }
 export interface Budgetutkast extends Budgetforslag {
@@ -845,13 +1005,72 @@ export interface Budgetutkast extends Budgetforslag {
   publicerad_av: string | null
   andrad: string
   inlast: Budgetuppgifter
+  /** Summeringens frågor, för att skriva en summering. */
+  mall: Summeringsfraga[]
+}
+export interface Kalla {
+  text: string
+  /** Förslaget som källan hänvisar till, och sidan i det. */
+  forslag?: number
+  sida?: number
+}
+export interface Planpost {
+  post: string
+  mnkr: number
+  kalla: string
+  kallor: Kalla[]
+}
+export type Plantabell = 'resultatbudget' | 'namnder' | 'investeringar' | 'balansbudget' | 'kassaflode'
+export interface Kontroll {
+  tabell: Plantabell
+  post: string
+  summa?: number
+  angivet?: number
+  differens?: number
+  procent?: number
+}
+export interface Planforutsattningar {
+  id: number
+  budgetar: number
+  status: Budgetstatus
+  filnamn: string
+  skattesats: { procent: number; kalla: string; kallor: Kalla[] }
+  tabeller: Record<Plantabell, Planpost[]>
+  kontroller: Kontroll[]
+  publicerad: string | null
+}
+export interface Planutkast extends Planforutsattningar {
+  redaktorer: string[]
+  granskad_av: string | null
+  granskad: string | null
+  andrad: string
 }
 export interface Budgetjamforelse {
   budgetar: number
-  ar: number[]
   organ: string[]
   antagen: number | null
+  planforutsattningar: Planforutsattningar | null
+  /** Summeringens frågor, samma för alla förslag. */
+  mall: Summeringsfraga[]
   forslag: Budgetforslag[]
+  /** Planförutsättningarnas skatteintäkter och generella bidrag och utjämning mot SKR:s prognoser (#62). */
+  skr: SkrJamforelse
+}
+
+export interface SkrJamforelse {
+  planforutsattningar_mnkr: number | null
+  /** En rad per skatteunderlagsprognos med en siffra för budgetåret, sorterade efter publiceringsdatum. */
+  prognoser: {
+    cirkular: string
+    publicerad: string
+    url: string
+    filnamn: string
+    mnkr: number
+    /** SKR − planförutsättningar. */
+    differens: { mnkr: number; procent: number | null } | null
+  }[]
+  /** Varför jämförelsen saknas, annars null. */
+  saknas: string | null
 }
 
 export const hamtaBudgetar = () =>
@@ -866,12 +1085,109 @@ export async function hamtaBudgetutkast(status?: Budgetstatus): Promise<Budgetut
 }
 export const andraBudgetforslag = (
   id: number,
-  data: Partial<Pick<Budgetforslag, 'uppgifter' | 'partier' | 'titel' | 'antagen' | 'anmarkning'>>,
+  data: Partial<Pick<Budgetforslag, 'partier' | 'titel' | 'antagen' | 'anmarkning'>> & { uppgifter?: Budgetuppgifterin },
 ) => skrivRattelse(`/api/budgetforslag/${id}`, 'PATCH', data) as unknown as Promise<Budgetutkast>
 export const granskaBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/granskning`, 'POST') as unknown as Promise<Budgetutkast>
 export const publiceraBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/publicering`, 'POST') as unknown as Promise<Budgetutkast>
+export async function hamtaPlanutkast(status?: Budgetstatus): Promise<Planutkast[]> {
+  const svar = await fetch(`/api/planforutsattningar${status ? `?status=${status}` : ''}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör eller utgivare.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+export const granskaPlanforutsattningar = (id: number) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/granskning`, 'POST') as unknown as Promise<Planutkast>
+export const publiceraPlanforutsattningar = (id: number) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/publicering`, 'POST') as unknown as Promise<Planutkast>
+
+// Sammanträdesplaner (#68): organens planer så som webbsidan visar dem, och skillnaderna mot besluten i
+// protokollen. Bara för redaktionen.
+export type Planstatus = 'planerat' | 'installt' | 'borttaget'
+
+export interface Planversion {
+  version: number
+  datum: string | null
+  starttid: string | null
+  status: Planstatus
+  anmarkning: string | null
+  kalltext: string
+  hamtad: string
+}
+
+export interface PlaneratSammantrade {
+  id: number
+  nyckel: string
+  datum: string | null
+  manad: string
+  starttid: string | null
+  status: Planstatus
+  anmarkning: string | null
+  version: number
+  protokoll: boolean
+  versioner: Planversion[]
+}
+
+export interface Planskillnad {
+  datum: string
+  typ: 'bara_sidan' | 'bara_beslutet' | 'tid'
+  sidan: string | null
+  beslutet: string | null
+}
+
+export interface Sammantradesplan {
+  organ: { id: string; namn: string }
+  ar: number
+  url: string
+  sammantraden: PlaneratSammantrade[]
+  beslut: { sammantrade_id: number; paragraf: number; rubrik: string; datum: string }[]
+  skillnader: Planskillnad[] | null
+}
+
+export async function hamtaSammantradesplaner(): Promise<Sammantradesplan[]> {
+  const svar = await fetch('/api/sammantradesplaner')
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+
+// Kalendern över sammanträden (#68). Flödena ligger på /kalender/<flode>.ics och är öppna utan inloggning.
+export interface Kalenderhandelse {
+  id: number
+  uid: string
+  organ: { id: string; namn: string; flode: string }
+  datum: string
+  starttid: string | null
+  sluttid: string | null
+  sluttid_ungefarlig: boolean
+  plats: string | null
+  plats_antagen: boolean
+  plats_kalla: 'protokoll' | 'kallelse' | 'antagen' | null
+  status: 'planerat' | 'installt' | 'borttaget' | 'hallet'
+  kallelse: { titel: string; url: string; typ: 'kungorelse' | 'kallelse' } | null
+  handlingar: { titel: string; url: string; storlek: number | null }[]
+  webbsandning: { url: string; inspelning: boolean } | null
+  protokoll: boolean
+  sekvens: number
+  andrad: string | null
+  plan_url: string | null
+}
+
+export interface Kalender {
+  idag: string
+  floden: { organ: string; namn: string; flode: string }[]
+  handelser: Kalenderhandelse[]
+}
+
+export async function hamtaKalender(): Promise<Kalender> {
+  const svar = await fetch('/api/kalender')
+  if (svar.status === 401) throw new EjInloggad()
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
 
 // Kommande: ärenden som inte är avslutade (automatiskt tolkade uppgifter)
 
