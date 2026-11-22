@@ -1,10 +1,19 @@
 <script setup lang="ts">
 // Avvikelser i protokollen: en samlad lista att gå igenom och vid behov lämna till kommunen.
-// Organ, årsintervall och kategori speglas i URL:en (design.md, Filter).
-import { computed, inject, onMounted, ref, watch } from 'vue'
+// Varje publicerad rättelse listas med före och efter och var felet finns (#74).
+// Organ, årsintervall, kategori och var felet finns speglas i URL:en (design.md, Filter).
+import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { EjInloggad, hamtaAvvikelser, hamtaOrgan, type Avvikelser, type Organ } from '../../api'
-import { sammantradesdatum, tal } from '../../format'
+import {
+  EjInloggad,
+  FELET_I,
+  hamtaAvvikelser,
+  hamtaOrgan,
+  type Avvikelser,
+  type Avvikelserattelse,
+  type Organ,
+} from '../../api'
+import { rattelseuppgift, rattelsevarde, sammantradesdatum, tal } from '../../format'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
@@ -21,6 +30,7 @@ const valtOrgan = fraga('organ')
 const fran = fraga('fran')
 const till = fraga('till')
 const kategori = fraga('kategori')
+const felet = fraga('felet')
 
 const organ = ref<Organ[]>([])
 const ar = ref<number[]>([])
@@ -36,6 +46,8 @@ async function ladda() {
   try {
     a.value = await hamtaAvvikelser(fran.value, till.value, valtOrgan.value || undefined)
     if (!ar.value.length) ar.value = Array.from({ length: a.value.till - a.value.fran + 1 }, (_, i) => a.value!.fran + i)
+    // En länk från markeringen "Innehåller felaktigheter" pekar på protokollet i listan.
+    if (route.hash) nextTick(() => document.getElementById(route.hash.slice(1))?.scrollIntoView())
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
@@ -56,17 +68,36 @@ watch([valtOrgan, fran, till], ladda)
 const franAr = computed({ get: () => fran.value || String(a.value?.fran ?? ''), set: (v) => (fran.value = v) })
 const tillAr = computed({ get: () => till.value || String(a.value?.till ?? ''), set: (v) => (till.value = v) })
 const namn = computed(() => Object.fromEntries((a.value?.kategorier ?? []).map((k) => [k.id, k.namn])) as Record<string, string>)
+const feletI = (x: Avvikelserattelse) => x.felet_i ?? 'ej_angivet'
+const matchar = (x: Avvikelserattelse) => !felet.value || feletI(x) === felet.value
 const visade = computed(() =>
   (a.value?.sammantraden ?? []).filter(
-    (s) => !kategori.value || (kategori.value === 'rattelser' ? s.rattelser > 0 : s.avvikelser.some((x) => x.kategori === kategori.value)),
+    (s) =>
+      (!kategori.value ||
+        (kategori.value === 'rattelser' ? s.rattelser.length > 0 : s.avvikelser.some((x) => x.kategori === kategori.value))) &&
+      (!felet.value || s.rattelser.some(matchar)),
   ),
 )
+const antalFelet = (id: string) => a.value?.felet_i.find((f) => (f.id ?? 'ej_angivet') === id)?.antal ?? 0
+// Vad uppgiften var före rättelsen: protokollets uppgift eller tolkningens.
+const fore = (x: Avvikelserattelse) =>
+  x.felet_i === 'protokollet' ? 'Protokollet' : x.felet_i === 'inlasningen' ? 'Tolkningen' : 'Före'
+function plats(x: Avvikelserattelse): string {
+  return x.paragraf === null ? '' : `§ ${x.paragraf}${x.rubrik ? ` ${x.rubrik}` : ''}`
+}
 
 function csv(): string {
   const huvud = ['Datum', 'Organ', 'Kategori', 'Avvikelse', 'Protokoll']
   const rader = visade.value.flatMap((s) => [
     ...s.avvikelser.map((x) => [s.sammantrade.datum ?? '', s.sammantrade.organ.namn, namn.value[x.kategori], x.text, s.url]),
-    ...(s.rattelser ? [[s.sammantrade.datum ?? '', s.sammantrade.organ.namn, 'Publicerad rättelse', `${s.rattelser} rättelser`, s.url]] : []),
+    ...s.rattelser.filter(matchar).map((x) => [
+      s.sammantrade.datum ?? '',
+      s.sammantrade.organ.namn,
+      `Publicerad rättelse, ${FELET_I[feletI(x)].toLowerCase()}`,
+      `${[plats(x), rattelseuppgift(x)].filter(Boolean).join(', ')}: ${rattelsevarde(x.falt, x.ursprungligt)} → ` +
+        `${rattelsevarde(x.falt, x.nytt)}. ${x.motivering}`,
+      s.url,
+    ]),
   ])
   return [huvud, ...rader].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n')
 }
@@ -112,6 +143,13 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
         <option value="rattelser">Publicerade rättelser</option>
       </select>
     </label>
+    <label>
+      Rättelser, var felet finns
+      <select v-model="felet" data-testid="filter-felet">
+        <option value="">Alla</option>
+        <option v-for="(t, id) in FELET_I" :key="id" :value="id">{{ t }} ({{ tal(antalFelet(id)) }})</option>
+      </select>
+    </label>
   </div>
 
   <p v-if="omvant" class="fel" role="alert">Startåret kan inte vara efter slutåret.</p>
@@ -133,7 +171,7 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
       </div>
       <p v-if="!visade.length" class="saknas" data-testid="inga">Inga avvikelser för urvalet.</p>
       <ul v-else class="protokoll">
-        <li v-for="s in visade" :key="s.sammantrade.id" data-testid="avvikelse-sammantrade">
+        <li v-for="s in visade" :id="`protokoll-${s.sammantrade.id}`" :key="s.sammantrade.id" data-testid="avvikelse-sammantrade">
           <div class="huvud">
             <RouterLink :to="`/politik/sammantraden/${s.sammantrade.id}`">
               {{ s.sammantrade.organ.namn }} {{ sammantradesdatum(s.sammantrade.datum) }}
@@ -142,12 +180,29 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
             <a :href="s.url" class="original" rel="noopener" target="_blank">Originalprotokollet</a>
           </div>
           <ul class="avvikelser">
-            <li v-for="(x, i) in s.avvikelser" :key="i" :data-kategori="x.kategori">
-              <span class="kategori">{{ namn[x.kategori] }}</span> {{ x.text }}
-            </li>
-            <li v-if="s.rattelser">
-              <span class="kategori">Publicerad rättelse</span>
-              <RouterLink :to="`/politik/sammantraden/${s.sammantrade.id}`">{{ s.rattelser }} rättelse{{ s.rattelser > 1 ? 'r' : '' }}</RouterLink>
+            <template v-if="!felet">
+              <li v-for="(x, i) in s.avvikelser" :key="i" :data-kategori="x.kategori">
+                <span class="kategori">{{ namn[x.kategori] }}</span> {{ x.text }}
+              </li>
+            </template>
+            <li
+              v-for="x in s.rattelser.filter(matchar)"
+              :key="`r${x.id}`"
+              class="rattelse"
+              data-testid="felaktighet"
+              :data-felet-i="feletI(x)"
+            >
+              <span class="kategori">Rättelse, {{ FELET_I[feletI(x)].toLowerCase() }}</span>
+              <RouterLink
+                v-if="x.paragraf !== null"
+                :to="`/politik/sammantraden/${s.sammantrade.id}/paragraf/${x.paragraf}`"
+              >{{ plats(x) }}</RouterLink>
+              {{ rattelseuppgift(x) }}
+              <span class="fore-efter">
+                {{ fore(x) }}: <span class="varde">{{ rattelsevarde(x.falt, x.ursprungligt) }}</span>. Rättat:
+                <span class="varde" data-testid="rattat">{{ rattelsevarde(x.falt, x.nytt) }}</span>.
+              </span>
+              <span class="motivering">{{ x.motivering }}</span>
             </li>
           </ul>
         </li>
@@ -260,6 +315,17 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   padding: 0 6px;
+}
+.rattelse .fore-efter,
+.rattelse .motivering {
+  display: block;
+}
+.rattelse .motivering {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.rattelse .varde {
+  color: var(--ink);
 }
 .avvikelser {
   margin: 6px 0 0;

@@ -320,6 +320,8 @@ export interface Sammantradesrad {
   antal_behandlingar: number
   /** Första och sista paragrafen. */
   paragrafer: [number, number] | null
+  /** Publicerade rättelser av fel i själva protokollet (#74). Fler än 0: "Innehåller felaktigheter". */
+  felaktigheter: number
   protokoll: Protokollkalla
 }
 
@@ -488,6 +490,22 @@ export interface Aterkommande {
 
 export type Avvikelsekategori = 'motsagelse' | 'felskrivet' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
 
+/** En publicerad rättelse i listan över felaktigheter (#74). */
+export interface Avvikelserattelse {
+  id: number
+  objekt: NyRattelse['objekt']
+  paragraf: number | null
+  votering: number | null
+  namn: string | null
+  rubrik: string | null
+  falt: NyRattelse['falt']
+  ursprungligt: unknown
+  nytt: unknown
+  motivering: string
+  felet_i: FeletI | null
+  publicerad: string
+}
+
 export interface Avvikelser {
   fran: number
   till: number
@@ -498,8 +516,11 @@ export interface Avvikelser {
     url: string
     avvikelser: { text: string; kategori: Avvikelsekategori }[]
     i_protokollet: boolean
-    rattelser: number
+    /** Publicerade rättelser av fel i protokollet. */
+    felaktigheter: number
+    rattelser: Avvikelserattelse[]
   }[]
+  felet_i: { id: FeletI | null; antal: number }[]
   granskade: number
 }
 
@@ -802,7 +823,16 @@ export interface Rattelsemarkering {
   ursprungligt: unknown
   nytt: unknown
   motivering: string
+  felet_i?: FeletI | null
   publicerad: string
+}
+
+/** Var felet som en rättelse rättar finns (#74). null: inte angivet (rättelser från före #74). */
+export type FeletI = 'protokollet' | 'inlasningen'
+export const FELET_I: Record<FeletI | 'ej_angivet', string> = {
+  protokollet: 'I protokollet',
+  inlasningen: 'I inläsningen',
+  ej_angivet: 'Inte angivet',
 }
 export type Rattelser = Partial<Record<string, Rattelsemarkering>>
 
@@ -817,9 +847,10 @@ export interface NyRattelse {
   falt: 'rubrik' | 'beslut' | 'diarienummer' | 'typ' | 'rost' | 'parti' | 'motionarer'
   nytt: unknown
   motivering: string
+  felet_i: FeletI
 }
 
-export interface Rattelse extends Omit<NyRattelse, 'paragraf' | 'votering' | 'namn'> {
+export interface Rattelse extends Omit<NyRattelse, 'paragraf' | 'votering' | 'namn' | 'felet_i'> {
   id: number
   sammantrade: { id: number; datum: string | null; organ: Organ }
   paragraf: number | null
@@ -828,6 +859,7 @@ export interface Rattelse extends Omit<NyRattelse, 'paragraf' | 'votering' | 'na
   /** Behandlingens rubrik enligt tolkningen. */
   rubrik: string | null
   ursprungligt: unknown
+  felet_i: FeletI | null
   status: Rattelsestatus
   redaktor: string
   skapad: string

@@ -11,7 +11,7 @@ test.beforeAll(async ({ request }) => {
 
 test('från behandling till ledamot till ledamotens sammanträden', async ({ page }) => {
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('rowheader').getByRole('link').click()
   await page.locator('[data-testid="behandling"][data-paragraf="3"]').getByRole('link').click()
   await expect(page).toHaveURL(/\/paragraf\/3$/)
 

@@ -12,6 +12,7 @@ import {
 } from '../../api'
 import { sammantradesdatum } from '../../format'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
+import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
@@ -195,7 +196,12 @@ const paragrafer = (s: Sammantradesrad) =>
           <td class="tal">{{ tid(s) }}</td>
           <td class="tal">{{ paragrafer(s) }}</td>
           <td class="tal hoger">{{ s.antal_behandlingar }}</td>
-          <td><Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" /></td>
+          <td>
+            <span class="underlag">
+              <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" />
+              <Felaktighetsmarkering :sammantrade="s" />
+            </span>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -291,5 +297,11 @@ const paragrafer = (s: Sammantradesrad) =>
 }
 .fel {
   color: var(--status-critical);
+}
+td .underlag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
 }
 </style>

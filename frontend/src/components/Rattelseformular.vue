@@ -2,9 +2,10 @@
 // Redaktörens formulär för att rätta en automatiskt tolkad uppgift i en behandling (#33), eller
 // partiet för en person i ett sammanträdes närvarolista.
 // Rättelsen sparas som utkast och publiceras först när en annan person med rollen utgivare
-// har granskat och publicerat den.
+// har granskat och publicerat den. Redaktören anger var felet finns, i protokollet eller i inläsningen (#74).
 import { computed, ref, watch } from 'vue'
-import { BEHANDLINGSTYPER, EjInloggad, skapaRattelse, type Behandling, type NyRattelse, type Person } from '../api'
+import { BEHANDLINGSTYPER, EjInloggad, skapaRattelse, type Behandling, type FeletI, type NyRattelse, type Person } from '../api'
+import FeletIVal from './FeletIVal.vue'
 
 const props = defineProps<{
   behandling?: Behandling
@@ -16,7 +17,7 @@ interface Val {
   nyckel: string
   grupp: string
   text: string
-  mal: Omit<NyRattelse, 'nytt' | 'motivering'>
+  mal: Omit<NyRattelse, 'nytt' | 'motivering' | 'felet_i'>
   nuvarande: unknown
 }
 
@@ -59,6 +60,7 @@ const grupper = computed(() => [...new Set(val.value.map((v) => v.grupp))])
 const valt = ref(props.narvaro ? (val.value[0]?.nyckel ?? '') : 'beslut')
 const nytt = ref('')
 const motivering = ref('')
+const feletI = ref<FeletI | null>(null)
 const sparar = ref(false)
 const fel = ref<string | null>(null)
 const sparat = ref<number | null>(null)
@@ -77,6 +79,8 @@ function somText(v: unknown): string {
 }
 watch(valt, () => {
   nytt.value = somText(aktuellt.value?.nuvarande ?? harlett.value)
+  // Saknas partiet i närvarolistan är felet troligen protokollets, men redaktören kan ändra valet.
+  feletI.value = falt.value === 'parti' && aktuellt.value?.nuvarande == null ? 'protokollet' : null
 }, { immediate: true })
 
 function varde(): unknown {
@@ -87,11 +91,17 @@ function varde(): unknown {
 
 async function spara() {
   if (!aktuellt.value) return
+  if (!feletI.value) {
+    fel.value = 'Ange om felet finns i protokollet eller i inläsningen.'
+    return
+  }
   sparar.value = true
   fel.value = null
   sparat.value = null
   try {
-    const r = await skapaRattelse({ ...aktuellt.value.mal, nytt: varde(), motivering: motivering.value })
+    const r = await skapaRattelse({
+      ...aktuellt.value.mal, nytt: varde(), motivering: motivering.value, felet_i: feletI.value,
+    })
     sparat.value = r.id
     motivering.value = ''
   } catch (e) {
@@ -142,6 +152,7 @@ async function spara() {
         data-testid="rattelse-motivering"
       />
     </label>
+    <FeletIVal v-model="feletI" />
     <div class="rad">
       <button type="submit" class="knapp" :disabled="sparar" data-testid="spara-rattelse">Spara som utkast</button>
       <p v-if="sparat" class="klart" role="status" data-testid="rattelse-sparad">

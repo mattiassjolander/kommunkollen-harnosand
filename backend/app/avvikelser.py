@@ -7,7 +7,9 @@ en del av protokollet. Listan skiljer på dem så gott det går, men säger inte
 förrän någon har tittat på originalet.
 
 Publicerade rättelser (ADR-0002) räknas med, eftersom en rättelse visar att protokollet eller
-tolkningen innehöll något som en redaktör har rättat.
+tolkningen innehöll något som en redaktör har rättat. Varje rättelse listas med vad den rättar, före
+och efter, motiveringen och var felet finns (#74): i protokollet, i inläsningen eller inte angivet.
+Rättelser av fel i protokollet är felaktigheter i protokollet.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import re
 
 import psycopg
 
+from .rattelser import FELET_I
 from .sources.harnosand import organ_ref
 
 # (kategori, regel). Den första regeln som passar avgör kategorin.
@@ -44,7 +47,8 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
     rader = conn.execute(
         """
         SELECT s.id, s.organ, s.datum, s.tolkning, s.avvikelser, d.typ AS dokument_typ, d.url,
-               (SELECT count(*) FROM rattelse r WHERE r.sammantrade_id = s.id AND r.status = 'publicerad') AS rattelser
+               EXISTS (SELECT 1 FROM rattelse r WHERE r.sammantrade_id = s.id AND r.status = 'publicerad')
+                 AS har_rattelser
         FROM sammantrade s JOIN dokument d ON d.id = s.dokument_id
         WHERE s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
           AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
@@ -52,6 +56,24 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
         """,
         {"fran": fran, "till": till, "organ": organ},
     ).fetchall()
+    rattelser: dict[int, list[dict]] = {}
+    for r in conn.execute(
+        """
+        SELECT r.id, r.sammantrade_id, r.objekt, r.paragraf, r.votering, r.namn, r.falt, r.ursprungligt, r.nytt,
+               r.motivering, r.felet_i, r.publicerad,
+               (SELECT rubrik FROM behandling b WHERE b.sammantrade_id = r.sammantrade_id AND b.paragraf = r.paragraf
+                ORDER BY ordning LIMIT 1) AS rubrik
+        FROM rattelse r
+        WHERE r.status = 'publicerad' AND r.sammantrade_id = ANY(%s)
+        ORDER BY r.paragraf NULLS FIRST, r.votering NULLS FIRST, r.namn, r.falt
+        """,
+        ([r["id"] for r in rader if r["har_rattelser"]],),
+    ):
+        rattelser.setdefault(r["sammantrade_id"], []).append({
+            "id": r["id"], "objekt": r["objekt"], "paragraf": r["paragraf"], "votering": r["votering"],
+            "namn": r["namn"] or None, "rubrik": r["rubrik"], "falt": r["falt"], "ursprungligt": r["ursprungligt"],
+            "nytt": r["nytt"], "motivering": r["motivering"], "felet_i": r["felet_i"], "publicerad": r["publicerad"],
+        })
     ut = []
     for r in rader:
         avv = [{"text": a, "kategori": kategori(a)} for a in r["avvikelser"]]
@@ -59,14 +81,17 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
             avv.append({"text": "Bara paragrafprotokoll finns, inte hela protokollet", "kategori": "ofullstandigt"})
         if r["tolkning"] == "ej_tolkad" and not avv:
             avv.append({"text": "Protokollet kunde inte tolkas", "kategori": "tolkning"})
-        if not avv and not r["rattelser"]:
+        ratt = rattelser.get(r["id"], [])
+        if not avv and not ratt:
             continue
         ut.append({
             "sammantrade": {"id": r["id"], "datum": r["datum"], "organ": organ_ref(r["organ"]), "tolkning": r["tolkning"]},
             "url": r["url"],
             "avvikelser": avv,
-            "i_protokollet": any(a["kategori"] in I_PROTOKOLLET for a in avv),
-            "rattelser": r["rattelser"],
+            "i_protokollet": any(a["kategori"] in I_PROTOKOLLET for a in avv)
+            or any(x["felet_i"] == "protokollet" for x in ratt),
+            "felaktigheter": sum(1 for x in ratt if x["felet_i"] == "protokollet"),
+            "rattelser": ratt,
         })
     antal = {k: sum(1 for s in ut for a in s["avvikelser"] if a["kategori"] == k) for k in KATEGORIER}
     return {
@@ -75,6 +100,8 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
         "organ": organ_ref(organ) if organ else None,
         "kategorier": [{"id": k, "namn": n, "i_protokollet": k in I_PROTOKOLLET, "antal": antal[k]}
                        for k, n in KATEGORIER.items()],
+        "felet_i": [{"id": f, "antal": sum(1 for x in ut for y in x["rattelser"] if y["felet_i"] == f)}
+                    for f in (*FELET_I, None)],
         "sammantraden": ut,
         "granskade": len(rader),
     }

@@ -226,6 +226,8 @@ Fliken Avvikelser samlar alla protokoll med avvikelser eller publicerade rättel
 
 Indelningen är en hjälp att välja vad som ska kontrolleras mot originalet, inte ett påstående om att kommunens protokoll är fel. API:t: `/api/avvikelser?fran=&till=&organ=`.
 
+Varje publicerad rättelse listas för sig under protokollet (#74): vad som rättats, paragrafen, vad protokollet eller tolkningen sa, det rättade värdet och motiveringen. Listan filtreras på var felet finns: i protokollet, i inläsningen eller inte angivet (filtret `felet` i URL:en). Rättelser av fel i protokollet är felaktigheter i protokollet, och de räknas också som avvikelser i protokollet. CSV-exporten har en rad per rättelse.
+
 ## Ärenden
 
 Behandlingar i olika organ kopplas till samma ärende (ADR-0003). Ärendet är plattformens egen entitet, och diarienumren är egenskaper hos det. Reglerna är framtagna ur hela arkivet:
@@ -246,6 +248,8 @@ API:t: `/api/arenden/{id}`, ärendet på `/api/sammantraden/{id}/behandlingar/{p
 En redaktör kan rätta en automatiskt tolkad uppgift: en behandlings rubrik, beslut, diarienummer eller typ, en röst i en votering, partiet för en person i närvarolistan, eller en motions motionärer (som också en utgivare kan skriva, se Motioner nedan). Formuläret finns längst ned på behandlingen. Partiet kan också rättas från sammanträdet, för alla i närvarolistan. Rättelsen kräver en motivering, till exempel var i protokollet uppgiften står.
 
 Statusflödet är utkast → granskad → publicerad (kravspec 18). En utgivare som inte skrev rättelsen granskar och publicerar den under fliken Rättelser. Det gäller också den som har båda rollerna. Redaktören kan ändra och ta bort sitt eget utkast. En ny publicerad rättelse av samma uppgift ersätter den tidigare, som får status ersatt. Alla listor (statistik, ärenden, motioner, återkommande och kommande ärenden, jämförelsen med sammanträdesplanerna) läser behandlingarna med publicerade rättelser genom `behandlingar.py`. En publicerad rättelse av en rubrik eller ett diarienummer räknar om kopplingarna direkt (ADR-0003).
+
+Redaktören anger i varje rättelse var felet finns (#74): **i protokollet** (protokollet saknar eller anger fel uppgift) eller **i inläsningen** (plattformen läste eller tolkade fel). Valet är obligatoriskt. Saknas partiet i närvarolistan är förvalet "i protokollet". Utgivaren ser valet när rättelsen granskas, och redaktören kan ändra det i sitt utkast. Ett protokoll med minst en publicerad rättelse av fel i protokollet märks *Innehåller felaktigheter* på sammanträdessidan och i protokollistan, med länk till listan över felaktigheterna under Avvikelser (`felaktigheter` i API:t för sammanträdena). Rättelser av fel i inläsningen ger ingen markering. Rättelser från före #74 saknar valet, visas som *Inte angivet* och ger ingen markering förrän det har angetts.
 
 Rättelsen sparas bredvid tolkningen och läggs på när uppgiften läses. Därför bevaras den vid en ny insamling och vid omtolkning. Den pekar ut uppgiften med sammanträde och paragraf, och med namn och votering för en röst. Läsaren ser den rättade uppgiften på behandlingen, sammanträdet och ärendet, med markeringen "Rättad av redaktionen" och vad tolkningen sa. Röstsiffrorna per parti räknas med den rättade rösten. Ledamotssidorna visar också rättade partier. Sökningen och kopplingen av ärenden använder tolkningen.
 

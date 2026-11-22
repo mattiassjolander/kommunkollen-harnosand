@@ -246,8 +246,12 @@ _Avoid_: Ogranskad uppgift, maskinuppgift
 En uppgift som plattformen har läst med textigenkänning ur ett protokoll som bara innehåller bilder. Den kan innehålla läsfel utöver dem som tolkningen kan ge.
 
 **Rättelse**:
-En redaktörs ändring av en automatiskt tolkad uppgift, med en motivering. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad rättelse visas med markering, och läsaren kan se vad tolkningen sa. Tolkningen ändras inte.
+En redaktörs ändring av en automatiskt tolkad uppgift, med en motivering. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad rättelse visas med markering, och läsaren kan se vad tolkningen sa. Tolkningen ändras inte. Rättelsen anger om felet finns i protokollet eller i inläsningen.
 _Avoid_: Korrigering, redigering
+
+**Felaktighet i protokollet**:
+En publicerad rättelse av ett fel som finns i själva protokollet: protokollet saknar eller anger fel uppgift. Ett protokoll med minst en sådan rättelse märks "Innehåller felaktigheter". Ett fel i inläsningen, där plattformen läste eller tolkade protokollet fel, är ingen felaktighet i protokollet.
+_Avoid_: Fel i protokollet (om tolkningsfel), protokollfel
 
 ## Datainsamling
 

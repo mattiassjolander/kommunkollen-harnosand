@@ -42,7 +42,7 @@ def behandling(api: TestClient, datum: str, paragraf: int) -> dict:
 
 
 def skapa(api: TestClient, **data) -> dict:
-    svar = api.post("/api/rattelser", json=data)
+    svar = api.post("/api/rattelser", json={"felet_i": "inlasningen"} | data)
     assert svar.status_code == 201, svar.text
     return svar.json()
 
@@ -53,7 +53,8 @@ def test_fran_utkast_till_publicerad_och_ingen_godkanner_sin_egen(api):
 
     # Bara redaktörer skriver rättelser.
     utkast = {"sammantrade_id": s, "objekt": "behandling", "paragraf": 109, "falt": "beslut",
-              "nytt": "Kommunfullmäktige antar planprogrammet.", "motivering": "Beslutet står på sidan 12."}
+              "nytt": "Kommunfullmäktige antar planprogrammet.", "motivering": "Beslutet står på sidan 12.",
+              "felet_i": "inlasningen"}
     assert api.post("/api/rattelser", json=utkast).status_code == 401
     logga_in(api, "utgivare")
     assert api.post("/api/rattelser", json=utkast).status_code == 403
@@ -116,8 +117,11 @@ def test_bara_redaktoren_andrar_sitt_utkast(api):
         ({"objekt": "rost", "paragraf": 109, "votering": 2, "namn": "Glenn Sehlin", "falt": "rost", "nytt": "nej"}, 422),
         ({"objekt": "narvaro", "namn": "Glenn Sehlin", "falt": "parti", "nytt": "Sverigedemokraterna"}, 422),
         ({"objekt": "behandling", "paragraf": 109, "falt": "beslut", "nytt": "x", "motivering": " "}, 422),
+        # Var felet finns är obligatoriskt (#74).
+        ({"objekt": "behandling", "paragraf": 109, "falt": "beslut", "nytt": "x", "felet_i": None}, 422),
+        ({"objekt": "behandling", "paragraf": 109, "falt": "beslut", "nytt": "x", "felet_i": "kommunen"}, 422),
     ]:
-        svar = api.post("/api/rattelser", json={"sammantrade_id": s, "motivering": "m"} | data)
+        svar = api.post("/api/rattelser", json={"sammantrade_id": s, "motivering": "m", "felet_i": "inlasningen"} | data)
         assert svar.status_code == kod, (data, svar.text)
 
 

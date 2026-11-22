@@ -34,7 +34,8 @@ def behandling(conn, sid: int, paragraf: int, rubrik: str, beslut: str | None = 
 
 def ratta(conn, sid: int, paragraf: int, falt: str, nytt, publicera: bool = True) -> None:
     r = rattelser.skapa(conn, {"objekt": "behandling", "sammantrade_id": sid, "paragraf": paragraf, "falt": falt,
-                               "nytt": nytt, "motivering": "Så står det i protokollet"}, "redaktor@test")
+                               "nytt": nytt, "motivering": "Så står det i protokollet", "felet_i": "inlasningen"},
+                              "redaktor@test")
     rattelser.granska(conn, r["id"], "utgivare@test")
     if publicera:
         rattelser.publicera(conn, r["id"], "utgivare@test")

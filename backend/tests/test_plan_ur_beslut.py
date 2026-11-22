@@ -130,7 +130,8 @@ def test_ett_rattat_beslut_andrar_planen(conn):
     sammantradesplan.lagra_beslut(conn, IDAG, hamtad=NU)
     r = rattelser.skapa(conn, {"objekt": "behandling", "sammantrade_id": sid, "paragraf": 130, "falt": "beslut",
                                "nytt": SEPT + "22 februari, 22 mars och 26 april.",
-                               "motivering": "Ett datum föll bort i tolkningen"}, "redaktor@test")
+                               "motivering": "Ett datum föll bort i tolkningen", "felet_i": "inlasningen"},
+                              "redaktor@test")
     rattelser.granska(conn, r["id"], "utgivare@test")
     rattelser.publicera(conn, r["id"], "utgivare@test")
     assert [x["datum"] for x in kf(conn, 2027)] == ["2027-02-22", "2027-03-22", "2027-04-26"]

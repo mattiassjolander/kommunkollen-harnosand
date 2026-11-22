@@ -209,7 +209,9 @@ _SAMMANTRADE = """
            d.sha256, d.storlek, d.hamtad, d.datakalla_id, k.titel AS datakalla_titel,
            (SELECT count(*) FROM behandling b WHERE b.sammantrade_id = s.id) AS antal_behandlingar,
            (SELECT min(paragraf) FROM behandling b WHERE b.sammantrade_id = s.id) AS forsta_paragraf,
-           (SELECT max(paragraf) FROM behandling b WHERE b.sammantrade_id = s.id) AS sista_paragraf
+           (SELECT max(paragraf) FROM behandling b WHERE b.sammantrade_id = s.id) AS sista_paragraf,
+           (SELECT count(*) FROM rattelse r WHERE r.sammantrade_id = s.id AND r.status = 'publicerad'
+              AND r.felet_i = 'protokollet') AS felaktigheter
     FROM sammantrade s
     JOIN dokument d ON d.id = s.dokument_id
     JOIN datakalla k ON k.id = d.datakalla_id
@@ -230,6 +232,8 @@ def _sammantrade(rad: dict) -> dict:
         "ocr": rad["ocr"],
         "antal_behandlingar": rad["antal_behandlingar"],
         "paragrafer": [rad["forsta_paragraf"], rad["sista_paragraf"]] if rad["forsta_paragraf"] is not None else None,
+        # Publicerade rättelser av fel i själva protokollet (#74): protokollet "Innehåller felaktigheter".
+        "felaktigheter": rad["felaktigheter"],
         "protokoll": {
             "dokument_id": rad["dokument_id"],
             "url": rad["dokument_url"],
