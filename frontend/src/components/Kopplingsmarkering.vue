@@ -14,11 +14,12 @@ const TEXT = {
 } as const
 const IKON = { automatisk: '⚙', forslag: '?', bekraftad: '✓', avvisad: '×' } as const
 
-const grund = computed(() =>
-  props.koppling.grund === 'diarienummer'
-    ? `samma diarienummer ${props.koppling.underlag}`
-    : `hänvisning i beslutsunderlaget: ”${props.koppling.underlag}”`,
-)
+const grund = computed(() => {
+  const { grund, underlag } = props.koppling
+  if (grund === 'diarienummer') return `samma diarienummer ${underlag}`
+  if (grund === 'motionstitel') return `samma motionstitel: ”${underlag}”`
+  return `hänvisning i beslutsunderlaget: ”${underlag}”`
+})
 </script>
 
 <template>

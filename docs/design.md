@@ -161,7 +161,7 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 | Härlett parti (närvarolistan anger inget) | Ikonen ≈ och texten "Härlett" med prickad kantlinje vid partiet. Den fälls ut och visar källan: samma protokoll, eller vilket sammanträde partiet hämtades från |
 | Fastställd partitillhörighet (#100, ADR-0006) | Ikonen ◆ och texten "Fastställt av redaktionen" i en hel ram vid partiet, bara när perioden ändrar partiet som protokollet anger. Den fälls ut och visar vad protokollet anger, perioden och motiveringen |
 | Diarienummer ur kallelsen (protokollet saknar det, #109) | Ikonen ↗ och texten "ur kallelsen" med prickad kantlinje vid diarienumret. Den fälls ut och länkar till kallelsen och sidan i föredragningslistan där numret står. Ett diarienummer i protokollet eller en publicerad rättelse går före och visas utan markering |
-| Koppling mellan behandlingar i ett ärende | Ikonen ⚙ och "Automatisk koppling", ? och "Förslag, inte bekräftat", ✓ och "Bekräftad av redaktör" eller × och "Avvisad av redaktör", alltid med grunden (diarienumret eller hänvisningen) |
+| Koppling mellan behandlingar i ett ärende | Ikonen ⚙ och "Automatisk koppling", ? och "Förslag, inte bekräftat", ✓ och "Bekräftad av redaktör" eller × och "Avvisad av redaktör", alltid med grunden: "samma diarienummer", hänvisningen i beslutsunderlaget, eller "Samma motionstitel" med motionens titel när ett svar på en motion kopplas till fullmäktiges beslut att väcka den (#108) |
 | AI-analys (ej bekräftad) | Streckad kantlinje och etiketten **Analys**, aldrig samma stil som fakta |
 | Ofullständigt underlag | Grå skraffering och texten "Ofullständigt underlag" |
 | Saknas | Tomt med texten "Uppgift saknas", aldrig noll |

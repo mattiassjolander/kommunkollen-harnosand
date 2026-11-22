@@ -11,6 +11,12 @@ Kopplingsreglerna, framtagna ur hela protokollarkivet:
   annars blir kopplingen ett förslag.
 - **Övriga hänvisningar** (till samma nivå eller nedåt, eller utan organ) blir förslag som en
   redaktör bekräftar eller avvisar (ADR-0002).
+- **Motionstitel.** Ett svar på en motion, eller en beredning av den, kopplas till kommunfullmäktiges
+  beslut att väcka motionen när titlarna är lika (#108). Från augusti 2026 saknar protokollen oftast
+  diarienummer, och våren 2026 fick pågående ärenden nya nummer, så titeln är det som återstår.
+  Exakt samma titel och en enda väckt motion ger en automatisk koppling. En titel som är början på
+  den andra eller liknar den, eller flera väckta motioner som passar, ger förslag. Motionen ska vara
+  väckt före behandlingen.
 - Samlingspunkter (delegationsbeslut, meddelanden, ärenden för kännedom …) kopplas aldrig.
 
 Diarienumren är protokollets, annars kallelsens (#109, `kallelsepunkter`), och en publicerad rättelse
@@ -60,6 +66,38 @@ def likhet(a: str, b: str) -> float:
     return len(x & y) / max(1, min(len(x), len(y)))
 
 
+_MOTIONSPREFIX = re.compile(
+    r"^(?:(?:svar\s+på|yttrande\s+över)\s+)?(?:remiss\s+(?:angående|gällande)\s+)?motion(?:en)?\b"
+    r"(?:\s*[-–—:]\s*|\s+)(?:om\s+)?",
+    re.I,
+)
+_DNR_PARENTES = re.compile(r"\s*\([^)]*\d[^)]*\)")
+
+
+def motionstitel(text: str | None) -> str | None:
+    """Motionens titel ur en rubrik, normaliserad för jämförelse, eller None om rubriken inte gäller en
+    motion. "Motion - Kontinuitet i allmän förskola" och "Svar på motion om kontinuitet i allmän
+    förskola" ger båda "kontinuitet i allmän förskola"."""
+    text = (text or "").strip()
+    m = _MOTIONSPREFIX.match(text)
+    if not m:
+        return None
+    titel = _DNR_PARENTES.sub("", text[m.end():])
+    titel = " ".join(titel.lower().split()).strip(" .,:;–—-")
+    return titel or None
+
+
+def _titlar_lika(a: str, b: str) -> int:
+    """Hur väl två motionstitlar stämmer: 3 exakt, 2 när den ena är början på den andra (vid ord- eller
+    skiljeteckengräns), 1 när de liknar varandra (likhet) och 0 annars."""
+    if a == b:
+        return 3
+    kort, lang = sorted((a, b), key=len)
+    if lang.startswith(kort) and not lang[len(kort)].isalnum():
+        return 2
+    return 1 if likhet(a, b) > LIKHETSGRANS else 0
+
+
 def serie(organ: str, dnr: str) -> str:
     if "/" in dnr:
         return dnr.split("/", 1)[0].strip().upper()
@@ -77,6 +115,7 @@ class _Beh:
     rubrik: str
     diarienummer: list[str]
     hanvisningar: list[dict] = field(default_factory=list)
+    beslut: str | None = None
 
     @property
     def ordning(self) -> tuple:
@@ -92,7 +131,8 @@ def _las(conn: psycopg.Connection) -> dict[Nyckel, _Beh]:
     beh = {}
     per_id = {}
     for r in sorted(behandlingar.las(conn), key=lambda r: (r["sammantrade_id"], r["paragraf"])):
-        b = _Beh((r["sammantrade_id"], r["paragraf"]), r["organ"], r["datum"], r["rubrik"], r["diarienummer"])
+        b = _Beh((r["sammantrade_id"], r["paragraf"]), r["organ"], r["datum"], r["rubrik"], r["diarienummer"],
+                 beslut=r["beslut"])
         beh[b.nyckel] = b
         per_id[r["id"]] = b
     for h in conn.execute("SELECT behandling_id, organ, datum, paragraf, text FROM hanvisning ORDER BY behandling_id, ordning"):
@@ -144,7 +184,66 @@ def _forslag_till_kopplingar(beh: dict[Nyckel, _Beh]) -> dict[tuple[Nyckel, Nyck
                 uppat = h["organ"] is not None and NIVA.get(k.organ, 0) < NIVA.get(b.organ, 0)
                 status = "automatisk" if uppat and likhet(b.rubrik, k.rubrik) > LIKHETSGRANS else "forslag"
                 lagg_till(k, b, "hanvisning", h["text"], status)
+
+    _motionstitlar(beh, ut, lagg_till)
     return ut
+
+
+def _motionstitlar(beh: dict[Nyckel, _Beh], ut: dict, lagg_till) -> None:
+    """Kopplingsregeln motionstitel (#108). Körs sist, så att den bara kopplar det som diarienummer och
+    automatiska hänvisningar inte redan har kopplat till en väckt motion."""
+    from .motioner import tillkommande_motioner, utfall  # motioner importerar den här modulen
+
+    # Väckta motioner: (titel, behandling, kan kopplas). Motioner som väcks under samlingspunkten
+    # "Tillkommande motioner" är kandidater, men samlingspunkten kopplas aldrig.
+    vackta: list[tuple[str, _Beh, bool]] = []
+    for b in beh.values():
+        if b.organ != "KF" or utfall(b.beslut) != "vackt":
+            continue
+        if b.samling:
+            vackta += [(t, b, False) for titel, _ in tillkommande_motioner(b.beslut or "")
+                       if (t := motionstitel(f"Motion - {titel}"))]
+        elif t := motionstitel(b.rubrik):
+            vackta.append((t, b, True))
+    if not vackta:
+        return
+    vackt_id = {v.nyckel for _, v, _ in vackta}
+
+    # Grupperna som de automatiska kopplingarna hittills ger.
+    foralder: dict[Nyckel, Nyckel] = {}
+
+    def rot(n: Nyckel) -> Nyckel:
+        while foralder.get(n, n) != n:
+            n = foralder[n]
+        return n
+
+    for (a, b), (_, _, status) in list(ut.items()):
+        if status == "automatisk" and rot(a) != rot(b):
+            foralder[rot(a)] = rot(b)
+    med_vackt = {rot(n) for n in vackt_id}
+
+    # Svar och beredning: den tidigaste behandlingen med en motionstitel i varje grupp som inte redan
+    # har en väckt motion. De övriga i gruppen är redan kopplade till den.
+    svar: dict[Nyckel, tuple[_Beh, str]] = {}
+    for b in sorted(beh.values(), key=lambda x: x.ordning):
+        if b.samling or b.nyckel in vackt_id or rot(b.nyckel) in med_vackt or rot(b.nyckel) in svar:
+            continue
+        if t := motionstitel(b.rubrik):
+            svar[rot(b.nyckel)] = (b, t)
+
+    for b, titel in svar.values():
+        traffar = [(_titlar_lika(titel, t), likhet(titel, t), t, v, kan) for t, v, kan in vackta
+                   if v.ordning < b.ordning]
+        traffar = [x for x in traffar if x[0]]
+        if not traffar:
+            continue
+        # Bara den bästa nivån: exakt före början före liknande, och bland liknande den högsta likheten.
+        niva, hogst = max(x[:2] for x in traffar)
+        traffar = [x for x in traffar if x[0] == niva and (niva > 1 or x[1] == hogst)]
+        status = "automatisk" if niva == 3 and len(traffar) == 1 else "forslag"
+        for _, _, t, v, kan in traffar:
+            if kan:
+                lagg_till(v, b, "motionstitel", t, status)
 
 
 def koppla(conn: psycopg.Connection) -> dict[str, int]:

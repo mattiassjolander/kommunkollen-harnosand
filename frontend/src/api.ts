@@ -782,8 +782,8 @@ export interface Koppling {
   /** Den tidigare behandlingen. */
   fran: Behandlingsref
   till: Behandlingsref
-  grund: 'diarienummer' | 'hanvisning'
-  /** Diarienumret, eller hänvisningen som den står i beslutsunderlaget. */
+  grund: 'diarienummer' | 'hanvisning' | 'motionstitel'
+  /** Diarienumret, hänvisningen som den står i beslutsunderlaget, eller motionens normaliserade titel. */
   underlag: string
   status: Kopplingsstatus
   /** Redaktören som fattade det senaste beslutet, och när. */
