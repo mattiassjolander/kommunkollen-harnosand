@@ -254,7 +254,7 @@ En persons parti, eller partilös, som redaktionen har fastställt för en perio
 _Avoid_: Partiperiod (om protokollens perioder), partibyte
 
 **Krock**:
-Ett sammanträde under en fastställd partitillhörighet där protokollet anger ett annat parti än perioden. Perioden gäller, och förekomsten markeras "Fastställt av redaktionen" med vad protokollet anger.
+Ett sammanträde där protokollet uttryckligen anger ett annat parti än personens fastställda eller föreslagna partitillhörighet. Perioden gäller, och förekomsten markeras "Fastställt av redaktionen" med vad protokollet anger. Ett sammanträde där protokollet saknar parti är ingen krock.
 _Avoid_: Konflikt, avvikelse
 
 **Felaktighet i protokollet**:

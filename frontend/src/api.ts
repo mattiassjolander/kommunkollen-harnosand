@@ -1330,6 +1330,8 @@ export interface Partitillhorighet {
   motivering: string
   status: Periodstatus
   ersatter_id: number | null
+  /** Satt när perioden bekräftades tillsammans med andra förslag (#100, del 2). */
+  batch: number | null
   redaktor: string
   skapad: string
   granskad_av: string | null
@@ -1369,3 +1371,37 @@ export const nyVersionAvPartitillhorighet = (id: number, data: Partial<Omit<NyPa
 /** En utgivare återkallar en publicerad period direkt. Protokollen gäller igen. */
 export const aterkallaPartitillhorighet = (id: number, motivering: string) =>
   skrivPeriod(`/api/partitillhorighet/${id}/aterkallelse`, 'POST', { motivering })
+
+/** En föreslagen period ur närvarolistorna, med belägg (#100, del 2). */
+export interface Periodforslag {
+  parti: string
+  fran: string
+  till: string | null
+  /** Antal sammanträden per angivet parti inom perioden. */
+  antal_per_parti: Record<string, number>
+  /** Sammanträden inom perioden där närvarolistan inte anger parti. */
+  utan_parti: number
+  forsta: string | null
+  sista: string | null
+  exempel: { id: number; datum: string; organ: Organ } | null
+  /** Sammanträden inom perioden där protokollet anger ett annat parti. */
+  krockar: { id: number; datum: string; organ: Organ; parti: string }[]
+}
+export interface Personforslag {
+  ledamot: { id: number; namn: string }
+  perioder: Periodforslag[]
+}
+export async function hamtaPeriodforslag(): Promise<Personforslag[]> {
+  const svar = await fetch('/api/partitillhorighet/forslag')
+  if (svar.status === 401) throw new EjInloggad()
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+export const skapaPeriodbatch = (data: {
+  motivering: string
+  perioder: (NyPartitillhorighet | Omit<NyPartitillhorighet, 'motivering'>)[]
+}) => skrivRattelse('/api/partitillhorighet/batcher', 'POST', data) as unknown as Promise<Partitillhorighet[]>
+export const granskaPeriodbatch = (batch: number) =>
+  skrivRattelse(`/api/partitillhorighet/batcher/${batch}/granskning`, 'POST') as unknown as Promise<Partitillhorighet[]>
+export const publiceraPeriodbatch = (batch: number) =>
+  skrivRattelse(`/api/partitillhorighet/batcher/${batch}/publicering`, 'POST') as unknown as Promise<Partitillhorighet[]>

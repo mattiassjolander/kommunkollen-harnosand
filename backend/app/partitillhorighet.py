@@ -46,7 +46,7 @@ _PARTI = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
 STATUSAR = ("utkast", "granskad", "publicerad", "ersatt", "aterkallad")
 
 __all__ = ["EjTillatet", "Konflikt", "Ogiltig", "Gallande", "skapa", "andra", "ta_bort", "granska", "publicera",
-           "ny_version", "aterkalla", "las", "lista"]
+           "ny_version", "aterkalla", "las", "lista", "skapa_batch", "granska_batch", "publicera_batch"]
 
 
 def _datum(v, namn: str, tomt: bool = False) -> date | None:
@@ -195,6 +195,68 @@ def ny_version(conn: psycopg.Connection, period_id: int, data: dict, redaktor: s
     return las(conn, pid)
 
 
+def skapa_batch(conn: psycopg.Connection, data: dict, redaktor: str) -> list[dict]:
+    """Förslag som redaktören bekräftar tillsammans (#100, del 2): {motivering, perioder: [{ledamot_id, parti, fran,
+    till, motivering?}]}. Alla blir utkast i samma batch, med den gemensamma motiveringen om raden inte har en egen.
+    Allt eller inget: en ogiltig rad, eller perioder som överlappar varandra eller en publicerad period, avvisar
+    hela batchen och anger raden."""
+    rader = data.get("perioder")
+    if not isinstance(rader, list) or not rader:
+        raise Ogiltig("Välj minst ett förslag")
+    gemensam = (data.get("motivering") or "").strip()
+    batch = conn.execute("SELECT nextval('partitillhorighet_batch_seq') AS b").fetchone()["b"]
+    nya: list[tuple[int, dict]] = []
+    for i, rad in enumerate(rader, 1):
+        if not isinstance(rad, dict):
+            raise Ogiltig(f"Rad {i}: ogiltig")
+        try:
+            person = _person(conn, rad.get("ledamot_id"))
+            v = _varden(rad | {"motivering": (rad.get("motivering") or "").strip() or gemensam})
+            _overlappar(conn, person, v["fran"], v["till"])
+        except (Ogiltig, Konflikt, LookupError) as e:
+            raise type(e)(f"Rad {i}: {e}") from e
+        for annan, w in nya:
+            if annan == person and v["fran"] <= (w["till"] or date.max) and w["fran"] <= (v["till"] or date.max):
+                raise Konflikt(f"Rad {i}: perioden överlappar en annan rad för samma person")
+        nya.append((person, v))
+    ider = [conn.execute(
+        """
+        INSERT INTO partitillhorighet (ledamot_id, parti, fran, till, motivering, status, redaktor, batch)
+        VALUES (%(l)s, %(parti)s, %(fran)s, %(till)s, %(motivering)s, 'utkast', %(red)s, %(batch)s) RETURNING id
+        """,
+        v | {"l": person, "red": redaktor, "batch": batch},
+    ).fetchone()["id"] for person, v in nya]
+    return [las(conn, i) for i in ider]
+
+
+def _batch(conn: psycopg.Connection, batch: int, status: str) -> list[int]:
+    ider = [r["id"] for r in conn.execute(
+        "SELECT id FROM partitillhorighet WHERE batch = %s AND status = %s ORDER BY id", (batch, status))]
+    if not ider:
+        if not conn.execute("SELECT 1 FROM partitillhorighet WHERE batch = %s", (batch,)).fetchone():
+            raise LookupError(f"Batchen {batch} finns inte")
+        raise Konflikt(f"Batchen har inga perioder som är {status}")
+    return ider
+
+
+def granska_batch(conn: psycopg.Connection, batch: int, utgivare: str) -> list[dict]:
+    """Granskar batchens alla utkast. Perioder som redan granskats eller publicerats rad för rad lämnas."""
+    return [granska(conn, i, utgivare) for i in _batch(conn, batch, "utkast")]
+
+
+def publicera_batch(conn: psycopg.Connection, batch: int, utgivare: str) -> list[dict]:
+    """Publicerar batchens alla granskade perioder. Allt eller inget: överlappar en period en publicerad period
+    publiceras ingen."""
+    ut = []
+    for i in _batch(conn, batch, "granskad"):
+        try:
+            ut.append(publicera(conn, i, utgivare))
+        except Konflikt as e:
+            t = las(conn, i)
+            raise Konflikt(f"{t['ledamot']['namn']}: {e}") from e
+    return ut
+
+
 def aterkalla(conn: psycopg.Connection, period_id: int, data: dict, utgivare: str) -> dict:
     """En utgivare återkallar en publicerad period direkt. Protokollet och härledningen gäller igen."""
     t = _hamta(conn, period_id)
@@ -219,7 +281,7 @@ def _ut(t: dict) -> dict:
     return {
         "id": t["id"], "ledamot": {"id": t["person"], "namn": t["person_namn"]},
         "parti": t["parti"], "fran": t["fran"], "till": t["till"], "motivering": t["motivering"],
-        "status": t["status"], "ersatter_id": t["ersatter_id"],
+        "status": t["status"], "ersatter_id": t["ersatter_id"], "batch": t["batch"],
         "redaktor": t["redaktor"], "skapad": t["skapad"], "granskad_av": t["granskad_av"], "granskad": t["granskad"],
         "publicerad_av": t["publicerad_av"], "publicerad": t["publicerad"],
         "aterkallad_av": t["aterkallad_av"], "aterkallad": t["aterkallad"], "aterkallelse": t["aterkallelse"],
