@@ -825,6 +825,8 @@ export interface Rattelsemarkering {
   motivering: string
   felet_i?: FeletI | null
   publicerad: string
+  /** Tidigare publicerade versioner av rättelsen, senaste först (#74). */
+  tidigare?: { nytt: unknown; motivering: string; felet_i: FeletI | null; publicerad: string }[]
 }
 
 /** Var felet som en rättelse rättar finns (#74). null: inte angivet (rättelser från före #74). */
@@ -836,7 +838,7 @@ export const FELET_I: Record<FeletI | 'ej_angivet', string> = {
 }
 export type Rattelser = Partial<Record<string, Rattelsemarkering>>
 
-export type Rattelsestatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt'
+export type Rattelsestatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt' | 'aterkallad'
 
 export interface NyRattelse {
   sammantrade_id: number
@@ -867,6 +869,13 @@ export interface Rattelse extends Omit<NyRattelse, 'paragraf' | 'votering' | 'na
   granskad: string | null
   publicerad_av: string | null
   publicerad: string | null
+  /** Versionen den här ersätter när den publiceras (#74). */
+  ersatter_id: number | null
+  aterkallad_av: string | null
+  aterkallad: string | null
+  aterkallelse: string | null
+  /** Tidigare versioner som den här ersätter, senaste först. */
+  tidigare: Rattelse[]
 }
 
 async function skrivRattelse(url: string, metod: string, data?: unknown): Promise<Rattelse | null> {
@@ -893,6 +902,12 @@ export const granskaRattelse = (id: number) =>
 export const publiceraRattelse = (id: number) =>
   skrivRattelse(`/api/rattelser/${id}/publicering`, 'POST') as Promise<Rattelse>
 export const taBortRattelse = (id: number) => skrivRattelse(`/api/rattelser/${id}`, 'DELETE')
+/** En ny version av en granskad eller publicerad rättelse, som utkast (#74). */
+export const nyVersionAvRattelse = (id: number, data: { nytt?: unknown; motivering: string; felet_i: FeletI | null }) =>
+  skrivRattelse(`/api/rattelser/${id}/versioner`, 'POST', data) as Promise<Rattelse>
+/** En utgivare återkallar en publicerad rättelse direkt. Tolkningen gäller igen. */
+export const aterkallaRattelse = (id: number, motivering: string) =>
+  skrivRattelse(`/api/rattelser/${id}/aterkallelse`, 'POST', { motivering }) as Promise<Rattelse>
 
 // Partiernas budgetförslag (#48) mot gemensamma planförutsättningar (#58)
 

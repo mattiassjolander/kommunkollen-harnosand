@@ -16,6 +16,11 @@ Rättningsbara uppgifter:
 Varje rättelse anger var felet finns (#74): i protokollet (källan saknar eller anger fel uppgift)
 eller i inläsningen (plattformen läste eller tolkade fel). Ett protokoll med publicerade rättelser
 av fel i protokollet märks "Innehåller felaktigheter". Rättelser från före #74 saknar valet.
+
+En granskad eller publicerad rättelse ändras inte på plats. Redaktören skapar en ny version, som går
+igenom granskning och publicering som vanligt och ersätter den gamla när den publiceras. En utgivare kan
+återkalla en publicerad rättelse direkt, med motivering, och då gäller tolkningen igen. De gamla
+versionerna bevaras som historik (#74, del 3).
 """
 
 from __future__ import annotations
@@ -233,6 +238,64 @@ def publicera(conn: psycopg.Connection, rattelse_id: int, utgivare: str) -> dict
     )
     conn.execute("UPDATE rattelse SET status = 'publicerad', publicerad_av = %s, publicerad = %s WHERE id = %s",
                  (utgivare, datetime.now(timezone.utc), rattelse_id))
+    if r["ersatter_id"] is not None:
+        # Versionen den ersätter, om den inte hann publiceras.
+        conn.execute("UPDATE rattelse SET status = 'ersatt' WHERE id = %s AND status IN ('utkast', 'granskad')",
+                     (r["ersatter_id"],))
+    _rakna_om(conn, r)
+    return las(conn, rattelse_id)
+
+
+def ny_version(conn: psycopg.Connection, rattelse_id: int, data: dict, redaktor: str, roller: set[str]) -> dict:
+    """En ny version av en granskad eller publicerad rättelse, som utkast. Den ersätter den gamla när den publiceras."""
+    r = _hamta(conn, rattelse_id)
+    if "redaktor" not in roller and r["falt"] != "motionarer":
+        raise EjTillatet("Kräver rollen redaktör")
+    if r["status"] == "utkast":
+        raise Konflikt("Ett utkast ändras direkt, utan ny version")
+    if r["status"] not in ("granskad", "publicerad"):
+        raise Konflikt(f"Rättelsen är {r['status']} och kan inte få en ny version")
+    if conn.execute("SELECT 1 FROM rattelse WHERE ersatter_id = %s AND status IN ('utkast', 'granskad')",
+                    (rattelse_id,)).fetchone():
+        raise Konflikt("Det finns redan en ny version som väntar på granskning")
+    m = {k: r[k] for k in ("sammantrade_id", "objekt", "paragraf", "votering", "namn", "falt")}
+    ursprungligt = _ursprungligt(conn, m)
+    nytt = _nytt(r["falt"], data.get("nytt", r["nytt"]), conn)
+    if nytt == ursprungligt:
+        raise Ogiltig("Det nya värdet är samma som tolkningen. Återkalla rättelsen i stället")
+    felet_i = _felet_i(data if "felet_i" in data else {"felet_i": r["felet_i"]})
+    rid = conn.execute(
+        """
+        INSERT INTO rattelse (sammantrade_id, objekt, paragraf, votering, namn, falt, ursprungligt, nytt,
+                              motivering, felet_i, status, redaktor, ersatter_id)
+        VALUES (%(sammantrade_id)s, %(objekt)s, %(paragraf)s, %(votering)s, %(namn)s, %(falt)s, %(u)s, %(n)s,
+                %(mot)s, %(felet_i)s, 'utkast', %(red)s, %(ersatter)s)
+        RETURNING id
+        """,
+        m | {"u": Jsonb(ursprungligt), "n": Jsonb(nytt), "mot": _motivering(data), "felet_i": felet_i,
+             "red": redaktor, "ersatter": rattelse_id},
+    ).fetchone()["id"]
+    return las(conn, rid)
+
+
+def aterkalla(conn: psycopg.Connection, rattelse_id: int, data: dict, utgivare: str) -> dict:
+    """En utgivare återkallar en publicerad rättelse direkt. Tolkningen gäller igen."""
+    r = _hamta(conn, rattelse_id)
+    if r["status"] != "publicerad":
+        raise Konflikt(f"Bara en publicerad rättelse kan återkallas, den här är {r['status']}")
+    motivering = (data.get("motivering") or "").strip()
+    if not motivering:
+        raise Ogiltig("Ange varför rättelsen återkallas")
+    conn.execute(
+        "UPDATE rattelse SET status = 'aterkallad', aterkallad_av = %s, aterkallad = %s, aterkallelse = %s WHERE id = %s",
+        (utgivare, datetime.now(timezone.utc), motivering, rattelse_id),
+    )
+    _rakna_om(conn, r)
+    return las(conn, rattelse_id)
+
+
+def _rakna_om(conn: psycopg.Connection, r: dict) -> None:
+    """Det som bygger på de publicerade rättelserna räknas om när en rättelse publiceras eller återkallas."""
     if r["objekt"] == "behandling" and r["falt"] in KOPPLANDE_FALT:
         # Kopplingarna bygger på de publicerade rättelserna (ADR-0003) och räknas om direkt.
         from .arenden import koppla
@@ -243,7 +306,6 @@ def publicera(conn: psycopg.Connection, rattelse_id: int, utgivare: str) -> dict
         from . import kalender, sammantradesplan
 
         sammantradesplan.lagra_beslut(conn, kalender.idag())
-    return las(conn, rattelse_id)
 
 
 _LISTA = """
@@ -268,22 +330,41 @@ def _ut(r: dict) -> dict:
         "redaktor": r["redaktor"], "skapad": r["skapad"],
         "granskad_av": r["granskad_av"], "granskad": r["granskad"],
         "publicerad_av": r["publicerad_av"], "publicerad": r["publicerad"],
+        "ersatter_id": r["ersatter_id"],
+        "aterkallad_av": r["aterkallad_av"], "aterkallad": r["aterkallad"], "aterkallelse": r["aterkallelse"],
     }
+
+
+def _med_historik(rader: list[dict], alla: dict[int, dict]) -> list[dict]:
+    """Varje rättelse med de tidigare versionerna den ersätter, senaste först."""
+    ut = []
+    for r in rader:
+        tidigare, fore = [], r["ersatter_id"]
+        while fore is not None and fore in alla:
+            tidigare.append(_ut(alla[fore]))
+            fore = alla[fore]["ersatter_id"]
+        ut.append(_ut(r) | {"tidigare": tidigare})
+    return ut
 
 
 def las(conn: psycopg.Connection, rattelse_id: int) -> dict:
     rad = conn.execute(f"{_LISTA} WHERE r.id = %s", (rattelse_id,)).fetchone()
     if rad is None:
         raise LookupError(f"Rättelsen {rattelse_id} finns inte")
-    return _ut(rad)
+    kedja = conn.execute(
+        f"""
+        WITH RECURSIVE k AS (SELECT id, ersatter_id FROM rattelse WHERE id = %s
+                             UNION SELECT r.id, r.ersatter_id FROM rattelse r JOIN k ON r.id = k.ersatter_id)
+        {_LISTA} WHERE r.id IN (SELECT id FROM k)
+        """,
+        (rattelse_id,),
+    ).fetchall()
+    return _med_historik([rad], {r["id"]: r for r in kedja})[0]
 
 
 def lista(conn: psycopg.Connection, status: str | None = None) -> list[dict]:
-    rader = conn.execute(
-        f"{_LISTA} WHERE (%(s)s::text IS NULL OR r.status = %(s)s) ORDER BY r.skapad DESC, r.id DESC",
-        {"s": status},
-    ).fetchall()
-    return [_ut(r) for r in rader]
+    alla = conn.execute(f"{_LISTA} ORDER BY r.skapad DESC, r.id DESC").fetchall()
+    return _med_historik([r for r in alla if status is None or r["status"] == status], {r["id"]: r for r in alla})
 
 
 # Pålägg vid läsning
@@ -293,11 +374,20 @@ class Publicerade:
 
     def __init__(self, conn: psycopg.Connection, sammantrade_ids: list[int]) -> None:
         self._rader: dict[tuple, dict] = {}
+        # Tidigare publicerade versioner av samma uppgift, som läsaren kan se som historik (#74).
+        self._tidigare: dict[tuple, list[dict]] = {}
         if sammantrade_ids:
             for r in conn.execute(
-                "SELECT * FROM rattelse WHERE status = 'publicerad' AND sammantrade_id = ANY(%s)", (sammantrade_ids,)
+                "SELECT * FROM rattelse WHERE status IN ('publicerad', 'ersatt') AND publicerad IS NOT NULL "
+                "AND sammantrade_id = ANY(%s) ORDER BY publicerad DESC", (sammantrade_ids,)
             ):
-                self._rader[(r["sammantrade_id"], r["objekt"], r["paragraf"], r["votering"], r["namn"], r["falt"])] = r
+                nyckel = (r["sammantrade_id"], r["objekt"], r["paragraf"], r["votering"], r["namn"], r["falt"])
+                if r["status"] == "publicerad":
+                    self._rader[nyckel] = r
+                else:
+                    self._tidigare.setdefault(nyckel, []).append(
+                        {"nytt": r["nytt"], "motivering": r["motivering"], "felet_i": r["felet_i"],
+                         "publicerad": r["publicerad"]})
 
     def _lagg_pa(self, mal: dict, nyckel: tuple, falt: str, ut_falt: str | None = None) -> None:
         r = self._rader.get((*nyckel, falt))
@@ -307,6 +397,7 @@ class Publicerade:
         mal.setdefault("rattelser", {})[ut_falt] = {
             "id": r["id"], "ursprungligt": mal.get(ut_falt), "nytt": r["nytt"], "motivering": r["motivering"],
             "felet_i": r["felet_i"], "publicerad": r["publicerad"],
+            "tidigare": self._tidigare.get((*nyckel, falt), []),
         }
         mal[ut_falt] = r["nytt"]
 

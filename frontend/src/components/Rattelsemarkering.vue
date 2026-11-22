@@ -33,11 +33,23 @@ const tolkat = computed(() => visa(props.rattelse.ursprungligt))
       </p>
       <p><span class="etikett">Motivering:</span> {{ rattelse.motivering }}</p>
       <p class="datum">Publicerad {{ datum(rattelse.publicerad) }}</p>
+      <div v-if="rattelse.tidigare?.length" class="tidigare" data-testid="tidigare-versioner">
+        <p class="etikett">Tidigare versioner:</p>
+        <ul>
+          <li v-for="t in rattelse.tidigare" :key="t.publicerad">
+            {{ visa(t.nytt) }}, publicerad {{ datum(t.publicerad) }}. {{ t.motivering }}
+          </li>
+        </ul>
+      </div>
     </div>
   </details>
 </template>
 
 <style scoped>
+.tidigare ul {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
 .rattelse {
   display: inline-block;
   font-size: 12px;
