@@ -149,8 +149,9 @@ def lagra(conn: psycopg.Connection, plan: Sammantradesplan, korning_id: int | No
     return antal
 
 
-# Ett sammanträde som börjar senare än planerat är samma sammanträde. Två sammanträden samma dag,
-# t.ex. fullmäktige 2026-10-26 kl. 11.00 och 13.15, är det inte.
+# Ett sammanträde som börjar senare än planerat är samma sammanträde. Har organet bara ett sammanträde
+# den dagen kopplas det oavsett tid (#107). Två sammanträden samma dag, t.ex. fullmäktige 2026-10-26
+# kl. 11.00 och 13.15, skiljs åt med tiden: det närmaste inom gränsen.
 MAX_AVVIKELSE_MINUTER = 60
 
 
@@ -160,8 +161,13 @@ def _minuter(tid: str | None) -> int | None:
     return int(tid[:2]) * 60 + int(tid[3:])
 
 
-def narmast(starttid: str | None, kandidater: list[dict]) -> dict | None:
-    """Kandidaten (med 'starttid') som ligger närmast i tid. Saknas en av tiderna räknas den som lika."""
+def narmast(starttid: str | None, kandidater: list[dict], entydig: bool = True) -> dict | None:
+    """Kandidaten (med 'starttid') som ligger närmast i tid. Saknas en av tiderna räknas den som lika.
+
+    En enda kandidat väljs oavsett tid, om inte `entydig` är falskt (det finns fler sammanträden den
+    dagen på andra sidan). Annars väljs den närmaste, och ingen om ingen ligger inom MAX_AVVIKELSE_MINUTER."""
+    if entydig and len(kandidater) == 1:
+        return kandidater[0]
     bast, bast_avvikelse = None, None
     for k in kandidater:
         a, b = _minuter(starttid), _minuter(k["starttid"])
@@ -174,7 +180,9 @@ def narmast(starttid: str | None, kandidater: list[dict]) -> dict | None:
 def planerat_for_protokoll(conn: psycopg.Connection, organ: str, datum: date | None,
                            starttid: str | None) -> int | None:
     """Det planerade sammanträde som ett nytt protokoll hör till: samma organ och datum, och starttiden
-    när den finns. Ett sammanträde som inte blev av kopplas bara om inget annat passar."""
+    när den behövs. Ett sammanträde som inte blev av kopplas bara om inget annat passar.
+
+    Har organet redan ett protokoll den dagen är dagen inte entydig, och tiden avgör (se `narmast`)."""
     if datum is None:
         return None
     kandidater = conn.execute(
@@ -185,8 +193,84 @@ def planerat_for_protokoll(conn: psycopg.Connection, organ: str, datum: date | N
         """,
         (organ, datum),
     ).fetchall()
-    rad = narmast(starttid, kandidater)
+    fler_protokoll = conn.execute(
+        "SELECT 1 FROM sammantrade WHERE organ = %s AND datum = %s AND dokument_id IS NOT NULL", (organ, datum),
+    ).fetchone() is not None
+    rad = narmast(starttid, kandidater, entydig=not fler_protokoll)
     return rad["id"] if rad else None
+
+
+def koppla_om(conn: psycopg.Connection, sammantrade_id: int) -> int | None:
+    """Ett nytt protokoll som passar organets planerade sammanträde den dagen bättre än det protokoll
+    planen kopplades till (när det var dagens enda) tar över planen. Returnerar planens tidigare sammanträde."""
+    s = conn.execute("SELECT organ, datum, starttid, plan_nyckel FROM sammantrade WHERE id = %s",
+                     (sammantrade_id,)).fetchone()
+    if s is None or s["plan_nyckel"] is not None or s["datum"] is None or _minuter(s["starttid"]) is None:
+        return None
+    for p in conn.execute(
+        """
+        SELECT id, starttid, plan_starttid FROM sammantrade
+        WHERE organ = %s AND plan_datum = %s AND dokument_id IS NOT NULL AND id <> %s ORDER BY id
+        """,
+        (s["organ"], s["datum"], sammantrade_id),
+    ).fetchall():
+        plan, fore = _minuter(p["plan_starttid"]), _minuter(p["starttid"])
+        if plan is None or fore is None:
+            continue
+        ny = abs(plan - _minuter(s["starttid"]))
+        if abs(plan - fore) > MAX_AVVIKELSE_MINUTER and ny <= MAX_AVVIKELSE_MINUTER:
+            flytta_plan(conn, p["id"], sammantrade_id)
+            return p["id"]
+    return None
+
+
+PLANKOLUMNER = ("plan_nyckel", "plan_datum", "plan_starttid", "plan_status", "plan_anmarkning", "plan_url",
+                "plan_version", "plan_kalla", "plan_beslut_sammantrade_id", "plan_beslut_paragraf")
+
+
+def flytta_plan(conn: psycopg.Connection, fran: int, till: int) -> None:
+    """Flyttar planens uppgifter och versioner från ett sammanträde till ett annat utan plan."""
+    varden = conn.execute(f"SELECT {', '.join(PLANKOLUMNER)} FROM sammantrade WHERE id = %s", (fran,)).fetchone()
+    mal = conn.execute("SELECT plan_nyckel FROM sammantrade WHERE id = %s", (till,)).fetchone()
+    if varden is None or varden["plan_nyckel"] is None or mal is None or mal["plan_nyckel"] is not None:
+        raise ValueError(f"planen kan inte flyttas från sammanträde {fran} till {till}")
+    conn.execute(f"UPDATE sammantrade SET {', '.join(f'{k} = NULL' for k in PLANKOLUMNER)} WHERE id = %s", (fran,))
+    conn.execute(f"UPDATE sammantrade SET {', '.join(f'{k} = %({k})s' for k in PLANKOLUMNER)} WHERE id = %(id)s",
+                 {**varden, "id": till})
+    conn.execute("UPDATE planversion SET sammantrade_id = %s WHERE sammantrade_id = %s", (till, fran))
+
+
+def sla_ihop_dubbletter(conn: psycopg.Connection) -> list[dict]:
+    """Slår ihop planerade sammanträden utan protokoll med protokollet samma dag för samma organ, när
+    kopplingen är entydig enligt `narmast` (#107). Planen flyttas till protokollets sammanträde och det
+    tomma planerade sammanträdet tas bort. Kallelser och webbsändningar hör till organ och datum och
+    följer med. Returnerar paren."""
+    ut = []
+    for p in conn.execute(
+        """
+        SELECT id, organ, plan_datum, plan_starttid FROM sammantrade
+        WHERE plan_nyckel IS NOT NULL AND dokument_id IS NULL AND plan_datum IS NOT NULL ORDER BY organ, plan_datum, id
+        """
+    ).fetchall():
+        k = narmast(p["plan_starttid"], conn.execute(
+            """
+            SELECT id, starttid FROM sammantrade
+            WHERE organ = %s AND datum = %s AND dokument_id IS NOT NULL AND plan_nyckel IS NULL ORDER BY id
+            """,
+            (p["organ"], p["plan_datum"]),
+        ).fetchall())
+        if k is None:
+            continue
+        flytta_plan(conn, p["id"], k["id"])
+        # Hänvisningar till det tomma sammanträdet (det finns inga, men en hänvisning ska inte försvinna).
+        conn.execute("UPDATE sammantrade SET plan_beslut_sammantrade_id = %s WHERE plan_beslut_sammantrade_id = %s",
+                     (k["id"], p["id"]))
+        conn.execute("UPDATE planversion SET beslut_sammantrade_id = %s WHERE beslut_sammantrade_id = %s",
+                     (k["id"], p["id"]))
+        conn.execute("DELETE FROM sammantrade WHERE id = %s", (p["id"],))
+        ut.append({"organ": p["organ"], "datum": p["plan_datum"], "planerat_id": p["id"],
+                   "plan_starttid": p["plan_starttid"], "protokoll_id": k["id"], "starttid": k["starttid"]})
+    return ut
 
 
 # Läsning

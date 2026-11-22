@@ -139,6 +139,8 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
          "plats": t.plats, "dokument_id": dokument_id, "tolkning": "tolkad" if t.tolkad else "ej_tolkad",
          "avvikelser": Jsonb(t.avvikelser), "tolkad": tolkad, "ocr": t.ocr},
     ).fetchone()["id"]
+    # Planen kopplades kanske till dagens enda protokoll, och det här passar den bättre i tid (#107).
+    sammantradesplan.koppla_om(conn, sammantrade_id)
     conn.execute("DELETE FROM narvaro WHERE sammantrade_id = %s", (sammantrade_id,))
     conn.execute("DELETE FROM behandling WHERE sammantrade_id = %s", (sammantrade_id,))
     with conn.cursor() as cur:

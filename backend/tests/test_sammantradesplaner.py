@@ -8,7 +8,7 @@ och övriga 13.15. Kommunstyrelsen har 2026 och 2027 med 08.15, och 2026-09-08 �
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import httpx
 import psycopg
@@ -16,11 +16,11 @@ import pytest
 from conftest import INSPELNINGAR, skapa_app
 from fastapi.testclient import TestClient
 
-from app import db, statistik
+from app import db, sammantradesplan, sla_ihop_planer, statistik
 from app.recorded import InspeladTransport
-from app.sammantradesplan import tolka_beslut
+from app.sammantradesplan import narmast, tolka_beslut
 from app.sources.harnosand import Protokollkalla
-from app.sources.sammantradesplaner import Sammantradesplaner, tolka_sida, tolka_tabell
+from app.sources.sammantradesplaner import Planrad, Sammantradesplan, Sammantradesplaner, tolka_sida, tolka_tabell
 
 KALLA = "harnosand-sammantradesplaner"
 SIDOR = {
@@ -259,3 +259,149 @@ def test_skillnader_mot_beslutet_i_protokollet_visas_for_redaktionen(database_ur
     assert p["skillnader"] == [{"datum": "2026-10-26", "typ": "tid", "sidan": "11:00", "beslutet": "13:15"}]
     # Utan beslut går planen inte att jämföra.
     assert planer(api)[("KS", 2027)]["skillnader"] is None
+
+
+# Koppling på datum när den är entydig (#107)
+
+
+def test_en_enda_kandidat_kopplas_oavsett_tid():
+    assert narmast("11:05", [{"id": 1, "starttid": "08:15"}]) == {"id": 1, "starttid": "08:15"}
+    # Finns fler sammanträden den dagen på andra sidan avgör tiden.
+    assert narmast("11:05", [{"id": 1, "starttid": "08:15"}], entydig=False) is None
+
+
+def test_flera_kandidater_samma_dag_skiljs_at_med_tiden():
+    kf = [{"id": 1, "starttid": "11:00"}, {"id": 2, "starttid": "13:15"}]
+    assert narmast("11:10", kf)["id"] == 1
+    assert narmast("13:20", kf)["id"] == 2
+    # Ingen ligger inom en timme: ingen koppling.
+    assert narmast("16:30", kf) is None
+
+
+def skol_och_plan(protokoll_forst: bool):
+    protokoll = Protokollkalla("SKOL", arkiv_fran=None, anrop_per_sekund=None)
+    planer = Sammantradesplaner(anrop_per_sekund=None)
+    return [protokoll, planer] if protokoll_forst else [planer, protokoll]
+
+
+@pytest.mark.parametrize("protokoll_forst", [True, False])
+def test_ett_mote_som_borjar_senare_an_planerat_kopplas_till_planen(database_url, google, protokoll_forst):
+    # Skolnämnden 2026-10-01: planerat 08.15, protokollet anger "kl 11:05 - 11:16".
+    api = TestClient(skapa_app(database_url, google, kallor=skol_och_plan(protokoll_forst)))
+    kor(api)
+    s = rad(planer(api)[("SKOL", 2026)], "2026-10-01")
+    assert s["protokoll"] is True
+    assert (s["starttid"], [v["starttid"] for v in s["versioner"]]) == ("08:15", ["08:15"])
+    hallna = {x["datum"]: x for x in api.get("/api/sammantraden", params={"organ": "SKOL"}).json()}
+    assert (hallna["2026-10-01"]["id"], hallna["2026-10-01"]["starttid"]) == (s["id"], "11:05")
+    # Kalendern visar ett sammanträde, hållet och med protokollets tid.
+    dagens = [h for h in api.get("/api/kalender", params={"organ": "SKOL"}).json()["handelser"]
+              if h["datum"] == "2026-10-01"]
+    assert [(h["id"], h["starttid"], h["status"], h["protokoll"]) for h in dagens] == [
+        (s["id"], "11:05", "hallet", True)]
+    with psycopg.connect(database_url) as conn:
+        assert conn.execute(DUBBLETTER).fetchall() == []
+
+
+DUBBLETTER = """
+SELECT p.organ, p.plan_datum FROM sammantrade p
+JOIN sammantrade s ON s.organ = p.organ AND s.datum = p.plan_datum
+                  AND s.dokument_id IS NOT NULL AND s.plan_nyckel IS NULL
+WHERE p.dokument_id IS NULL
+"""
+
+
+def test_befintliga_dubbletter_slas_ihop(database_url, google, capsys, monkeypatch):
+    api = TestClient(skapa_app(database_url, google, kallor=skol_och_plan(True)))
+    kor(api)
+    protokollets = rad(planer(api)[("SKOL", 2026)], "2026-10-01")["id"]
+    # Så som det blev före #107: planen på ett eget sammanträde utan protokoll.
+    with db.connect(database_url) as conn:
+        planerat = conn.execute(
+            "INSERT INTO sammantrade (organ, nyckel, datum) VALUES ('SKOL', 'plan:2026-10-01', '2026-10-01') RETURNING id"
+        ).fetchone()["id"]
+        sammantradesplan.flytta_plan(conn, protokollets, planerat)
+        assert len(conn.execute(DUBBLETTER).fetchall()) == 1
+
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    sla_ihop_planer.main([])
+    assert "1 planerade sammanträden kan slås ihop. Inget ändrades" in capsys.readouterr().out
+    with db.connect(database_url) as conn:
+        assert len(conn.execute(DUBBLETTER).fetchall()) == 1
+
+    sla_ihop_planer.main(["--utfor"])
+    ut = capsys.readouterr().out
+    assert f"SKOL 2026-10-01: planerat {planerat} (08:15) → protokollets sammanträde {protokollets} (11:05)" in ut
+    with db.connect(database_url) as conn:
+        assert conn.execute(DUBBLETTER).fetchall() == []
+        assert conn.execute("SELECT 1 FROM sammantrade WHERE id = %s", (planerat,)).fetchone() is None
+    s = rad(planer(api)[("SKOL", 2026)], "2026-10-01")
+    assert (s["id"], s["protokoll"], len(s["versioner"])) == (protokollets, True, 1)
+    dagens = [h for h in api.get("/api/kalender", params={"organ": "SKOL"}).json()["handelser"]
+              if h["datum"] == "2026-10-01"]
+    assert [(h["id"], h["starttid"]) for h in dagens] == [(protokollets, "11:05")]
+
+
+def _protokoll(conn, organ: str, datum: str, starttid: str) -> int:
+    """Ett protokoll utan innehåll, för att pröva kopplingen direkt i databasen."""
+    conn.execute("INSERT INTO datakalla (id, titel, url) VALUES ('test', 'Test', 'https://example.test') "
+                 "ON CONFLICT (id) DO NOTHING")
+    k = conn.execute("INSERT INTO insamlingskorning (utlosare, status) VALUES ('manuell', 'lyckad') RETURNING id").fetchone()
+    d = conn.execute(
+        """
+        INSERT INTO dokument (datakalla_id, url, version, filnamn, typ, organ, sha256, storlek, innehall, hamtad,
+                              korning_id)
+        VALUES ('test', %s, 1, 'p.pdf', 'protokoll', %s, '', 0, '', now(), %s) RETURNING id
+        """,
+        (f"https://example.test/{organ}/{datum}/{starttid}", organ, k["id"]),
+    ).fetchone()
+    return conn.execute(
+        """
+        INSERT INTO sammantrade (organ, nyckel, datum, starttid, dokument_id, tolkning, tolkad)
+        VALUES (%s, %s, %s, %s, %s, 'tolkad', now()) RETURNING id
+        """,
+        (organ, f"{datum} {starttid}", datum, starttid, d["id"]),
+    ).fetchone()["id"]
+
+
+def test_ett_protokoll_som_passar_planen_battre_tar_over_den(database_url):
+    # En plan kl. 11.00. Protokollet från 13.15 läses först och är dagens enda, så planen kopplas dit.
+    # Sedan kommer protokollet från 11.10, som är det planerade sammanträdet.
+    db.migrate(database_url)
+    with db.connect(database_url) as conn:
+        senare = _protokoll(conn, "KF", "2026-10-26", "13:15")
+        plan = Sammantradesplan("KF", "https://example.test/kf", [2026],
+                                [Planrad("KF", 2026, 10, date(2026, 10, 26), "11:00", "planerat")])
+        sammantradesplan.lagra(conn, plan, None, datetime.now(timezone.utc))
+        assert conn.execute("SELECT plan_nyckel FROM sammantrade WHERE id = %s", (senare,)).fetchone()["plan_nyckel"]
+        # Ett nytt protokoll samma dag kopplas inte på datumet, eftersom dagen redan har ett protokoll.
+        assert sammantradesplan.planerat_for_protokoll(conn, "KF", date(2026, 10, 26), "11:10") is None
+        tidigare = _protokoll(conn, "KF", "2026-10-26", "11:10")
+        assert sammantradesplan.koppla_om(conn, tidigare) == senare
+        rader = {r["id"]: r for r in conn.execute(
+            "SELECT id, plan_nyckel, plan_starttid FROM sammantrade WHERE organ = 'KF'")}
+        assert (rader[tidigare]["plan_nyckel"], rader[tidigare]["plan_starttid"]) == ("2026-10-26", "11:00")
+        assert rader[senare]["plan_nyckel"] is None
+        assert [v["sammantrade_id"] for v in conn.execute("SELECT sammantrade_id FROM planversion")] == [tidigare]
+
+
+def test_en_plan_som_lases_efter_protokollet_kopplas_aven_nar_tiden_skiljer(database_url):
+    db.migrate(database_url)
+    with db.connect(database_url) as conn:
+        protokollet = _protokoll(conn, "SOC", "2026-09-24", "13:30")
+        plan = Sammantradesplan("SOC", "https://example.test/soc", [2026],
+                                [Planrad("SOC", 2026, 9, date(2026, 9, 24), "08:15", "planerat")])
+        assert sammantradesplan.lagra(conn, plan, None, datetime.now(timezone.utc))["nya"] == 1
+        assert conn.execute("SELECT count(*) AS n FROM sammantrade WHERE organ = 'SOC'").fetchone()["n"] == 1
+        r = conn.execute("SELECT id, plan_starttid, starttid FROM sammantrade WHERE organ = 'SOC'").fetchone()
+        assert (r["id"], r["plan_starttid"], r["starttid"]) == (protokollet, "08:15", "13:30")
+
+
+def test_ett_protokoll_som_lases_efter_planen_kopplas_aven_nar_tiden_skiljer(database_url):
+    db.migrate(database_url)
+    with db.connect(database_url) as conn:
+        plan = Sammantradesplan("SOC", "https://example.test/soc", [2026],
+                                [Planrad("SOC", 2026, 5, date(2026, 5, 28), "08:15", "planerat")])
+        sammantradesplan.lagra(conn, plan, None, datetime.now(timezone.utc))
+        planerat = conn.execute("SELECT id FROM sammantrade WHERE organ = 'SOC'").fetchone()["id"]
+        assert sammantradesplan.planerat_for_protokoll(conn, "SOC", date(2026, 5, 28), "10:00") == planerat

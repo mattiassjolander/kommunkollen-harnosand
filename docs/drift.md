@@ -77,6 +77,13 @@ Tolka om de lagrade protokollen efter en förbättrad tolkning (hämtar inget fr
 ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.tolka_om"
 ```
 
+Slå ihop planerade sammanträden med protokollet samma dag, när mötet började mer än en timme senare än
+planerat och protokollet lästes in före #107. Utan `--utfor` visas bara paren. Ta en säkerhetskopia först:
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.sla_ihop_planer"
+```
+
 Se status och loggar:
 
 ```bash
