@@ -202,6 +202,7 @@ Fliken Avvikelser samlar alla protokoll med avvikelser eller publicerade rättel
 | Kategori | Avvikelser | Var felet troligen finns |
 |---|---|---|
 | Motsägelse i protokollet | Voteringslistan stämmer inte med protokollets text | I protokollet |
+| Felskrivet i protokollet | En paragrafrubrik är felskriven, t.ex. "Ko§ 168" | I protokollet |
 | Ofullständigt dokument | PDF:en saknar sidor eller text, eller bara paragrafprotokoll finns | I protokollet |
 | Paragraferna stämmer inte | Paragraferna stämmer inte med paragrafintervallet, eller samma paragraf förekommer flera gånger | I protokollet eller i tolkningen |
 | Kunde inte läsas av plattformen | Övrigt, t.ex. att närvarolistan eller en rubrik inte hittades | I tolkningen |

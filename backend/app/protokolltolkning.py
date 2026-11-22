@@ -641,6 +641,9 @@ def _tjanstgoringar(text: str) -> list[tuple[str, str | None]]:
 # Behandlingar
 
 _PARAGRAFRAD = re.compile(r"^§\s*(\d+)\s*(.*)$")
+# En felskriven paragrafrubrik med några tecken framför §, t.ex. "Ko§ 168" (#87). Godtas bara med motkontroll.
+_FELSKRIVEN_PARAGRAFRAD = re.compile(r"^([^\s§\d]{1,3})§\s*(\d+)\s*(.*)$")
+_INNEHALL = ("Ärendelista", "Innehållsförteckning", "Nummer Rubrik Sida")
 _RUBRIKER = (
     "Yrkande", "Yrkanden", "Yttrande", "Yttranden", "Propositionsordning", "Propositionsordningar",
     "Reservation", "Reservationer", "Sammanfattning", "Bakgrund", "Beslutsunderlag", "Jäv", "Överläggning",
@@ -698,11 +701,49 @@ def _organrad(rader: list[str]) -> str | None:
     return rader[0] if rader else None
 
 
-def _behandlingar(t: Tolkning, lop: list[str]) -> None:
-    rader: list[str] = []
+def _sidnummer(sida: str, index: int) -> int:
+    """Sidnumret som det står på sidan ("36(36)"), annars sidans plats i PDF:en."""
+    m = re.search(r"\b(\d+)\(\d+\)", sida)
+    return int(m[1]) if m else index + 1
+
+
+def paragrafintervall(layout: list[str]) -> list[int]:
+    """Paragraferna enligt försättsbladet ("Paragrafer 144–168"), eller en tom lista."""
+    forsta = " ".join(layout[0].split()) if layout else ""
+    m = re.search(r"Paragrafer\s+(?:§+\s*)?([\d\s\-–,]+)", forsta)
+    return paragraflista(m[1]) if m else []
+
+
+def innehallsforteckning(lop: list[str]) -> dict[int, int]:
+    """Paragraf → sida enligt ärendelistan eller innehållsförteckningen, om protokollet har en."""
+    text = ""
     for sida in lop:
         sidrader = _sidmobler(sida)
-        if any(r in ("Ärendelista", "Innehållsförteckning", "Nummer Rubrik Sida") for r in sidrader[:4]):
+        if any(r in _INNEHALL for r in sidrader[:4]):
+            text += " " + " ".join(sidrader)
+    text = re.sub(r"\.{3,}", " ", text)
+    return {int(m[1]): int(m[2]) for m in re.finditer(r"§\s*(\d+)\s.*?\s(\d+)\s*(?=§|$)", text)}
+
+
+def _felskriven_rubrik(m: re.Match, sida: int, foregaende: int | None, intervall: list[int],
+                       forteckning: dict[int, int]) -> bool:
+    """En felskriven paragrafrubrik godtas bara om numret är nästa i följden, ligger inom
+    försättsbladets intervall och, när protokollet har en ärendelista, står där på samma sida."""
+    nr = int(m[2])
+    nasta = foregaende + 1 if foregaende is not None else (intervall[0] if intervall else None)
+    if nr != nasta or nr not in intervall:
+        return False
+    return not forteckning or forteckning.get(nr) == sida
+
+
+def _behandlingar(t: Tolkning, lop: list[str], layout: list[str] | None = None) -> None:
+    intervall = paragrafintervall(layout or [])
+    forteckning = innehallsforteckning(lop)
+    rader: list[str] = []
+    sidor: list[int] = []
+    for index, sida in enumerate(lop):
+        sidrader = _sidmobler(sida)
+        if any(r in _INNEHALL for r in sidrader[:4]):
             continue
         if sidrader and not sidrader[0].startswith("§") and len(sidrader[0].split()) <= 3 and not _ar_rubrik(sidrader[0]):
             organ = sidrader[0]
@@ -710,14 +751,22 @@ def _behandlingar(t: Tolkning, lop: list[str]) -> None:
         if _SIGNERING in sida:
             sidrader = sidrader[: next((i for i, r in enumerate(sidrader) if r.startswith("Signering")), len(sidrader))]
             rader.extend(sidrader)
+            sidor.extend([_sidnummer(sida, index)] * len(sidrader))
             break
         rader.extend(sidrader)
+        sidor.extend([_sidnummer(sida, index)] * len(sidrader))
 
     starter: list[tuple[int, int, list[str]]] = []
     for i, r in enumerate(rader):
         m = _PARAGRAFRAD.match(r)
+        felskriven = False
         if not m:
-            continue
+            m = _FELSKRIVEN_PARAGRAFRAD.match(r)
+            if not m or m[3].strip() or not _felskriven_rubrik(
+                    m, sidor[i], starter[-1][1] if starter else None, intervall, forteckning):
+                continue
+            felskriven = True
+            m = _PARAGRAFRAD.match(r[len(m[1]):])
         rest = m[2].strip()
         dnr = _diarienummer(rest)
         rest = _DIARIENUMMER.sub("", rest).strip(" ,")
@@ -728,6 +777,8 @@ def _behandlingar(t: Tolkning, lop: list[str]) -> None:
         # Innehållsförteckningens rader har rubrik efter numret, eller rubrik och sidnummer på nästa rad.
         if rest or (i + 1 < len(rader) and re.search(r"\.{5,}\s*\d*$", rader[i + 1])):
             continue
+        if felskriven:
+            t.avvikelser.append(f'Paragrafrubriken är felskriven i protokollet: "{r}" (s. {sidor[i]})')
         starter.append((i, int(m[1]), dnr))
 
     for k, (i, nr, dnr) in enumerate(starter):
@@ -1566,10 +1617,8 @@ def _kontrollera(t: Tolkning, lop: list[str], layout: list[str]) -> None:
     funna = [b.paragraf for b in t.behandlingar]
     if len(set(funna)) != len(funna):
         t.avvikelser.append("Samma paragraf förekommer flera gånger")
-    forsta = " ".join(layout[0].split()) if layout else ""
-    if m := re.search(r"Paragrafer\s+(?:§+\s*)?([\d\s\-–,]+)", forsta):
-        vantade = paragraflista(m[1])
-        if vantade and set(vantade) != set(funna):
+    if vantade := paragrafintervall(layout):
+        if set(vantade) != set(funna):
             saknas = sorted(set(vantade) - set(funna))
             extra = sorted(set(funna) - set(vantade))
             delar = [f"saknas: {', '.join(map(str, saknas))}" if saknas else "",
@@ -1630,7 +1679,7 @@ def _tolka(pdf: bytes) -> Tolkning:
         t.narvaro = []
         if not _narvarotabeller(t, layout[:6]):
             t.avvikelser.append("Närvarolistan hittades inte")
-    _behandlingar(t, lop)
+    _behandlingar(t, lop, layout)
     _voteringar(t, layout)
     if not t.behandlingar:
         t.avvikelser.append("Inga behandlingar hittades")
