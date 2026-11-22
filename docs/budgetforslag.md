@@ -78,7 +78,7 @@ En ram kan ha en lista `atgarder` med de besparingar och satsningar förslaget a
 
 **Avläst eller inte.** `"atgarder": []` betyder att redaktören har läst förslaget och att det inte anger några åtgärder för nämnden. Saknas fältet är åtgärderna inte avlästa, och det står så för läsaren. Läs därför av varje nämnd som förslaget tar upp, också en oförändrad.
 
-Åtgärderna står oftare i löptext än i tabeller, så avläsningen är mer tolkning än för ramarna. Därför krävs sidan. En åtgärd som inte går att knyta till en nämnd, till exempel en avgiftshöjning som inte anges per nämnd, tas inte med. En ogiltig åtgärd (utan text, med okänt fält, utan sida i en PDF) stoppar inläsningen med fil och fel.
+Åtgärderna står oftare i löptext än i tabeller, så avläsningen är mer tolkning än för ramarna. Därför krävs sidan. Står det inte i dokumentet vilken nämnd en åtgärd hör till, eller om den är en besparing eller en satsning, avgör redaktionen det utifrån hur kommunen är organiserad. En åtgärd som gäller flera nämnder utan belopp per nämnd, till exempel en avgiftshöjning i alla verksamheter, tas inte med. En ogiltig åtgärd (utan text, med okänt fält, utan sida i en PDF) stoppar inläsningen med fil och fel.
 
 ### Summering
 
