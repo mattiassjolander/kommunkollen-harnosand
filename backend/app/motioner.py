@@ -26,11 +26,9 @@ from datetime import date
 
 import psycopg
 
-from . import ledamoter
+from . import behandlingar, ledamoter
 from .arenden import LIKHETSGRANS, NIVA, likhet
-from .behandlingstyper import klassa
-from .rattelser import Publicerade
-from .sources.harnosand import ORGAN
+from .sources.harnosand import organ_ref
 
 ETT_AR = 365
 UTFALL = {"bifall": "Bifall", "avslag": "Avslag", "besvarad": "Besvarad", "delvis": "Delvis bifall",
@@ -90,34 +88,13 @@ def tillkommande_motioner(beslut: str) -> list[tuple[str, str | None]]:
     return ut
 
 
-def _organ(organ_id: str) -> dict:
-    o = ORGAN.get(organ_id)
-    return {"id": organ_id, "namn": o.namn if o else organ_id}
-
-
-def _las(conn: psycopg.Connection) -> list[dict]:
-    rader = conn.execute(
-        """
-        SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.sammantrade_id, b.paragraf, b.rubrik, b.beslut,
-               b.diarienummer, b.motionarer, s.organ, s.datum, a.arende_id
-        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-        LEFT JOIN arende_behandling a ON a.sammantrade_id = b.sammantrade_id AND a.paragraf = b.paragraf
-        WHERE s.datum IS NOT NULL
-        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
-        """
-    ).fetchall()
-    pub = Publicerade(conn, list({r["sammantrade_id"] for r in rader}))
-    ut = []
-    for r in rader:
-        b = pub.behandling(r["sammantrade_id"], {k: r[k] for k in ("paragraf", "rubrik", "beslut", "diarienummer")})
-        ut.append(r | {"rubrik": b["rubrik"], "beslut": b["beslut"], "diarienummer": b["diarienummer"],
-                       "typ": b["typ"], "motionarer_rattelse": pub.motionarer(r["sammantrade_id"], r["paragraf"])})
-    ut.sort(key=lambda r: (r["datum"], NIVA.get(r["organ"], 0), r["paragraf"]))
-    return ut
+def daterade(conn: psycopg.Connection) -> list[dict]:
+    """Behandlingarna på sammanträden med datum, med publicerade rättelser (behandlingar.las). Underlaget för berakna."""
+    return [r for r in behandlingar.las(conn) if r["datum"] is not None]
 
 
 def _hanvisning(r: dict) -> dict:
-    return {"sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": _organ(r["organ"])},
+    return {"sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": organ_ref(r["organ"])},
             "paragraf": r["paragraf"], "rubrik": r["rubrik"]}
 
 
@@ -187,7 +164,7 @@ def _i_urvalet(f: dict, fran: int, till: int, organ: str | None) -> bool:
 
 def motioner_och_forslag(conn: psycopg.Connection, fran: int, till: int, organ: str | None = None,
                          idag: date | None = None) -> dict:
-    ut = berakna(_las(conn), fran, till, organ, idag or date.today())
+    ut = berakna(daterade(conn), fran, till, organ, idag or date.today())
     # Personsidan för varje namngiven motionär. Rättade har redan person_id, tolkade slås upp på namnet.
     lista = ut["motioner"]["lista"]
     personer = ledamoter.personer_for(conn, [p["namn"] for m in lista for p in m["motionarer"]
@@ -226,7 +203,7 @@ def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: da
         vackt = None
         if v := next((b for b in bs if b["organ"] == "KF" and utfall(b["beslut"]) == "vackt"), None):
             vackt = {"datum": v["datum"], "sammantrade_id": v["sammantrade_id"], "paragraf": v["paragraf"],
-                     "organ": _organ("KF"), "grund": "beslut", "osaker": False}
+                     "organ": organ_ref("KF"), "grund": "beslut", "osaker": False}
         else:
             dnr = {d for b in bs for d in b["diarienummer"]}
             rubrik = bs[0]["rubrik"]
@@ -236,7 +213,7 @@ def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: da
             if traff:
                 (titel, _, r), osaker = traff
                 vackt = {"datum": r["datum"], "sammantrade_id": r["sammantrade_id"], "paragraf": r["paragraf"],
-                         "organ": _organ("KF"), "grund": "samlingspunkt", "osaker": osaker, "titel": titel}
+                         "organ": organ_ref("KF"), "grund": "samlingspunkt", "osaker": osaker, "titel": titel}
         f = _forlopp(bs, idag, vackt, {"KF"})
         if not _i_urvalet(f, fran, till, organ):
             continue
@@ -288,7 +265,7 @@ def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: da
     return {
         "fran": fran,
         "till": till,
-        "organ": _organ(organ) if organ else None,
+        "organ": organ_ref(organ) if organ else None,
         "idag": idag,
         "utfall": [{"id": u, "namn": n} for u, n in UTFALL.items()],
         "motioner": {

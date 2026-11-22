@@ -320,6 +320,12 @@ def _behandling(r: dict) -> dict:
     return ut
 
 
+def protokoll_for(conn: psycopg.Connection, sammantrade_ids: list[int]) -> dict[int, dict | None]:
+    """Protokollet (originalet och plattformens kopia) per sammanträde, None för ett sammanträde utan protokoll."""
+    return {r["id"]: _sammantrade(r)["protokoll"]
+            for r in conn.execute(f"{_SAMMANTRADE} WHERE s.id = ANY(%s)", (list(sammantrade_ids),))}
+
+
 def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | None:
     rad = conn.execute(f"{_SAMMANTRADE} WHERE s.id = %s", (sammantrade_id,)).fetchone()
     if rad is None:

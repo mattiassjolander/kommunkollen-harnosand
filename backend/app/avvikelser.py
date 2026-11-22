@@ -16,7 +16,7 @@ import re
 
 import psycopg
 
-from .sources.harnosand import ORGAN
+from .sources.harnosand import organ_ref, ORGAN
 
 # (kategori, regel). Den första regeln som passar avgör kategorin.
 KATEGORIER = {
@@ -37,11 +37,6 @@ _REGLER = [
 
 def kategori(avvikelse: str) -> str:
     return next((k for k, r in _REGLER if r.search(avvikelse)), "tolkning")
-
-
-def _organ(organ_id: str) -> dict:
-    o = ORGAN.get(organ_id)
-    return {"id": organ_id, "namn": o.namn if o else organ_id}
 
 
 def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = None) -> dict:
@@ -67,7 +62,7 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
         if not avv and not r["rattelser"]:
             continue
         ut.append({
-            "sammantrade": {"id": r["id"], "datum": r["datum"], "organ": _organ(r["organ"]), "tolkning": r["tolkning"]},
+            "sammantrade": {"id": r["id"], "datum": r["datum"], "organ": organ_ref(r["organ"]), "tolkning": r["tolkning"]},
             "url": r["url"],
             "avvikelser": avv,
             "i_protokollet": any(a["kategori"] in I_PROTOKOLLET for a in avv),
@@ -77,7 +72,7 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
     return {
         "fran": fran,
         "till": till,
-        "organ": _organ(organ) if organ else None,
+        "organ": organ_ref(organ) if organ else None,
         "kategorier": [{"id": k, "namn": n, "i_protokollet": k in I_PROTOKOLLET, "antal": antal[k]}
                        for k, n in KATEGORIER.items()],
         "sammantraden": ut,

@@ -19,6 +19,7 @@ from datetime import date, datetime
 
 import psycopg
 
+from . import behandlingar
 from .sources.harnosand import ORGAN
 from .sources.sammantradesplaner import MANADER, Planrad, Sammantradesplan
 
@@ -230,6 +231,7 @@ def lista(conn: psycopg.Connection) -> list[dict]:
 
 _DATUM = re.compile(r"(\d{1,2})\s+(" + "|".join(MANADER) + r")(?:\s+(20\d{2}))?", re.IGNORECASE)
 _TID = re.compile(r"(\d{1,2})[.:](\d{2})")
+_PLANRUBRIK = r"sammanträdes(tider|dagar|plan|datum)"
 _HELA_PLANEN = re.compile(
     r"^(?P<subjekt>[a-zåäö ]+?)\s+sammanträder\s+(?:kl\.?\s*)?(?P<tid>\d{1,2}[.:]\d{2})?\s*"
     r"följande\s+(?:datum|dagar)\s*:?(?P<datum>.*)$",
@@ -296,15 +298,9 @@ def _tom() -> dict:
 
 def beslut_om_planer(conn: psycopg.Connection) -> dict[tuple[str, int], dict]:
     """(organ, år) → besluten om organets sammanträdesplan för året och de datum som gäller enligt dem."""
-    rader = conn.execute(
-        """
-        SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.sammantrade_id, b.paragraf, b.rubrik, b.beslut,
-               s.organ, s.datum
-        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-        WHERE b.rubrik ~* 'sammanträdes(tider|dagar|plan|datum)' AND b.beslut IS NOT NULL AND s.datum IS NOT NULL
-        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
-        """
-    ).fetchall()
+    # Rättade beslut gäller (ADR-0002). Rubriken väljs på tolkningen och prövas igen efter rättelsen.
+    rader = [r for r in behandlingar.las(conn, rubrik=_PLANRUBRIK)
+             if r["beslut"] and r["datum"] is not None and re.search(_PLANRUBRIK, r["rubrik"] or "", re.I)]
     rader.sort(key=lambda r: (r["datum"], r["paragraf"]))
     ut: dict[tuple[str, int], dict] = {}
     for r in rader:

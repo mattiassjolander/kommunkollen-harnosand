@@ -41,6 +41,15 @@ ORGAN = {
     )
 }
 
+# Beslutsnivå: nämnderna bereder åt kommunstyrelsen, som bereder åt kommunfullmäktige.
+NIVA = {"SAM": 0, "SOC": 0, "SKOL": 0, "KS": 1, "KF": 2}
+
+
+def organ_ref(organ_id: str) -> dict:
+    """Organet som det visas i API:t: {"id", "namn"}. Ett okänt organ får sitt id som namn."""
+    o = ORGAN.get(organ_id)
+    return {"id": organ_id, "namn": o.namn if o else organ_id}
+
 # Utskott och beredningar är egna organ och ingår inte (kravspec avsnitt 18).
 _ANNAT_ORGAN = re.compile(r"utskott|beredning", re.IGNORECASE)
 _PARAGRAFPROTOKOLL = re.compile(r"§|direktjuster|omedelbar justering|utdrag", re.IGNORECASE)
