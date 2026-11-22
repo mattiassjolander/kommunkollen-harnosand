@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import sammantradesplan, skatteunderlag
+from . import kalender, sammantradesplan, skatteunderlag
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -110,6 +110,8 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
             fel.append(dokumentfel)
     if dokument_andrade:
         koppla(conn)
+        # Ett nytt protokoll kan innehålla ett beslut om sammanträdestiderna (#99).
+        sammantradesplan.lagra_beslut(conn, kalender.idag(), korning_id, hamtad)
     prognosdatum = []
     for p in hamtning.prognosfiler:
         utfall, prognosfel, publicerad = skatteunderlag.lagra(conn, p, korning_id, hamtad)
@@ -128,6 +130,9 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         res.antal_nya += antal["nya"]
         res.antal_andrade += antal["andrade"]
         res.antal_oforandrade += antal["oforandrade"]
+    if hamtning.sammantradesplaner:
+        # År utan plan på webbsidan får sina sammanträden ur organens beslut (#99).
+        sammantradesplan.lagra_beslut(conn, kalender.idag(), korning_id, hamtad)
     if hamtning.kallelser or hamtning.webbsandningar:
         antal = sammantradesplan.lagra_kallelser(conn, hamtning.kallelser, hamtning.webbsandningar, korning_id, hamtad)
         res.antal_nya += antal["nya"]

@@ -90,6 +90,10 @@ function tid(t: string | null): string {
       >
         <h2 :id="`plan-${p.organ.id}-${p.ar}`">{{ p.organ.namn }} {{ p.ar }}</h2>
 
+        <p v-if="p.bara_beslut" class="bara-beslut" data-testid="bara-beslut">
+          Ingen plan på webbsidan än. Sammanträdena kommer från organets beslut i protokollet och ersätts när
+          kommunen publicerar tabellen.
+        </p>
         <div class="jamforelse" data-testid="jamforelse">
           <template v-if="p.beslut.length">
             <p>
@@ -101,7 +105,8 @@ function tid(t: string | null): string {
                 </RouterLink>
               </template>
             </p>
-            <p v-if="p.skillnader === null" class="anteckning">Beslutet anger inte datumen, så planen kan inte jämföras.</p>
+            <p v-if="p.bara_beslut" class="anteckning">Inget att jämföra med förrän webbsidan har en plan.</p>
+            <p v-else-if="p.skillnader === null" class="anteckning">Beslutet anger inte datumen, så planen kan inte jämföras.</p>
             <p v-else-if="!p.skillnader.length" class="lika" data-testid="inga-skillnader">
               <span aria-hidden="true">✓</span> Webbsidan stämmer med beslutet.
             </p>
@@ -124,6 +129,7 @@ function tid(t: string | null): string {
               <th scope="col">Datum</th>
               <th scope="col">Tid</th>
               <th scope="col">Status</th>
+              <th scope="col">Källa</th>
               <th scope="col">Protokoll</th>
               <th scope="col">Ändringar</th>
             </tr>
@@ -136,6 +142,7 @@ function tid(t: string | null): string {
               data-testid="planerat-sammantrade"
               :data-nyckel="s.nyckel"
               :data-status="s.status"
+              :data-kalla="s.kalla"
             >
               <td class="datum">{{ nar(s.datum, s.manad) }}</td>
               <td>{{ tid(s.starttid) }}</td>
@@ -144,6 +151,15 @@ function tid(t: string | null): string {
                 <span v-if="s.anmarkning" class="anmarkning" data-testid="anmarkning">
                   <span aria-hidden="true">!</span> Okänd text: ”{{ s.anmarkning }}”
                 </span>
+              </td>
+              <td data-testid="kalla">
+                <RouterLink
+                  v-if="s.beslut"
+                  :to="`/politik/sammantraden/${s.beslut.sammantrade_id}/paragraf/${s.beslut.paragraf}`"
+                >
+                  Beslut {{ s.beslut.datum ? sammantradesdatum(s.beslut.datum) : '' }} § {{ s.beslut.paragraf }}
+                </RouterLink>
+                <template v-else>Webbsidan</template>
               </td>
               <td>
                 <RouterLink v-if="s.protokoll" :to="`/politik/sammantraden/${s.id}`">Protokoll</RouterLink>
@@ -154,7 +170,8 @@ function tid(t: string | null): string {
                   <summary>{{ s.versioner.length - 1 }} {{ s.versioner.length === 2 ? 'ändring' : 'ändringar' }}</summary>
                   <ol>
                     <li v-for="v in s.versioner" :key="v.version">
-                      {{ datumTid(v.hamtad) }}: {{ STATUS[v.status] }}, {{ tid(v.starttid) }}
+                      {{ datumTid(v.hamtad) }}: {{ STATUS[v.status] }}, {{ tid(v.starttid) }},
+                      {{ v.kalla === 'beslut' ? 'enligt beslutet' : 'enligt webbsidan' }}
                       <span v-if="v.kalltext" class="anteckning">(”{{ v.kalltext }}”)</span>
                     </li>
                   </ol>
@@ -164,7 +181,7 @@ function tid(t: string | null): string {
             </tr>
           </tbody>
         </table>
-        <p class="kallrad">
+        <p v-if="p.url" class="kallrad">
           Källa: <a :href="p.url" rel="noopener">{{ p.organ.namn }} på harnosand.se</a>
         </p>
       </section>
@@ -222,6 +239,11 @@ function tid(t: string | null): string {
 }
 .kallrad {
   margin: 8px 0 0;
+}
+.bara-beslut {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  margin: 0 0 8px;
 }
 .anmarkning {
   display: block;

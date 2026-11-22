@@ -232,9 +232,12 @@ def test_protokollen_kopplas_till_de_planerade_sammantradena(database_url, googl
     assert id_for[("2026-10-26", "13:15")] not in {s["id"] for s in p["sammantraden"]}
     # Kommande sammanträden har inget protokoll än.
     assert rad(p, "2026-12-14")["protokoll"] is False
+    # 2027 saknar plan på webbsidan och kommer från beslutet 2026-09-28 § 130 (#99).
+    p27 = planer(api)[("KF", 2027)]
+    assert p27["bara_beslut"] and len(p27["sammantraden"]) == 9
     with psycopg.connect(database_url) as conn:
         assert conn.execute("SELECT count(*) FROM sammantrade WHERE organ = 'KF'").fetchone()[0] == \
-            len(p["sammantraden"]) + 1
+            len(p["sammantraden"]) + len(p27["sammantraden"]) + 1
 
 
 def test_skillnader_mot_beslutet_i_protokollet_visas_for_redaktionen(database_url, google):

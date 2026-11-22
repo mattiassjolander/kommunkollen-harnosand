@@ -56,6 +56,23 @@ Besluten gäller i datumordning. Webbsidans planerade sammanträden jämförs me
 skillnaderna (bara på webbsidan, bara i beslutet och annan tid) visas på sidan Planer för redaktionen. De visas
 inte publikt. Anger inget beslut datumen, t.ex. "att anta förslag till sammanträdestider", jämförs planen inte.
 
+**Planen ur besluten när webbsidan saknar tabell (#99).** Kommunen publicerar ofta tabellen för nästa år
+först i december, men organet har beslutat om sammanträdestiderna tidigare (fullmäktige 2026-09-28 § 130 om
+2027). För år från och med i år som webbsidan inte har någon plan för blir datumen enligt besluten planerade
+sammanträden, med källan `beslut` och en hänvisning till paragrafen (`plan_kalla`,
+`plan_beslut_sammantrade_id` och `plan_beslut_paragraf`). Samma regler gäller som i jämförelsen: senare beslut
+flyttar eller ställer in, och ett flyttat sammanträde behåller sitt id med ett nytt datum. Planen ur besluten
+räknas om efter insamling, omtolkning och när en rättelse av ett beslut publiceras. Ingen granskning behövs,
+eftersom beslutet redan är publicerat.
+
+När webbsidan publicerar tabellen för året tar den över: samma sammanträde (samma UID i kalendern, högre
+SEQUENCE) får en ny version med källan `webbsidan`, och datum som bara fanns i beslutet blir borttagna ur
+planen. Därefter läses inte besluten för året. Tidigare år påverkas inte.
+
+Kalendern och ics-flödet märker sådana sammanträden "Enligt beslut i protokollet (kommunfullmäktige
+2026-09-28 § 130)" med länk till paragrafen. Sidan Planer visar källan per sammanträde och "Ingen plan på
+webbsidan än" för år som bara har beslut.
+
 Planerade sammanträden räknas inte i statistiken och listas inte bland sammanträdena med protokoll.
 
 ## Kalender och ics-flöden

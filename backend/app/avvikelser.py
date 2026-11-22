@@ -16,7 +16,7 @@ import re
 
 import psycopg
 
-from .sources.harnosand import organ_ref, ORGAN
+from .sources.harnosand import organ_ref
 
 # (kategori, regel). Den första regeln som passar avgör kategorin.
 KATEGORIER = {
