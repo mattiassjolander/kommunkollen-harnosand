@@ -41,6 +41,8 @@ Skriv det som står i dokumentet, i den form det står:
 
 Bara budgetåret läses. Planåren tas inte med. Ett värde som inte står i dokumentet utelämnas och nämns i rapporten till användaren. Det räknas aldrig fram eller uppskattas. Är en siffra svårläst, till exempel på en inskannad sida, fråga användaren.
 
+Fråga också när en åtgärd inte går att härleda ur dokumentet: om den är en besparing eller en satsning, eller vilken nämnd den hör till. Samla frågorna och ställ dem på en gång, med åtgärdens text och sida, innan filen skrivs. Användaren känner till hur kommunens verksamheter är organiserade, till exempel att landsbygdsmedlen ligger under Kommunstyrelsen. Svaret skrivs in i åtgärden, och en åtgärd lämnas inte utanför för att den är oklar.
+
 I planförutsättningarna har varje rad sin källa i kolumn D, i samma form ("L s. 8", flera skiljs med komma).
 
 För varje förslag finns nu en post i `budget.json` och en **källförteckning** i rapporten: varje värde med sin källa. Nya poster skrivs i formatet ovan. Befintliga poster i det tidigare formatet med planår (`"ar": 2027`) läses som de är.
