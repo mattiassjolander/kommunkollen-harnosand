@@ -121,13 +121,23 @@ def atgarder(v: Any, falt: str, sidor: bool) -> list[dict]:
     return ut
 
 
+# En förändring under 0,05 mnkr är avrundning, inte en ändrad ram.
+OFORANDRAD_MNKR = 0.05
+
+
 def tackning(ram: dict, forandring: float | None) -> dict:
-    """Hur stor del av ramens förändring åtgärderna förklarar: antal, summan av beloppen (None om inget
-    belopp anges) och om ramen ändras utan att förslaget anger några åtgärder."""
+    """Hur stor del av ramens förändring åtgärderna förklarar: antal och summan av beloppen (None om inget
+    belopp anges).
+
+    `avlast` är sant när redaktören har läst av åtgärderna för ramen: fältet `atgarder` finns, och en tom
+    lista betyder att förslaget inte anger några. `saknas` är sant när ramen ändras men förslaget enligt
+    avläsningen inte anger några åtgärder."""
+    avlast = "atgarder" in ram
     atg = ram.get("atgarder") or []
     belopp = [a["mnkr"] for a in atg if "mnkr" in a]
-    return {"antal": len(atg), "mnkr": round(sum(belopp), 3) if belopp else None,
-            "saknas": not atg and bool(forandring)}
+    andras = forandring is not None and abs(forandring) >= OFORANDRAD_MNKR
+    return {"antal": len(atg), "mnkr": round(sum(belopp), 3) if belopp else None, "avlast": avlast,
+            "saknas": avlast and not atg and andras}
 
 
 # Summeringen: samma frågor, i samma ordning, för alla förslag. Svaren återger vad förslaget säger
@@ -215,7 +225,8 @@ def uppgifter(data: Any, budgetar: int, sidor: bool = True, nt: dict | None = No
     Uppgifterna är det som står i dokumentet, med sida när dokumentet har fasta sidor (`sidor`, PDF):
 
     - `ramar`: per nämnd, {mnkr} eller {forandring} mot planförutsättningen. Lagras som mnkr. En ram kan ha
-      `atgarder`, en lista med åtgärder och satsningar (`atgarder`, #57).
+      `atgarder`, en lista med besparingar och satsningar (`atgarder`, #57). En tom lista betyder att
+      förslaget inte anger några, och utan fältet är åtgärderna inte avlästa (`tackning`).
     - `skattesats`: {ore}, {forandring} i procentenheter (−0,10 för "10 öre lägre") eller {procent}.
       Lagras som förändring i öre, eller som procent när planförutsättningar saknas. Utelämnad är 0 öre.
     - `resultat`: {procent} av skatteintäkter och generella bidrag, eller {mnkr}. Lagras som procent.
@@ -293,8 +304,8 @@ def uppgifter(data: Any, budgetar: int, sidor: bool = True, nt: dict | None = No
         else:
             mnkr = nt["ramar"][organ] + v["forandring"]
         ram = {"organ": organ, "mnkr": round(mnkr, 3)} | _sida(r.get("sida"), f, sidor)
-        if atg := atgarder(r.get("atgarder"), f"{f} ({organ})", sidor):
-            ram["atgarder"] = atg
+        if r.get("atgarder") is not None:  # en tom lista: förslaget anger inga åtgärder för ramen
+            ram["atgarder"] = atgarder(r["atgarder"], f"{f} ({organ})", sidor)
         ramar.append(ram)
     if len({r["organ"] for r in ramar}) != len(ramar):
         raise Ogiltig("Samma nämnd står flera gånger")

@@ -36,7 +36,8 @@ Skriv det som står i dokumentet, i den form det står:
 | Ram per organ | `mnkr` för budgetåret. Anger förslaget också förändringen mot planförutsättningarna, skriv båda: `mnkr` lagras och `forandring` används i kontrollen av versionen. Står bara förändringen, skriv bara `forandring`. Organen heter som i planförutsättningarna. |
 | Skattesats | Som förslaget anger den: `ore`, `forandring` i procentenheter eller `procent`. Utelämnas om förslaget inte nämner den. |
 | Budgeterat resultat | `procent` och, om förslaget anger det, `mnkr`. Procenten lagras och beloppet kontrolleras mot den. |
-| Åtgärder, summering, behandling | Enligt `docs/budgetforslag.md`. Texten ligger nära originalet och värderar inte. |
+| Åtgärder | `atgarder` för varje nämnd som förslaget tar upp, också en oförändrad: besparingar med negativt och satsningar med positivt belopp, utan belopp när förslaget inte anger något. Anger förslaget inga åtgärder för nämnden, skriv `"atgarder": []`. Utan fältet visas "Åtgärderna är inte avlästa". |
+| Summering, behandling | Enligt `docs/budgetforslag.md`. Texten ligger nära originalet och värderar inte. |
 
 Bara budgetåret läses. Planåren tas inte med. Ett värde som inte står i dokumentet utelämnas och nämns i rapporten till användaren. Det räknas aldrig fram eller uppskattas. Är en siffra svårläst, till exempel på en inskannad sida, fråga användaren.
 
@@ -44,7 +45,7 @@ I planförutsättningarna har varje rad sin källa i kolumn D, i samma form ("L 
 
 För varje förslag finns nu en post i `budget.json` och en **källförteckning** i rapporten: varje värde med sin källa. Nya poster skrivs i formatet ovan. Befintliga poster i det tidigare formatet med planår (`"ar": 2027`) läses som de är.
 
-Klart när varje siffra i ramtabellen, skattesatsen och resultatet för budgetåret har en post med källa, eller står i rapporten som saknad.
+Klart när varje siffra i ramtabellen, skattesatsen och resultatet för budgetåret har en post med källa, eller står i rapporten som saknad, och varje ram har `atgarder`.
 
 ## 3. Kontrollera
 
@@ -61,6 +62,7 @@ Skriptet läser mappen som inläsningen gör, utan databas. Stoppar inläsningen
 3. **Samma version av planförutsättningarna**: för en ram med både mnkr och förändring jämförs ram − förändring med den gemensamma planförutsättningen. Förändringen är förslagets eget beslut och ramen är avrundad till hela mnkr, så mer än 0,5 mnkr avviker. Det fångar både ett förslag som räknat från en annan version och en rad som inte går ihop i förslagets egen tabell (C 2027: plan 187 − 3 men ram 185, s. 4). Har förslaget en egen kolumn med planförutsättningarna, gå igenom den rad för rad: plan + förändring ska bli ramen, och planen ska vara den gemensamma avrundad. Jämför också andra planförutsättningar som förslaget redovisar, till exempel skatteintäkterna. Använder flera förslag samma andra version, säg det till användaren: den version som flest förslag använder gäller (#58, beslut 1), och kanske är det fliken som ska rättas.
 4. **Resultatet i procent mot mnkr**, när förslaget anger båda: mer än 0,1 procentenheter avviker.
 5. **Organ utanför planförutsättningarna**: ett organ som inte finns där är oftast ett felstavat namn.
+6. **Åtgärderna**: en ram utan `atgarder` avviker. Summan av åtgärderna står mot förändringen. En stor skillnad betyder ofta ett tecken som blivit fel eller en åtgärd som hör till en annan nämnd.
 
 Kör om efter varje rättelse.
 

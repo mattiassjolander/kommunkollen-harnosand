@@ -123,12 +123,12 @@ def berakna(data: dict) -> dict:
 def test_l_2027_saknar_finansiering_for_20_mnkr():
     # L budgeterar 80 mnkr, men ramarna sparar bara 10 mnkr netto mot planförutsättningen (resultat 50).
     b = berakna({"resultat": {"mnkr": 80, "sida": 8}, "skattesats": {"procent": 23.34, "sida": 8}, "ramar": [
-        {"organ": "Kommunfullmäktige", "mnkr": 13, "sida": 8}, {"organ": "Kommunstyrelsen", "mnkr": 150, "sida": 8},
+        {"organ": "Kommunfullmäktige", "mnkr": 13, "sida": 8}, {"organ": "Kommunstyrelsen", "mnkr": 150, "sida": 8, "atgarder": []},
         {"organ": "Kommungemensam verksamhet", "mnkr": 105, "sida": 8}, {"organ": "Samhällsnämnden", "mnkr": 235, "sida": 8},
         {"organ": "Skolnämnden", "mnkr": 703, "sida": 8}, {"organ": "Socialnämnden", "mnkr": 928, "sida": 8}]})
     assert b["skattesats"] == {"procent": 23.34, "ore": 0, "plan": 23.34}
     assert {"organ": "Kommunstyrelsen", "mnkr": 150.0, "plan": 187.0, "forandring": -37.0,
-            "atgarder": {"antal": 0, "mnkr": None, "saknas": True}} in b["ramar"]
+            "atgarder": {"antal": 0, "mnkr": None, "avlast": True, "saknas": True}} in b["ramar"]
     assert (b["forandring"], b["beraknat"], b["resultat"]["mnkr"], b["differens"]) == (-10.0, 60.0, 80.0, 20.0)
     # Resultatet i mnkr räknas om till procent av skatter och bidrag (80 / 2 217).
     assert b["resultat"]["procent"] == 3.608
@@ -172,8 +172,21 @@ def test_ar_utan_planforutsattningar_visas_utan_forandring():
                  "ramar": [{"organ": "Skolnämnden", "mnkr": 616.2}]}
     b = budgetforslag.berakning(u, None)
     assert b["ramar"] == [{"organ": "Skolnämnden", "mnkr": 616.2, "plan": None, "forandring": None,
-                           "atgarder": {"antal": 0, "mnkr": None, "saknas": False}}]
+                           "atgarder": {"antal": 0, "mnkr": None, "avlast": False, "saknas": False}}]
     assert (b["planforutsattningar"], b["beraknat"], b["differens"], b["resultat"]) == (False, None, None, {"procent": 2.0, "mnkr": None})
     # En förändring kan inte räknas om utan planförutsättningar.
     with pytest.raises(budgetforslag.Ogiltig, match="förändringen räknas bara om när planförutsättningarna för 2022 finns"):
         budgetforslag.uppgifter({"ramar": [{"organ": "Skolnämnden", "forandring": 4}]}, 2022, False, None)
+
+
+def test_atgarder_avlasta_och_avrundning():
+    """En tom lista betyder att förslaget inte anger några åtgärder, och utan fältet är de inte avlästa. En
+    förändring under 0,05 mnkr är avrundning och räknas inte som en ändrad ram."""
+    b = berakna({"resultat": {"procent": 2.3, "sida": 1}, "ramar": [
+        {"organ": "Kommunfullmäktige", "mnkr": 13.97, "sida": 1, "atgarder": []},
+        {"organ": "Skolnämnden", "forandring": 2, "sida": 1, "atgarder": []},
+        {"organ": "Socialnämnden", "forandring": 2, "sida": 1}]})
+    tack = {r["organ"]: r["atgarder"] for r in b["ramar"]}
+    assert tack["Kommunfullmäktige"] == {"antal": 0, "mnkr": None, "avlast": True, "saknas": False}
+    assert tack["Skolnämnden"] == {"antal": 0, "mnkr": None, "avlast": True, "saknas": True}
+    assert tack["Socialnämnden"] == {"antal": 0, "mnkr": None, "avlast": False, "saknas": False}

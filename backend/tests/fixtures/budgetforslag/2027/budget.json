@@ -167,7 +167,14 @@
         {
           "organ": "Kommungemensam verksamhet",
           "forandring": -4,
-          "sida": 1
+          "sida": 1,
+          "atgarder": []
+        },
+        {
+          "organ": "Kommunfullmäktige",
+          "forandring": 0,
+          "sida": 1,
+          "atgarder": []
         },
         {
           "organ": "Samhällsnämnden",
