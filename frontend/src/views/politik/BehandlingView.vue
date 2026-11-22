@@ -3,7 +3,7 @@ import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BEHANDLINGSTYPER, EjInloggad, hamtaBehandling, Saknas, type Behandling, type Jag, type Votering } from '../../api'
-import { namnOchParti, rosttext, sammantradesdatum } from '../../format'
+import { tidsintervall, namnOchParti, rosttext, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
 import Kallelsemarkering from '../../components/Kallelsemarkering.vue'
 import Periodmarkering from '../../components/Periodmarkering.vue'
@@ -90,6 +90,12 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
       <p class="ingress" data-testid="typ">
         Typ: {{ BEHANDLINGSTYPER.find((t) => t.id === b?.typ)?.namn ?? 'kunde inte klassas' }}
         <Rattelsemarkering v-if="b.rattelser?.typ" :rattelse="b.rattelser.typ" falt="typ" />
+      </p>
+      <p v-if="b.sittning" class="ingress" data-testid="sittning">
+        <template v-if="b.sittning.delegation">Beslut av {{ b.sittning.delegation }} på delegation. </template>
+        Sittning {{ b.sittning.nummer }}<template v-if="tidsintervall(b.sittning.starttid, b.sittning.sluttid)"
+          >, {{ tidsintervall(b.sittning.starttid, b.sittning.sluttid) }}</template
+        ><template v-if="b.sittning.plats"> · {{ b.sittning.plats }}</template>
       </p>
       <p class="markering"><Tolkningsmarkering :ocr="b.sammantrade.ocr" /></p>
       <Protokollkalla :protokoll="b.sammantrade.protokoll" :paragraf="b.paragraf" />

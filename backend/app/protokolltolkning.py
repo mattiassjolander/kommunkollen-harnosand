@@ -35,7 +35,8 @@ class Narvaro:
     kategori: str
     tjanstgor_for: str | None = None
     tjanstgor_for_parti: str | None = None
-    # Paragrafer personen var beslutande vid, om inte alla. None = hela sammanträdet.
+    # Paragrafer personen var beslutande vid, om inte alla. None = hela sammanträdet. För den som inte
+    # var beslutande: paragraferna vid de sittningar personen var närvarande, i ett protokoll med flera.
     paragrafer: list[int] | None = None
     jav: list[int] = field(default_factory=list)
 
@@ -127,6 +128,20 @@ class Hanvisning:
 
 
 @dataclass
+class Sittning:
+    """En sittning i ett protokoll med flera sittningar samma dag (#85). Varje sittning har ett eget
+    försättsblad med "Plats och tid", "Beslutande" och "Paragrafer"."""
+
+    plats: str | None
+    starttid: str | None
+    sluttid: str | None
+    paragrafer: list[int]
+    # Den som fattade sittningens beslut på delegation, enligt beslutsformeln ("Kommunstyrelsens
+    # presidium beslutar med delegation av kommunstyrelsen"): "kommunstyrelsens presidium".
+    delegation: str | None = None
+
+
+@dataclass
 class Tolkning:
     datum: date | None = None
     starttid: str | None = None
@@ -134,6 +149,8 @@ class Tolkning:
     plats: str | None = None
     narvaro: list[Narvaro] = field(default_factory=list)
     behandlingar: list[Behandling] = field(default_factory=list)
+    # Sittningarna, bara när protokollet har fler än en. Sammanträdets plats och tid är den första sittningens.
+    sittningar: list[Sittning] = field(default_factory=list)
     avvikelser: list[str] = field(default_factory=list)
     # Texten är läst med OCR ur sidbilder (#52) och kan innehålla läsfel.
     ocr: bool = False
@@ -216,21 +233,22 @@ def _sammantrade(t: Tolkning, lop: list[str], layout: list[str]) -> None:
             break
     plats_rad = next((r for r in (layout[0] if layout else "").splitlines() if "Plats och tid" in r), None)
     if plats_rad:
-        text = " ".join(plats_rad.split("Plats och tid", 1)[1].split())
-        kl = re.search(r"\bkl\.?\s*", text)
-        fore = text[: kl.start()] if kl else text
-        plats = re.split(r",\s*(?=\d{4}-)|,?\s+(?:måndagen|tisdagen|onsdagen|torsdagen|fredagen|lördagen|söndagen)\b", fore)[0]
-        t.plats = plats.strip(" ,") or None
-        if kl:
-            tider = list(_TID.finditer(text[kl.end() :]))
-            if tider:
-                t.starttid = _tid(tider[0])
-            if len(tider) > 1:
-                t.sluttid = _tid(tider[1])
+        t.plats, t.starttid, t.sluttid = _plats_och_tid(plats_rad)
         if t.datum is None:
-            t.datum = _datum(text)
+            t.datum = _datum(plats_rad)
     if t.datum is None:
         t.avvikelser.append("Sammanträdesdatum hittades inte")
+
+
+def _plats_och_tid(plats_rad: str) -> tuple[str | None, str | None, str | None]:
+    """(plats, starttid, sluttid) ur raden "Plats och tid  Rådhuset, 2026-05-21 kl. 08.30–12.00"."""
+    text = " ".join(plats_rad.split("Plats och tid", 1)[1].split())
+    kl = re.search(r"\bkl\.?\s*", text)
+    fore = text[: kl.start()] if kl else text
+    plats = re.split(r",\s*(?=\d{4}-)|,?\s+(?:måndagen|tisdagen|onsdagen|torsdagen|fredagen|lördagen|söndagen)\b", fore)[0]
+    tider = list(_TID.finditer(text[kl.end() :])) if kl else []
+    return (plats.strip(" ,") or None, _tid(tider[0]) if tider else None,
+            _tid(tider[1]) if len(tider) > 1 else None)
 
 
 # Närvaro, form 1: lista på första sidan
@@ -707,11 +725,25 @@ def _sidnummer(sida: str, index: int) -> int:
     return int(m[1]) if m else index + 1
 
 
-def paragrafintervall(layout: list[str]) -> list[int]:
-    """Paragraferna enligt försättsbladet ("Paragrafer 144–168"), eller en tom lista."""
-    forsta = " ".join(layout[0].split()) if layout else ""
-    m = re.search(r"Paragrafer\s+(?:§+\s*)?([\d\s\-–,]+)", forsta)
+def _sidans_intervall(sida: str) -> list[int]:
+    """Paragraferna enligt ett försättsblad ("Paragrafer 144–168"), eller en tom lista."""
+    m = re.search(r"Paragrafer\s+(?:§+\s*)?([\d\s\-–,]+)", " ".join(sida.split()))
     return paragraflista(m[1]) if m else []
+
+
+def _sittningssidor(layout: list[str]) -> list[int]:
+    """Försättsbladen: första sidan, och varje senare sida med en egen sittning samma dag, alltså
+    med "Plats och tid", "Beslutande" och "Paragrafer" (#85)."""
+    if not layout:
+        return []
+    return [0] + [i for i in range(1, len(layout))
+                  if "Plats och tid" in layout[i] and re.search(r"^\s*Beslutande\s{2,}", layout[i], re.M)
+                  and _sidans_intervall(layout[i])]
+
+
+def paragrafintervall(layout: list[str]) -> list[int]:
+    """Paragraferna enligt försättsbladen, alla sittningar tillsammans, eller en tom lista."""
+    return sorted({p for i in _sittningssidor(layout) for p in _sidans_intervall(layout[i])})
 
 
 def innehallsforteckning(lop: list[str]) -> dict[int, int]:
@@ -1626,6 +1658,56 @@ def _kontrollera(t: Tolkning, lop: list[str], layout: list[str]) -> None:
             t.avvikelser.append(f"Paragraferna stämmer inte med protokollets paragrafintervall ({'; '.join(d for d in delar if d)})")
 
 
+_DELEGATION = re.compile(
+    r"^(?P<vem>[A-ZÅÄÖ][\wåäö-]*s (?:presidium|arbetsutskott|ordförande))\s+beslutar\s+(?:med|på|enligt)\s+delegation\b")
+
+
+def _sittningar(t: Tolkning, layout: list[str]) -> None:
+    """Ett protokoll med flera sittningar samma dag (#85): varje sittnings plats, tid och paragrafer, och
+    närvaron per sittning. En person som var med vid en sittning får den sittningens paragrafer."""
+    sidor = _sittningssidor(layout)
+    if len(sidor) < 2:
+        return
+    forsta = _sidans_intervall(layout[0])
+    if not forsta:
+        t.avvikelser.append("Protokollet har flera sittningar, men den första sittningens paragrafer anges inte")
+        return
+    sittningar = [Sittning(t.plats, t.starttid, t.sluttid, forsta)]
+    narvaro = [t.narvaro]
+    for i in sidor[1:]:
+        plats_rad = next(r for r in layout[i].splitlines() if "Plats och tid" in r)
+        egen = Tolkning()
+        if not _narvaro_forsta_sidan(egen, layout[i]):
+            t.avvikelser.append(f"Närvarolistan för sittningen på sida {i + 1} hittades inte")
+            return
+        sittningar.append(Sittning(*_plats_och_tid(plats_rad), _sidans_intervall(layout[i])))
+        narvaro.append(egen.narvaro)
+    alla = sorted({p for s in sittningar for p in s.paragrafer})
+    sammanslagen: dict[tuple, Narvaro] = {}
+    for s, personer in zip(sittningar, narvaro):
+        for n in personer:
+            egna = [p for p in (n.paragrafer if n.paragrafer is not None else s.paragrafer) if p in s.paragrafer]
+            nyckel = (n.namn, n.kategori, n.tjanstgor_for)
+            if (tidigare := sammanslagen.get(nyckel)) is None:
+                sammanslagen[nyckel] = copy.copy(n)
+                sammanslagen[nyckel].paragrafer = egna
+                sammanslagen[nyckel].jav = list(n.jav)
+            else:
+                tidigare.paragrafer = sorted({*tidigare.paragrafer, *egna})
+                tidigare.jav = sorted({*tidigare.jav, *n.jav})
+    for n in sammanslagen.values():
+        if n.paragrafer == alla:
+            n.paragrafer = None
+    t.narvaro = list(sammanslagen.values())
+    for s in sittningar:
+        beslut = [b.beslut or "" for b in t.behandlingar if b.paragraf in s.paragrafer]
+        vem = {m["vem"] if (m := _DELEGATION.match(b.strip())) else None for b in beslut}
+        if beslut and len(vem) == 1 and None not in vem:
+            v = vem.pop()
+            s.delegation = v[0].lower() + v[1:]
+    t.sittningar = sittningar
+
+
 def _forsta_sida(sida: str) -> bool:
     """Ett protokolls första sida. Sidnumret är 1 när det finns: en andra sittning samma dag
     kan ha egen 'Plats och tid' men fortsätter sidnumreringen."""
@@ -1680,6 +1762,7 @@ def _tolka(pdf: bytes) -> Tolkning:
         if not _narvarotabeller(t, layout[:6]):
             t.avvikelser.append("Närvarolistan hittades inte")
     _behandlingar(t, lop, layout)
+    _sittningar(t, layout)
     _voteringar(t, layout)
     if not t.behandlingar:
         t.avvikelser.append("Inga behandlingar hittades")
@@ -1690,6 +1773,12 @@ def _tolka(pdf: bytes) -> Tolkning:
             t.avvikelser.append(f"PDF:en har {alla_sidor} av protokollets {angivna[1]} sidor")
     _kontrollera(t, lop, layout)
     return t
+
+
+def beslutande_i(narvaro: list[Narvaro], paragrafer: list[int]) -> list[Narvaro]:
+    """De som var beslutande vid någon av paragraferna, t.ex. en sittnings (#85)."""
+    return [n for n in narvaro if n.kategori == "beslutande"
+            and (n.paragrafer is None or set(n.paragrafer) & set(paragrafer))]
 
 
 def beslutande_vid(narvaro: list[Narvaro], paragraf: int) -> list[Narvaro]:

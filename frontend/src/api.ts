@@ -334,7 +334,8 @@ export interface Person {
   roll: string | null
   kategori: 'beslutande' | 'ej_tjanstgorande' | 'franvarande' | 'ovrig'
   tjanstgor_for: { namn: string; parti: string | null } | null
-  /** Paragrafer personen var beslutande vid, om inte alla. */
+  /** Paragrafer personen var beslutande vid, om inte alla. För den som inte var beslutande: paragraferna vid de
+   * sittningar personen var närvarande, när protokollet har flera sittningar (#85). */
   paragrafer: number[] | null
   jav: number[]
   /** Satt när närvarolistan inte anger parti och partiet härletts ur samma eller ett annat protokoll. */
@@ -589,9 +590,25 @@ export interface Votering {
   per_parti: { parti: string | null; ja: number; nej: number; avstar: number; franvarande: number }[]
 }
 
+/** En sittning i ett protokoll med flera sittningar samma dag, med eget försättsblad (#85). */
+export interface Sittningsref {
+  nummer: number
+  plats: string | null
+  starttid: string | null
+  sluttid: string | null
+  paragrafer: number[]
+  /** Den som fattade sittningens beslut på delegation, t.ex. 'kommunstyrelsens presidium'. */
+  delegation: string | null
+}
+export interface Sittning extends Sittningsref {
+  beslutande: Person[]
+}
+
 export interface Sammantrade extends Sammantradesrad {
   narvaro: Person[]
   behandlingar: Behandlingsrad[]
+  /** Tom när protokollet har en enda sittning. */
+  sittningar: Sittning[]
 }
 
 export interface Behandling extends Behandlingsrad {
@@ -600,6 +617,8 @@ export interface Behandling extends Behandlingsrad {
   jav: Person[]
   /** Ärendet behandlingen hör till (ADR-0003). */
   arende: { id: number; antal_behandlingar: number } | null
+  /** Sittningen paragrafen hör till, när protokollet har flera sittningar (#85). */
+  sittning: Sittningsref | null
   foregaende: number | null
   nasta: number | null
   yrkanden: { text: string; personer: Namngiven[] }[]

@@ -93,6 +93,11 @@ export function namnOchParti(namn: string, p: string | null): string {
 }
 
 /** [121, 122, 123, 125] → "§§ 121–123, 125". */
+/** "kl. 08:15–14:10", eller null när starttiden saknas. */
+export function tidsintervall(starttid: string | null, sluttid: string | null): string | null {
+  return starttid ? `kl. ${starttid}${sluttid ? `–${sluttid}` : ''}` : null
+}
+
 export function paragraftext(nummer: number[]): string {
   const delar: string[] = []
   let start = nummer[0]

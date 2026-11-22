@@ -15,6 +15,10 @@ Den tjänstepersonsorganisation som bereder ärenden åt ett organ. Förvaltning
 Ett möte i ett organ. Före mötet är det planerat enligt sammanträdesplanen, efteråt dokumenteras det i ett protokoll. Ett planerat sammanträde och protokollet för det är samma sammanträde. Ett sammanträde som inte finns i planen, t.ex. ett extra sammanträde, har bara ett protokoll.
 _Avoid_: Möte
 
+**Sittning**:
+En del av ett sammanträde med eget försättsblad i protokollet: egen plats och tid, egna beslutande och egna paragrafer. De flesta protokoll har en enda sittning. Kommunstyrelsens protokoll 2022-01-18 har två: hela styrelsen för §§ 1–14 och presidiet, som beslutade på delegation av styrelsen, för § 15. De beslutande vid en paragraf är de beslutande vid paragrafens sittning.
+_Avoid_: Delsammanträde, session
+
 **Sammanträdesplan**:
 Ett organs fastställda datum och tider för kommande sammanträden. Organet beslutar om planen i ett protokoll, och kommunen publicerar den som en tabell på organets webbsida. Ändringar i tabellen blir reviderade uppgifter. Innan kommunen har publicerat tabellen för ett år gäller organets beslut i protokollet. Planen kommer då från beslutet och märks med det.
 _Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
