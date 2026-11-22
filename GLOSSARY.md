@@ -76,7 +76,7 @@ Det beslut i ett ärende som inte längre är ett förslag till ett annat organ.
 En uppgift i ett beslutsunderlag om ett protokollsutdrag från en tidigare behandling, till exempel "Protokollsutdrag samhällsnämnden 2026-05-21 § 61".
 
 **Koppling**:
-Att två behandlingar hör till samma ärende, på grund av samma diarienummer eller en hänvisning. En koppling är automatisk, ett förslag, bekräftad eller avvisad.
+Att två behandlingar hör till samma ärende, på grund av samma diarienummer, en hänvisning, eller samma motionstitel (ett svar på en motion och fullmäktiges beslut att väcka den). En koppling är automatisk, ett förslag, bekräftad eller avvisad.
 _Avoid_: Länk, relation
 
 **Kopplingsförslag**:
