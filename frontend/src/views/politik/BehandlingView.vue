@@ -5,6 +5,7 @@ import {
   BEHANDLINGSTYPER, EjInloggad, hamtaBehandling, Saknas, type Behandling, type Jag, type Votering } from '../../api'
 import { namnOchParti, rosttext, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
+import Periodmarkering from '../../components/Periodmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Rattelseformular from '../../components/Rattelseformular.vue'
@@ -120,7 +121,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
               <template v-if="j">, </template>
               <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
               <template v-else>{{ p.namn }}</template>
-              {{ ' ' }}<Partimarkering :parti="p.parti" />
+              {{ ' ' }}<Partimarkering :parti="p.parti" /><Periodmarkering v-if="p.partitillhorighet" :period="p.partitillhorighet" />
             </template>
           </p>
         </li>
@@ -207,7 +208,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
                   · ersättare för {{ namnOchParti(r.ersatt.namn, r.ersatt.parti) }}
                 </span>
               </th>
-              <td><Partimarkering :parti="r.parti" /></td>
+              <td><Partimarkering :parti="r.parti" /><Periodmarkering v-if="r.partitillhorighet" :period="r.partitillhorighet" /></td>
               <td>
                 {{ rosttext(r.rost) }}
                 <Rattelsemarkering v-if="r.rattelser?.rost" :rattelse="r.rattelser.rost" falt="rost" />
@@ -229,7 +230,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
               <template v-if="j || r.partier.length"> · </template>
               <RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink>
               <template v-else>{{ p.namn }}</template>
-              {{ ' ' }}<Partimarkering :parti="p.parti" />
+              {{ ' ' }}<Partimarkering :parti="p.parti" /><Periodmarkering v-if="p.partitillhorighet" :period="p.partitillhorighet" />
             </template>
           </p>
         </li>
@@ -247,6 +248,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
           <template v-else>{{ p.namn }}</template>
           <Partimarkering :parti="p.parti" />
           <Harledningsmarkering v-if="p.parti_harlett" :kalla="p.parti_harlett" />
+          <Periodmarkering v-if="p.partitillhorighet" :period="p.partitillhorighet" />
           <Rattelsemarkering v-if="p.rattelser?.parti" :rattelse="p.rattelser.parti" falt="parti" />
           <span v-if="p.tjanstgor_for" class="anteckning">
             tjänstgör för {{ namnOchParti(p.tjanstgor_for.namn, p.tjanstgor_for.parti) }}
@@ -261,6 +263,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
             <template v-else>{{ p.namn }}</template>
             <Partimarkering :parti="p.parti" />
             <Harledningsmarkering v-if="p.parti_harlett" :kalla="p.parti_harlett" />
+            <Periodmarkering v-if="p.partitillhorighet" :period="p.partitillhorighet" />
           </li>
         </ul>
       </template>

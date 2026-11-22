@@ -28,6 +28,7 @@ import psycopg
 
 from . import behandlingar, ledamoter
 from .arenden import LIKHETSGRANS, NIVA, likhet
+from .partitillhorighet import Gallande
 from .sources.harnosand import organ_ref
 
 ETT_AR = 365
@@ -164,7 +165,10 @@ def _i_urvalet(f: dict, fran: int, till: int, organ: str | None) -> bool:
 
 def motioner_och_forslag(conn: psycopg.Connection, fran: int, till: int, organ: str | None = None,
                          idag: date | None = None) -> dict:
-    ut = berakna(daterade(conn), fran, till, organ, idag or date.today())
+    rader = daterade(conn)
+    # Fastställda partitillhörigheter (#100) gäller tolkningens motionärer vid sammanträdet där motionen väcktes.
+    gal = Gallande(conn, [p["namn"] for r in rader for p in r["motionarer"] or []])
+    ut = berakna(rader, fran, till, organ, idag or date.today(), gal)
     # Personsidan för varje namngiven motionär. Rättade har redan person_id, tolkade slås upp på namnet.
     lista = ut["motioner"]["lista"]
     personer = ledamoter.personer_for(conn, [p["namn"] for m in lista for p in m["motionarer"]
@@ -174,7 +178,8 @@ def motioner_och_forslag(conn: psycopg.Connection, fran: int, till: int, organ: 
     return ut
 
 
-def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: date) -> dict:
+def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: date,
+            gallande: Gallande | None = None) -> dict:
     """Motioner och medborgarförslag ur behandlingarna, sorterade i tidsordning."""
 
     # Motioner väckta under samlingspunkten: (titel, dnr, behandling).
@@ -224,6 +229,8 @@ def berakna(rader: list[dict], fran: int, till: int, organ: str | None, idag: da
         else:
             mal = {"sammantrade_id": bs[0]["sammantrade_id"], "paragraf": bs[0]["paragraf"]}
         tolkade = _motionarer(bs)
+        if gallande is not None:
+            tolkade = [gallande.satt(dict(p), (vackt or bs[0])["datum"]) for p in tolkade]
         rattad = next((b["motionarer_rattelse"] for b in bs if b.get("motionarer_rattelse")
                        and (b["sammantrade_id"], b["paragraf"]) == (mal["sammantrade_id"], mal["paragraf"])), None)
         m = {"arende_id": arende_id, "rubrik": next(b["rubrik"] for b in bs if b["organ"] == "KF" or b is bs[-1]),

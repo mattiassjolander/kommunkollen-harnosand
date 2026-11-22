@@ -37,7 +37,7 @@ Ett protokoll för en eller några enstaka behandlingar, som justeras eller läm
 _Avoid_: Utdrag (som begrepp)
 
 **Ledamot**:
-En förtroendevald som deltar i ett organs sammanträde, som ordinarie ledamot eller som tjänstgörande ersättare. Partitillhörigheten är den som protokollet anger för personen vid just det sammanträdet.
+En förtroendevald som deltar i ett organs sammanträde, som ordinarie ledamot eller som tjänstgörande ersättare. Partitillhörigheten är den som protokollet anger för personen vid just det sammanträdet, om inte redaktionen fastställt en annan för perioden (se Fastställd partitillhörighet).
 _Avoid_: Politiker, representant
 
 **Namnvariant**:
@@ -248,6 +248,14 @@ En uppgift som plattformen har läst med textigenkänning ur ett protokoll som b
 **Rättelse**:
 En redaktörs ändring av en automatiskt tolkad uppgift, med en motivering. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad rättelse visas med markering, och läsaren kan se vad tolkningen sa. Tolkningen ändras inte. Rättelsen anger om felet finns i protokollet eller i inläsningen. En granskad eller publicerad rättelse ändras genom en ny version, som ersätter den gamla när den publiceras. En utgivare kan återkalla en publicerad rättelse, och då gäller tolkningen igen.
 _Avoid_: Korrigering, redigering
+
+**Fastställd partitillhörighet**:
+En persons parti, eller partilös, som redaktionen har fastställt för en period, från och med ett datum och till och med ett datum eller tills vidare, med en motivering. Den går igenom samma flöde som en rättelse. En publicerad period gäller vid sammanträden under perioden före protokollets uppgift, men efter en rättelse av en enskild förekomst. Två publicerade perioder för samma person överlappar inte.
+_Avoid_: Partiperiod (om protokollens perioder), partibyte
+
+**Krock**:
+Ett sammanträde under en fastställd partitillhörighet där protokollet anger ett annat parti än perioden. Perioden gäller, och förekomsten markeras "Fastställt av redaktionen" med vad protokollet anger.
+_Avoid_: Konflikt, avvikelse
 
 **Felaktighet i protokollet**:
 En publicerad rättelse av ett fel som finns i själva protokollet: protokollet saknar eller anger fel uppgift. Ett protokoll med minst en sådan rättelse märks "Innehåller felaktigheter". Ett fel i inläsningen, där plattformen läste eller tolkade protokollet fel, är ingen felaktighet i protokollet.

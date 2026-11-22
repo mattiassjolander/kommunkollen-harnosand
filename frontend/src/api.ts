@@ -341,6 +341,20 @@ export interface Person {
   parti_harlett?: PartiHarlett | null
   /** Publicerade rättelser av partiet. */
   rattelser?: Rattelser
+  /** Satt när en fastställd partitillhörighet (#100) ändrade partiet som protokollet anger. */
+  partitillhorighet?: Periodmarkering | null
+}
+
+/** Pålägget när en fastställd partitillhörighet gäller vid sammanträdet och ändrar partiet (#100, ADR-0006). */
+export interface Periodmarkering {
+  id: number
+  /** Partiet som protokollet anger, null om det inte anger något. */
+  protokollet: string | null
+  fran: string
+  /** null = tills vidare. */
+  till: string | null
+  motivering: string
+  publicerad: string | null
 }
 
 export interface PartiHarlett {
@@ -528,6 +542,7 @@ export interface Namngiven {
   namn: string
   parti: string | null
   ledamot_id: number | null
+  partitillhorighet?: Periodmarkering | null
 }
 
 export type Rostval = 'ja' | 'nej' | 'avstar' | 'franvarande'
@@ -558,6 +573,7 @@ export interface Votering {
     ledamot_id: number | null
     ersatt: Namngiven | null
     rattelser: Rattelser | null
+    partitillhorighet?: Periodmarkering | null
   }[]
   per_parti: { parti: string | null; ja: number; nej: number; avstar: number; franvarande: number }[]
 }
@@ -632,13 +648,14 @@ export interface Motionar {
   person_id: number | null
   namn: string | null
   parti: string | null
+  partitillhorighet?: Periodmarkering | null
 }
 
 /** Förslag på parti för en motionär vid sammanträdet där motionen väcktes, med källa (#78). */
 export interface Partiforslag {
   parti: string | null
   kalla: {
-    grund: 'narvaro' | 'samma_protokoll' | 'annat_protokoll'
+    grund: 'partitillhorighet' | 'narvaro' | 'samma_protokoll' | 'annat_protokoll'
     sammantrade: { id: number; datum: string | null; organ: Organ } | null
   } | null
 }
@@ -677,6 +694,8 @@ export interface Ledamot {
   sammanslagen_med: number | null
   namn_varianter: { id: number; namn: string; huvudnamn: boolean; antal: number }[]
   partier_over_tid: { parti: string | null; fran: string | null; till: string | null; antal: number }[]
+  /** Publicerade fastställda partitillhörigheter (#100), äldst först. */
+  partitillhorighet: Partitillhorighet[]
   organ: {
     organ: Organ
     roller: string[]
@@ -693,6 +712,7 @@ export interface Ledamot {
     parti: string | null
     parti_harlett: PartiHarlett | null
     rattelser: Rattelser | null
+    partitillhorighet: Periodmarkering | null
     roll: string | null
     kategori: 'beslutande' | 'ej_tjanstgorande' | 'franvarande'
     tjanstgor_for: { namn: string; parti: string | null } | null
@@ -711,6 +731,7 @@ export interface Ledamot {
     namn: string
     parti: string | null
     rost: Rostval
+    partitillhorighet?: Periodmarkering | null
     ersatt: { namn: string; parti: string | null } | null
     ja_forslag: string | null
     nej_forslag: string | null
@@ -1293,3 +1314,58 @@ export interface Arendeunderlag extends Omit<Arende, 'behandlingar'> {
 export const hamtaKommande = (manader?: number) =>
   hamta<Kommande>(`/api/kommande${manader ? `?manader=${manader}` : ''}`)
 export const hamtaArendeunderlag = (id: number | string) => hamtaEllerSaknas<Arendeunderlag>(`/api/kommande/${id}`)
+
+// Fastställd partitillhörighet per period (#100, ADR-0006)
+
+export type Periodstatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt' | 'aterkallad'
+export interface Partitillhorighet {
+  id: number
+  /** Personen, under huvudnamnet. */
+  ledamot: { id: number; namn: string }
+  /** Partiförkortning, '-' för partilös. */
+  parti: string
+  fran: string
+  /** null = tills vidare. */
+  till: string | null
+  motivering: string
+  status: Periodstatus
+  ersatter_id: number | null
+  redaktor: string
+  skapad: string
+  granskad_av: string | null
+  granskad: string | null
+  publicerad_av: string | null
+  publicerad: string | null
+  aterkallad_av: string | null
+  aterkallad: string | null
+  aterkallelse: string | null
+}
+export interface NyPartitillhorighet {
+  ledamot_id: number
+  parti: string
+  fran: string
+  till: string | null
+  motivering: string
+}
+
+const skrivPeriod = (url: string, metod: string, data?: unknown) =>
+  skrivRattelse(url, metod, data) as unknown as Promise<Partitillhorighet>
+
+export async function hamtaPartitillhorigheter(): Promise<Partitillhorighet[]> {
+  const svar = await fetch('/api/partitillhorighet')
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör eller utgivare.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+export const skapaPartitillhorighet = (p: NyPartitillhorighet) => skrivPeriod('/api/partitillhorighet', 'POST', p)
+export const taBortPartitillhorighet = (id: number) => skrivRattelse(`/api/partitillhorighet/${id}`, 'DELETE')
+export const granskaPartitillhorighet = (id: number) => skrivPeriod(`/api/partitillhorighet/${id}/granskning`, 'POST')
+export const publiceraPartitillhorighet = (id: number) =>
+  skrivPeriod(`/api/partitillhorighet/${id}/publicering`, 'POST')
+/** En ny version av en granskad eller publicerad period, som utkast. Den ersätter den gamla när den publiceras. */
+export const nyVersionAvPartitillhorighet = (id: number, data: Partial<Omit<NyPartitillhorighet, 'ledamot_id'>>) =>
+  skrivPeriod(`/api/partitillhorighet/${id}/versioner`, 'POST', data)
+/** En utgivare återkallar en publicerad period direkt. Protokollen gäller igen. */
+export const aterkallaPartitillhorighet = (id: number, motivering: string) =>
+  skrivPeriod(`/api/partitillhorighet/${id}/aterkallelse`, 'POST', { motivering })

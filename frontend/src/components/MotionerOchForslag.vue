@@ -5,6 +5,7 @@ import { computed, inject, ref, type Ref } from 'vue'
 import type { Forlopp, Jag, Motionsstatistik } from '../api'
 import { parti, sammantradesdatum, tal } from '../format'
 import Motionarformular from './Motionarformular.vue'
+import Periodmarkering from './Periodmarkering.vue'
 import Rattelsemarkering from './Rattelsemarkering.vue'
 
 const props = defineProps<{ m: Motionsstatistik }>()
@@ -131,7 +132,7 @@ const partinamn = (p: string) => (p === 'okant' ? 'Parti anges inte' : parti(p))
               <template v-if="f.motionarer.length">
                 <span v-for="(p, i) in f.motionarer" :key="i" class="person">
                   <RouterLink v-if="p.person_id && p.namn" :to="`/politik/ledamoter/${p.person_id}`">{{ p.namn }}</RouterLink>
-                  <template v-else>{{ p.namn ?? 'Partiet' }}</template><template v-if="p.parti"> ({{ p.parti }})</template>
+                  <template v-else>{{ p.namn ?? 'Partiet' }}</template><template v-if="p.parti"> ({{ p.parti }})</template><Periodmarkering v-if="p.partitillhorighet" :period="p.partitillhorighet" />
                 </span>
               </template>
               <span v-else class="saknas">Uppgift saknas</span>

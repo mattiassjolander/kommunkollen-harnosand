@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaSammantrade, Saknas, type Jag, type Person, type Sammantrade } from '../../api'
 import { paragraftext, parti, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
+import Periodmarkering from '../../components/Periodmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Rattelseformular from '../../components/Rattelseformular.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
@@ -140,6 +141,7 @@ const tid = computed(() =>
               <td>
                 <Partimarkering :parti="p.parti" />
                 <Harledningsmarkering v-if="p.parti_harlett" :kalla="p.parti_harlett" />
+                <Periodmarkering v-if="p.partitillhorighet" :period="p.partitillhorighet" />
                 <Rattelsemarkering v-if="p.rattelser?.parti" :rattelse="p.rattelser.parti" falt="parti" />
               </td>
               <td>{{ p.roll ?? '–' }}</td>
