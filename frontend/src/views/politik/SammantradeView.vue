@@ -132,6 +132,9 @@ const delegation = computed(
             <span class="nr">§ {{ b.paragraf }}</span>
             <span class="rubrik">{{ b.rubrik || 'Rubrik saknas' }}</span>
           </RouterLink>
+          <span v-if="b.rubrik_ur_arendelistan" class="etikett" data-testid="rubrik-ur-arendelistan">
+            Rubriken hämtad ur ärendelistan
+          </span>
           <span v-if="b.diarienummer.length" class="dnr">{{ b.diarienummer.join(', ') }}</span>
           <Kallelsemarkering v-if="b.diarienummer_kallelse" :kalla="b.diarienummer_kallelse" />
           <span v-if="b.antal_voteringar" class="etikett" data-testid="har-votering">

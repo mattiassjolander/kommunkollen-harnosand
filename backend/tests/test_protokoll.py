@@ -118,7 +118,9 @@ def test_sammantradet_med_narvaro_tjanstgoring_och_jav(api):
     assert s["plats"] == "Rådhuset - KF-salen"
     assert (s["starttid"], s["sluttid"]) == ("13:15", "16:30")
     assert s["paragrafer"] == [121, 136]
-    assert s["avvikelser"] == []
+    # Paragrafen utan beslutsrubrik får hela texten i rubriken, och motkontrollen mot ärendelistan ser det (#88).
+    assert s["avvikelser"] == ['§ 124: rubriken är längre än i ärendelistan ("Allmänhetens frågestund i '
+                               'kommunfullmäktige"). Inläsningen har troligen tagit med text ur paragrafen']
     assert s["sittningar"] == []  # en enda sittning (#85)
 
     ordf = person(s, "Monica Fahlén")
@@ -214,7 +216,8 @@ def test_avvikelser_mot_protokollets_egna_uppgifter_redovisas(api):
     # Protokollet anger §§ 35-54, men innehåller 35–52 (53 är första paragrafen i april).
     s = sammantrade(api, "2026-03-23")
     assert s["tolkning"] == "tolkad"
-    assert s["avvikelser"] == ["Paragraferna stämmer inte med protokollets paragrafintervall (saknas: 53, 54)"]
+    assert [a for a in s["avvikelser"] if "ärendelistan" not in a] == [
+        "Paragraferna stämmer inte med protokollets paragrafintervall (saknas: 53, 54)"]
 
 
 def test_ett_protokoll_som_inte_gar_att_tolka_visas_anda_och_ger_delvis_fel(database_url, google):

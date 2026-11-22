@@ -36,6 +36,9 @@ KATEGORIER = {
 I_PROTOKOLLET = {"motsagelse", "felskrivet", "ofullstandigt"}
 _REGLER = [
     ("motsagelse", re.compile(r"voteringslistan har .* protokollets text", re.I)),
+    # Motkontrollen mot ärendelistan (#88): bara en rubrik som liknar ärendelistans men skiljer sig är ett
+    # fel i protokollet. Övriga skillnader beror troligen på inläsningen.
+    ("motsagelse", re.compile(r"skiljer sig från ärendelistan i protokollet", re.I)),
     ("felskrivet", re.compile(r"felskriven i protokollet", re.I)),
     ("ofullstandigt", re.compile(r"PDF:en (?:har \d+ av|saknar text)|paragrafprotokoll", re.I)),
     ("paragrafer", re.compile(r"paragrafintervall|samma paragraf förekommer", re.I)),

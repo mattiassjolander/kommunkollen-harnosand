@@ -376,6 +376,8 @@ export interface Diarienummerkallelse {
 export interface Behandlingsrad {
   paragraf: number
   rubrik: string
+  /** Satt när rubriken inte hittades i paragrafen och är hämtad ur protokollets ärendelista. */
+  rubrik_ur_arendelistan?: boolean
   diarienummer: string[]
   /** Satt när diarienumret står i kallelsen men inte i protokollet. */
   diarienummer_kallelse?: Diarienummerkallelse | null

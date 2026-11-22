@@ -79,6 +79,9 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
         <span class="forsta-versal">{{ sammantradesdatum(b.sammantrade.datum) }}</span>
       </p>
       <h1>{{ b.rubrik || 'Rubrik saknas' }}</h1>
+      <p v-if="b.rubrik_ur_arendelistan" class="ingress" data-testid="rubrik-ur-arendelistan">
+        Rubriken hämtad ur ärendelistan. Den hittades inte i paragrafen.
+      </p>
       <p v-if="b.rattelser?.rubrik" class="rattelserad">
         <Rattelsemarkering :rattelse="b.rattelser.rubrik" falt="rubrik" />
       </p>
