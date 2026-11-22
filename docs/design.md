@@ -159,6 +159,7 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 | Rättad av redaktionen | Ikonen ✎ och texten "Rättad av redaktionen" vid uppgiften. Den fälls ut och visar vad tolkningen sa, motiveringen och när rättelsen publicerades |
 | Protokoll med felaktigheter (publicerade rättelser av fel i protokollet, #74) | Varningsikonen ! och texten "Innehåller felaktigheter" i en ram, på sammanträdessidan och i protokollistan. Den länkar till listan över felaktigheterna under Avvikelser. Tonen är saklig: markeringen beskriver vad som står i protokollet, inte vem som gjort fel |
 | Härlett parti (närvarolistan anger inget) | Ikonen ≈ och texten "Härlett" med prickad kantlinje vid partiet. Den fälls ut och visar källan: samma protokoll, eller vilket sammanträde partiet hämtades från |
+| Fastställd partitillhörighet (#100, ADR-0006) | Ikonen ◆ och texten "Fastställt av redaktionen" i en hel ram vid partiet, bara när perioden ändrar partiet som protokollet anger. Den fälls ut och visar vad protokollet anger, perioden och motiveringen |
 | Koppling mellan behandlingar i ett ärende | Ikonen ⚙ och "Automatisk koppling", ? och "Förslag, inte bekräftat", ✓ och "Bekräftad av redaktör" eller × och "Avvisad av redaktör", alltid med grunden (diarienumret eller hänvisningen) |
 | AI-analys (ej bekräftad) | Streckad kantlinje och etiketten **Analys**, aldrig samma stil som fakta |
 | Ofullständigt underlag | Grå skraffering och texten "Ofullständigt underlag" |

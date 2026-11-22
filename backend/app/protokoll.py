@@ -20,6 +20,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from . import arenden, ledamoter, partier, sammantradesplan
+from .partitillhorighet import Gallande
 from .rattelser import Publicerade
 from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_vid, tolka
 from .sources.base import Dokument
@@ -345,8 +346,9 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
     narvaro = _las_narvaro(conn, sammantrade_id)
     personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
     pub = Publicerade(conn, [sammantrade_id])
+    gal = Gallande(conn, [x for n in narvaro for x in (n.namn, n.tjanstgor_for)])
     return _sammantrade(rad) | {
-        "narvaro": partier.fyll_i(conn, sammantrade_id, [pub.person(sammantrade_id, _person(n, personer)) for n in narvaro]),
+        "narvaro": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal, [_person(n, personer) for n in narvaro]),
         "behandlingar": [pub.behandling(sammantrade_id, _behandling(b)) for b in behandlingar],
     }
 
@@ -370,18 +372,31 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
     ).fetchone()
     narvaro = _las_narvaro(conn, sammantrade_id)
     personer = ledamoter.personer_for(conn, (n.namn for n in narvaro))
-    # Publicerade rättelser läggs på tolkningen (rattelser.py).
+    # Publicerade rättelser och fastställda partitillhörigheter läggs på tolkningen (rattelser.py,
+    # partitillhorighet.py).
     pub = Publicerade(conn, [sammantrade_id])
-    return pub.behandling(sammantrade_id, _behandling(b)) | _yrkanden_och_voteringar(conn, b, pub) | {
+    gal = Gallande(conn, [x for n in narvaro for x in (n.namn, n.tjanstgor_for)])
+    return pub.behandling(sammantrade_id, _behandling(b)) | _yrkanden_och_voteringar(conn, b, pub, rad["datum"]) | {
         "sammantrade": _sammantrade(rad),
-        "beslutande": partier.fyll_i(conn, sammantrade_id, [pub.person(sammantrade_id, _person(n, personer))
-                                                            for n in beslutande_vid(narvaro, paragraf)]),
-        "jav": partier.fyll_i(conn, sammantrade_id, [pub.person(sammantrade_id, _person(n, personer))
-                                                     for n in narvaro if paragraf in n.jav]),
+        "beslutande": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal,
+                                 [_person(n, personer) for n in beslutande_vid(narvaro, paragraf)]),
+        "jav": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal,
+                          [_person(n, personer) for n in narvaro if paragraf in n.jav]),
         "arende": arenden.arende_for(conn, sammantrade_id, paragraf),
         "foregaende": grannar["foregaende"],
         "nasta": grannar["nasta"],
     }
+
+
+def _med_parti(conn: psycopg.Connection, sammantrade_id: int, datum, pub: Publicerade, gal: Gallande,
+               personer: list[dict]) -> list[dict]:
+    """Partiet för personerna i närvarolistan: rättelse, fastställd partitillhörighet, protokollet, härlett."""
+    for p in personer:
+        pub.person(sammantrade_id, p)
+        if p["kategori"] != "ovrig":
+            gal.satt(p, datum)
+        gal.satt(p["tjanstgor_for"], datum)
+    return partier.fyll_i(conn, sammantrade_id, personer)
 
 
 def _partiordning(parti: str | None) -> tuple:
@@ -389,7 +404,7 @@ def _partiordning(parti: str | None) -> tuple:
     return (parti is None, parti == "-", parti or "")
 
 
-def _yrkanden_och_voteringar(conn: psycopg.Connection, b: dict, pub: Publicerade) -> dict:
+def _yrkanden_och_voteringar(conn: psycopg.Connection, b: dict, pub: Publicerade, datum=None) -> dict:
     yrkanden = conn.execute(
         "SELECT text, personer FROM yrkande WHERE behandling_id = %s ORDER BY ordning", (b["id"],)).fetchall()
     reservationer = conn.execute(
@@ -406,13 +421,14 @@ def _yrkanden_och_voteringar(conn: psycopg.Connection, b: dict, pub: Publicerade
     namn = [n for r in roster for n in (r["namn"], r["ersatt"]) if n]
     namn += [p["namn"] for y in [*yrkanden, *reservationer] for p in y["personer"]]
     personer = ledamoter.personer_for(conn, namn)
+    gal = Gallande(conn, namn)
 
     def med_id(p: dict) -> dict:
-        return p | {"ledamot_id": personer.get(p["namn"])}
+        return gal.satt(dict(p), datum) | {"ledamot_id": personer.get(p["namn"])}
 
     ut_voteringar = []
     for v in voteringar:
-        vr = [pub.rost(b["sammantrade_id"], b["paragraf"], v["ordning"] + 1, dict(r))
+        vr = [gal.satt(pub.rost(b["sammantrade_id"], b["paragraf"], v["ordning"] + 1, dict(r)), datum)
               for r in roster if r["votering_id"] == v["id"]]
         per_parti: dict[str | None, dict[str, int]] = {}
         for r in vr:
@@ -427,8 +443,10 @@ def _yrkanden_och_voteringar(conn: psycopg.Connection, b: dict, pub: Publicerade
             "vinnare": v["vinnare"],
             "roster": [
                 {"namn": r["namn"], "parti": r["parti"], "rost": r["rost"], "rattelser": r.get("rattelser"),
+                 "partitillhorighet": r.get("partitillhorighet"),
                  "ledamot_id": personer.get(r["namn"]) if r["namn"] else None,
-                 "ersatt": {"namn": r["ersatt"], "parti": r["ersatt_parti"], "ledamot_id": personer.get(r["ersatt"])}
+                 "ersatt": gal.satt({"namn": r["ersatt"], "parti": r["ersatt_parti"],
+                                     "ledamot_id": personer.get(r["ersatt"])}, datum)
                  if r["ersatt"] else None}
                 for r in vr
             ],

@@ -15,7 +15,8 @@ from collections.abc import Iterable
 
 import psycopg
 
-from . import partier
+from . import partier, partitillhorighet
+from .partitillhorighet import Gallande
 from .rattelser import Publicerade
 from .sources.harnosand import organ_ref, ORGAN
 
@@ -49,7 +50,11 @@ def _sorteringsnyckel(namn: str) -> str:
 _FOREKOMSTER = """
     SELECT coalesce(l.huvud_id, l.id) AS person, l.id AS namn_id, n.namn, n.parti, n.roll, n.kategori,
            n.tjanstgor_for, n.tjanstgor_for_parti, n.paragrafer, n.jav,
-           s.id AS sammantrade_id, s.organ, s.datum, s.starttid, s.tolkning
+           s.id AS sammantrade_id, s.organ, s.datum, s.starttid, s.tolkning,
+           -- Fastställd partitillhörighet vid sammanträdet (#100).
+           (SELECT t.parti FROM partitillhorighet t JOIN ledamot lp ON lp.id = t.ledamot_id
+            WHERE t.status = 'publicerad' AND coalesce(lp.huvud_id, lp.id) = coalesce(l.huvud_id, l.id)
+              AND s.datum >= t.fran AND (t.till IS NULL OR s.datum <= t.till) LIMIT 1) AS period_parti
     FROM narvaro n
     JOIN ledamot l ON l.namn = n.namn
     JOIN sammantrade s ON s.id = n.sammantrade_id
@@ -65,8 +70,8 @@ def lista(conn: psycopg.Connection, q: str | None = None, parti: str | None = No
         SELECT p.id, p.namn,
                array_agg(DISTINCT f.namn) AS namn_varianter,
                array_agg(DISTINCT f.organ) AS organ,
-               array_agg(DISTINCT coalesce(f.parti, '')) AS partier,
-               (array_agg(f.parti ORDER BY f.datum DESC NULLS LAST, f.starttid DESC NULLS LAST,
+               array_agg(DISTINCT coalesce(f.period_parti, f.parti, '')) AS partier,
+               (array_agg(coalesce(f.period_parti, f.parti) ORDER BY f.datum DESC NULLS LAST, f.starttid DESC NULLS LAST,
                           f.sammantrade_id DESC))[1] AS senaste_parti,
                count(DISTINCT f.sammantrade_id) AS antal_sammantraden,
                max(f.datum) AS senast
@@ -87,7 +92,8 @@ def lista(conn: psycopg.Connection, q: str | None = None, parti: str | None = No
             "namn": r["namn"],
             "andra_namn": sorted(n for n in r["namn_varianter"] if n != r["namn"]),
             "parti": r["senaste_parti"],
-            # Partierna personen haft enligt protokollen ('-' = partilös). Saknat parti räknas inte.
+            # Partierna personen haft enligt protokollen och fastställda partitillhörigheter ('-' = partilös).
+            # Saknat parti räknas inte.
             "partier": sorted(p for p in r["partier"] if p),
             "organ": [organ_ref(o) for o in sorted(r["organ"], key=list(ORGAN).index)],
             "antal_sammantraden": r["antal_sammantraden"],
@@ -150,10 +156,17 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
     if not forekomster and rad["huvud_id"] is None and not [n for n in namn if n["huvud_id"]]:
         return None  # namnet finns inte längre i någon närvarolista
     forekomster = _per_sammantrade(forekomster)
-    # Publicerade partirättelser läggs på. Saknat parti härleds ur samma eller närmaste protokoll.
+    # Publicerade partirättelser och fastställda partitillhörigheter läggs på. Saknat parti härleds ur samma
+    # eller närmaste protokoll.
     pub = Publicerade(conn, [f["sammantrade_id"] for f in forekomster])
+    gal = Gallande(conn, [n for f in forekomster for n in (f["namn"], *(t["namn"] for t in f["tjanstgoringar"]))])
     for f in forekomster:
         pub.person(f["sammantrade_id"], f)
+        gal.satt(f, f["datum"])
+        f["tjanstgor_for_parti"] = (gal.satt({"namn": f["tjanstgor_for"], "parti": f["tjanstgor_for_parti"]},
+                                             f["datum"]) or {}).get("parti") if f["tjanstgor_for"] else None
+        for t in f["tjanstgoringar"]:
+            gal.satt(t, f["datum"])
         if f["parti"] is None:
             partier.fyll_i(conn, f["sammantrade_id"], [f])
 
@@ -178,6 +191,8 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
             for n in namn
         ],
         "partier_over_tid": _perioder(forekomster),
+        # Fastställda partitillhörigheter (#100).
+        "partitillhorighet": partitillhorighet.lista(conn, ledamot_id=person, bara_publicerade=True),
         "organ": sorted(per_organ.values(), key=lambda o: list(ORGAN).index(o["organ"]["id"])
                         if o["organ"]["id"] in ORGAN else 99),
         "sammantraden": [
@@ -185,7 +200,7 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
                 "sammantrade": {"id": f["sammantrade_id"], "datum": f["datum"], "starttid": f["starttid"],
                                 "organ": organ_ref(f["organ"]), "tolkning": f["tolkning"]},
                 "namn": f["namn"], "parti": f["parti"], "parti_harlett": f.get("parti_harlett"),
-                "rattelser": f.get("rattelser"),
+                "rattelser": f.get("rattelser"), "partitillhorighet": f.get("partitillhorighet"),
                 "roll": f["roll"], "kategori": f["kategori"],
                 "tjanstgor_for": {"namn": f["tjanstgor_for"], "parti": f["tjanstgor_for_parti"]}
                 if f["tjanstgor_for"] else None,
@@ -215,13 +230,14 @@ def _roster(conn: psycopg.Connection, namn: list[str]) -> list[dict]:
         """,
         (namn,),
     ).fetchall()
+    gal = Gallande(conn, [n for r in rader for n in (r["namn"], r["ersatt"])])
     return [
         {
             "sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": organ_ref(r["organ"])},
             "paragraf": r["paragraf"], "rubrik": r["rubrik"],
             "votering": r["ordning"] + 1, "antal_voteringar": r["antal_voteringar"],
-            "namn": r["namn"], "parti": r["parti"], "rost": r["rost"],
-            "ersatt": {"namn": r["ersatt"], "parti": r["ersatt_parti"]} if r["ersatt"] else None,
+            **gal.satt({"namn": r["namn"], "parti": r["parti"]}, r["datum"]), "rost": r["rost"],
+            "ersatt": gal.satt({"namn": r["ersatt"], "parti": r["ersatt_parti"]}, r["datum"]) if r["ersatt"] else None,
             "ja_forslag": r["ja_forslag"], "nej_forslag": r["nej_forslag"],
             "vinnare": r["vinnare"], "resultat": r["resultat"],
         }

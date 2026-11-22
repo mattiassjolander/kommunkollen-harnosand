@@ -84,6 +84,7 @@ function laggTillParti() {
 function kallatext(k: Rad['kalla']): string {
   if (k === 'tolkning') return 'enligt tolkningen'
   if (!k) return ''
+  if (k.grund === 'partitillhorighet') return 'enligt partitillhörigheten som redaktionen fastställt'
   if (k.grund === 'narvaro') return 'ur närvaron vid sammanträdet där motionen väcktes'
   if (k.grund === 'samma_protokoll') return 'härlett ur samma protokoll'
   const s = k.sammantrade

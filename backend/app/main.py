@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -434,6 +434,60 @@ def create_app(
     def aterkalla_rattelse(rattelse_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         """Återkalla en publicerad rättelse direkt: {motivering}. Tolkningen gäller igen."""
         return _rattelse(rattelser.aterkalla, rattelse_id, data, anv.epost)
+
+    # Fastställd partitillhörighet per period (#100, ADR-0006): redaktören skriver, en annan person med rollen
+    # utgivare granskar och publicerar. Ändras genom en ny version och kan återkallas, som en rättelse.
+
+    def _period(steg, *args):
+        with db.connect(database_url) as conn:
+            try:
+                return steg(conn, *args)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except partitillhorighet.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
+            except partitillhorighet.EjTillatet as e:
+                raise HTTPException(403, str(e)) from e
+            except partitillhorighet.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/partitillhorighet", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def lista_partitillhorighet(
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt|aterkallad)$"),
+        ledamot_id: int | None = None,
+    ) -> list[dict]:
+        return _period(partitillhorighet.lista, status, ledamot_id)
+
+    @app.post("/api/partitillhorighet", status_code=201)
+    def skapa_partitillhorighet(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """En period som utkast: {ledamot_id, parti, fran, till, motivering}. till kan vara null (tills vidare)."""
+        return _period(partitillhorighet.skapa, data, anv.epost)
+
+    @app.patch("/api/partitillhorighet/{period_id}")
+    def andra_partitillhorighet(period_id: int, data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _period(partitillhorighet.andra, period_id, data, anv.epost)
+
+    @app.delete("/api/partitillhorighet/{period_id}", status_code=204)
+    def ta_bort_partitillhorighet(period_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> Response:
+        _period(partitillhorighet.ta_bort, period_id, anv.epost)
+        return Response(status_code=204)
+
+    @app.post("/api/partitillhorighet/{period_id}/granskning")
+    def granska_partitillhorighet(period_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _period(partitillhorighet.granska, period_id, anv.epost)
+
+    @app.post("/api/partitillhorighet/{period_id}/publicering")
+    def publicera_partitillhorighet(period_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _period(partitillhorighet.publicera, period_id, anv.epost)
+
+    @app.post("/api/partitillhorighet/{period_id}/versioner", status_code=201)
+    def ny_version_av_partitillhorighet(period_id: int, data: dict,
+                                        anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _period(partitillhorighet.ny_version, period_id, data, anv.epost)
+
+    @app.post("/api/partitillhorighet/{period_id}/aterkallelse")
+    def aterkalla_partitillhorighet(period_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _period(partitillhorighet.aterkalla, period_id, data, anv.epost)
 
     # Partiernas budgetförslag (#48): läses in som utkast, rättas av redaktör och publiceras av utgivare.
 

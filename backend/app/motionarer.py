@@ -17,6 +17,7 @@ from typing import Any
 import psycopg
 
 from . import partier
+from .partitillhorighet import Gallande
 
 _PARTI = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
 
@@ -66,11 +67,16 @@ def normalisera(conn: psycopg.Connection, varde: Any) -> list[dict]:
 
 
 def parti_for(conn: psycopg.Connection, person_id: int, sammantrade_id: int) -> dict:
-    """Förslag på parti för personen vid sammanträdet: {parti, kalla}. Källan är närvaron vid
+    """Förslag på parti för personen vid sammanträdet: {parti, kalla}. Källan är en fastställd
+    partitillhörighet, närvaron vid
     sammanträdet, eller den härledning som partier.harled gör. parti är None om inget hittas."""
     p = _person(conn, person_id)
     namn = [r["namn"] for r in conn.execute(
         "SELECT namn FROM ledamot WHERE coalesce(huvud_id, id) = %s ORDER BY id", (p["id"],))]
+    # En fastställd partitillhörighet (#100) går före närvaron.
+    datum = conn.execute("SELECT datum FROM sammantrade WHERE id = %s", (sammantrade_id,)).fetchone()
+    if datum and (t := Gallande(conn, namn).period(namn[0], datum["datum"])):
+        return {"parti": t["parti"], "kalla": {"grund": "partitillhorighet", "sammantrade": None}}
     rad = conn.execute(
         "SELECT parti FROM narvaro WHERE sammantrade_id = %s AND namn = ANY(%s) AND parti IS NOT NULL "
         "ORDER BY ordning LIMIT 1", (sammantrade_id, namn),

@@ -14,8 +14,10 @@ import {
 } from '../../api'
 import { namnOchParti, paragraftext, rosttext, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
+import Periodmarkering from '../../components/Periodmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
+import Periodformular from '../../components/Periodformular.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
@@ -104,6 +106,12 @@ async function skriv(atgard: () => Promise<Ledamot>, klart: (ny: Ledamot) => str
 }
 const slaIhop = (annan: Ledamotsrad) =>
   skriv(() => slaIhopLedamoter(l.value!.id, annan.id), (ny) => `${annan.namn} är nu sammanslagen med ${ny.namn}.`)
+// Redaktör: fastställ partiet för en period (#100). Utkastet granskas och publiceras under Partitillhörighet.
+const periodSparad = ref<string | null>(null)
+function sparadPeriod(p: { parti: string; fran: string; till: string | null }) {
+  periodSparad.value = `Perioden ${p.fran} – ${p.till ?? 'tills vidare'} (${p.parti}) är sparad som utkast.`
+}
+
 const delaUpp = (namn: { id: number; namn: string }) =>
   skriv(
     async () => {
@@ -137,9 +145,51 @@ const delaUpp = (namn: { id: number; namn: string }) =>
     </header>
     <PolitikFlikar />
 
+    <section
+      v-if="l.partitillhorighet.length || arRedaktor"
+      class="kort"
+      aria-labelledby="period-rubrik"
+      data-testid="faststalld-partitillhorighet"
+    >
+      <h2 id="period-rubrik">Fastställd partitillhörighet</h2>
+      <p class="ingress">
+        Partiet som redaktionen har fastställt för en period. Det gäller före protokollens uppgift vid sammanträden
+        under perioden, och markeras där det ändrar protokollets uppgift.
+      </p>
+      <p v-if="!l.partitillhorighet.length" class="anteckning">Ingen period är fastställd.</p>
+      <table v-else class="tabell">
+        <thead>
+          <tr>
+            <th scope="col">Parti</th>
+            <th scope="col">Period</th>
+            <th scope="col">Motivering</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="t in l.partitillhorighet" :key="t.id" data-testid="faststalld-period">
+            <td><Partimarkering :parti="t.parti" /></td>
+            <td class="tal">{{ t.fran }} – {{ t.till ?? 'tills vidare' }}</td>
+            <td>{{ t.motivering }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <template v-if="arRedaktor">
+        <h3>Redaktör: fastställ partiet för en period</h3>
+        <p class="anteckning">
+          Perioden sparas som utkast. Den gäller först när en annan person med rollen utgivare har granskat och
+          publicerat den under
+          <RouterLink to="/politik/partitillhorighet">Partitillhörighet</RouterLink>.
+        </p>
+        <p v-if="periodSparad" class="meddelande" role="status" data-testid="period-sparad">{{ periodSparad }}</p>
+        <Periodformular :ledamot-id="l.id" @sparad="sparadPeriod" @utloggad="utloggad" />
+      </template>
+    </section>
+
     <section class="kort" aria-labelledby="parti-rubrik">
       <h2 id="parti-rubrik">Parti över tid</h2>
-      <p class="ingress">Som protokollen anger det vid varje sammanträde. Inget parti fylls i från andra källor.</p>
+      <p class="ingress">
+        Som protokollen anger det vid varje sammanträde, som underlag. Inget parti fylls i från andra källor.
+      </p>
       <table class="tabell" data-testid="partier">
         <thead>
           <tr>
@@ -215,6 +265,7 @@ const delaUpp = (namn: { id: number; namn: string }) =>
             <td>
               <Partimarkering :parti="s.parti" />
               <Harledningsmarkering v-if="s.parti_harlett" :kalla="s.parti_harlett" />
+              <Periodmarkering v-if="s.partitillhorighet" :period="s.partitillhorighet" />
               <Rattelsemarkering v-if="s.rattelser?.parti" :rattelse="s.rattelser.parti" falt="parti" />
             </td>
             <td>{{ s.roll ?? '–' }}</td>
@@ -272,7 +323,7 @@ const delaUpp = (namn: { id: number; namn: string }) =>
               </RouterLink>
               <span v-if="r.antal_voteringar > 1" class="anteckning"> · votering {{ r.votering }} av {{ r.antal_voteringar }}</span>
             </th>
-            <td><Partimarkering :parti="r.parti" /></td>
+            <td><Partimarkering :parti="r.parti" /><Periodmarkering v-if="r.partitillhorighet" :period="r.partitillhorighet" /></td>
             <td>
               {{ rosttext(r.rost) }}
               <span v-if="rostadForslag(r)" class="anteckning"> · {{ rostadForslag(r) }}</span>
