@@ -38,10 +38,18 @@ protokoll. Raden identifieras av organet och datumet. En ändrad tid eller statu
 sidan, för ett år som sidan fortfarande visar, markeras som borttaget ur planen och finns kvar.
 
 **Koppling till protokollen.** När ett protokoll läses in kopplas det till det planerade sammanträdet med
-samma organ och datum, i stället för att skapa ett nytt. Har båda en starttid väljs det sammanträde vars tid
-ligger närmast, högst 60 minuter ifrån. Fullmäktige hade till exempel två sammanträden 2026-10-26: planens
-11.00 gäller protokollet som började 11.10, och protokollet från 13.15 blir ett eget sammanträde. Finns
-protokollet redan när planen läses kopplas planen till det på samma sätt.
+samma organ och datum, i stället för att skapa ett nytt. Har organet ett planerat sammanträde och ett
+protokoll den dagen kopplas de oavsett starttid, eftersom ett möte kan börja senare än planerat (#107).
+Skolnämnden planerade till exempel 2026-10-01 kl. 08.15, och protokollet anger 11.05. Finns flera sammanträden
+samma dag avgör tiden: det sammanträde vars tid ligger närmast, högst 60 minuter ifrån. Fullmäktige hade
+till exempel två sammanträden 2026-10-26: planens 11.00 gäller protokollet som började 11.10, och protokollet
+från 13.15 blir ett eget sammanträde. Kopplades planen till dagens enda protokoll och kommer sedan ett
+protokoll som passar planens tid, flyttas planen dit. Finns protokollet redan när planen läses kopplas planen
+till det på samma sätt. Ett hållet sammanträde visar protokollets tid, också i kalendern, och planens tid
+finns kvar i planens versioner.
+
+Dubbletter från före #107 (ett planerat sammanträde utan protokoll och protokollet samma dag) slås ihop med
+`python -m app.sla_ihop_planer` (docs/drift.md).
 
 **Jämförelse med besluten.** Organen beslutar om planen i protokollen, med rubriker som "Sammanträdestider
 2027" eller "Socialnämndens sammanträdesdagar 2026". Ur besluten läses att-satser om organets egna sammanträden:
