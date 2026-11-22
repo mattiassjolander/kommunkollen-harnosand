@@ -280,3 +280,19 @@ def test_sidor_som_saknas_i_foredragningslistan_ger_delvis_fel(tmp_path):
     assert f.status == "delvis_fel"
     assert f.fel == ("Sidan 13 i föredragningslistan hittades inte",)
     assert 105 not in dnr(f) and dnr(f)[104] == ["SKN/2026-734"]
+
+
+def test_olasbar_text_ger_fel_och_en_avvikelse(api, database_url):
+    # Kommunstyrelsen 2026-02-24: typsnittet saknar teckentabell, så texten är bara glyfkoder.
+    f = fl.las(KALLELSER / "ks-2026-02-24-olasbar.pdf", "KS")
+    assert f.status == "fel"
+    assert f.fel == ("texten går inte att läsa, typsnittet saknar teckentabell",)
+    s = skol(api)
+    with db.connect(database_url) as conn:
+        [kallelse_id] = [r["id"] for r in conn.execute("SELECT id FROM kallelse")]
+        kallelsepunkter.lagra_punkter(conn, kallelse_id, f, datetime.now(timezone.utc))
+        kallelsepunkter.komplettera(conn)
+        conn.commit()
+    avv = api.get(f"/api/sammantraden/{s}").json()["avvikelser"]
+    assert ("Kallelse skolnämnden 2026-10-01, med bilagor: kunde inte läsas "
+            "(texten går inte att läsa, typsnittet saknar teckentabell)") in avv
