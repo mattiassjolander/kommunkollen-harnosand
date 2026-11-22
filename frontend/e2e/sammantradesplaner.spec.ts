@@ -38,6 +38,8 @@ test('redaktören ser sammanträdesplanerna med inställda möten, ändrade tide
   await expect(installt).toContainText('Inställt')
   await expect(kf.locator('[data-nyckel="2026-10-26"]')).toContainText('kl. 11.00')
 
+  // Källan per sammanträde (#99).
+  await expect(kf.getByTestId('kalla').first()).toHaveText('Webbsidan')
   // Hållna sammanträden har sitt protokoll kopplat.
   await kf.locator('[data-nyckel="2026-03-23"]').getByRole('link', { name: 'Protokoll' }).click()
   await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+$/)

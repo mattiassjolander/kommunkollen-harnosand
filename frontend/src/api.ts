@@ -1106,6 +1106,8 @@ export const publiceraPlanforutsattningar = (id: number) =>
 // Sammanträdesplaner (#68): organens planer så som webbsidan visar dem, och skillnaderna mot besluten i
 // protokollen. Bara för redaktionen.
 export type Planstatus = 'planerat' | 'installt' | 'borttaget'
+/** Varifrån planen kommer: tabellen på webbsidan, eller organets beslut i protokollet innan tabellen finns (#99). */
+export type Plankalla = 'webbsidan' | 'beslut'
 
 export interface Planversion {
   version: number
@@ -1115,6 +1117,7 @@ export interface Planversion {
   anmarkning: string | null
   kalltext: string
   hamtad: string
+  kalla: Plankalla
 }
 
 export interface PlaneratSammantrade {
@@ -1127,6 +1130,8 @@ export interface PlaneratSammantrade {
   anmarkning: string | null
   version: number
   protokoll: boolean
+  kalla: Plankalla
+  beslut: { sammantrade_id: number; paragraf: number; datum: string } | null
   versioner: Planversion[]
 }
 
@@ -1140,8 +1145,10 @@ export interface Planskillnad {
 export interface Sammantradesplan {
   organ: { id: string; namn: string }
   ar: number
-  url: string
+  url: string | null
   sammantraden: PlaneratSammantrade[]
+  /** Webbsidan har ingen plan för året än: alla sammanträden kommer från beslut i protokollen. */
+  bara_beslut: boolean
   beslut: { sammantrade_id: number; paragraf: number; rubrik: string; datum: string }[]
   skillnader: Planskillnad[] | null
 }
@@ -1174,6 +1181,8 @@ export interface Kalenderhandelse {
   sekvens: number
   andrad: string | null
   plan_url: string | null
+  /** Planerat enligt ett beslut i protokollet, när webbsidan saknar plan för året (#99). */
+  beslut: { sammantrade_id: number; paragraf: number; datum: string; organ: { id: string; namn: string } } | null
 }
 
 export interface Kalender {

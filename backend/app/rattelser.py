@@ -224,6 +224,11 @@ def publicera(conn: psycopg.Connection, rattelse_id: int, utgivare: str) -> dict
         from .arenden import koppla
 
         koppla(conn)
+    if r["objekt"] == "behandling" and r["falt"] == "beslut":
+        # Ett rättat beslut om sammanträdestiderna kan ändra planen ur besluten (#99).
+        from . import kalender, sammantradesplan
+
+        sammantradesplan.lagra_beslut(conn, kalender.idag())
     return las(conn, rattelse_id)
 
 

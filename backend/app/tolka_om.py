@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from . import db
+from . import db, kalender, sammantradesplan
 from .arenden import koppla
 from .protokoll import tolka_om
 
@@ -21,6 +21,7 @@ def main() -> None:
     with db.connect(url) as conn:
         antal = tolka_om(conn, datetime.now(timezone.utc))
         arenden = koppla(conn)
+        sammantradesplan.lagra_beslut(conn, kalender.idag())
     print(
         f"{antal['sammantraden']} sammanträden tolkades om: {antal['nu_tolkade']} kunde nu tolkas, "
         f"{antal['nu_ej_tolkade']} kunde inte längre tolkas."

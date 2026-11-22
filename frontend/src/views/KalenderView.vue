@@ -263,6 +263,15 @@ watch(valt, async (id) => {
                   {{ h.plats }}<template v-if="h.plats_antagen"> (enligt senaste protokollet)</template>
                   <template v-else-if="h.plats_kalla === 'kallelse'"> (enligt kallelsen)</template>
                 </span>
+                <RouterLink
+                  v-if="h.beslut"
+                  class="beslutskalla"
+                  data-testid="enligt-beslut"
+                  :to="`/politik/sammantraden/${h.beslut.sammantrade_id}/paragraf/${h.beslut.paragraf}`"
+                >
+                  Enligt beslut i protokollet ({{ h.beslut.organ.namn.toLowerCase() }} {{ h.beslut.datum }} §
+                  {{ h.beslut.paragraf }})
+                </RouterLink>
               </div>
               <div class="lankar">
                 <RouterLink v-if="h.protokoll" :to="`/politik/sammantraden/${h.id}`">Protokoll</RouterLink>
@@ -464,6 +473,9 @@ h2 {
 .plats {
   color: var(--ink-secondary);
   font-size: 13px;
+}
+.beslutskalla {
+  font-size: 12px;
 }
 .vad {
   display: flex;

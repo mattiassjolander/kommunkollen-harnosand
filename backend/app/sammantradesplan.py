@@ -15,6 +15,7 @@ Organen fastställer sina planer genom beslut i protokollen, t.ex. "Sammanträde
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import date, datetime
 
 import psycopg
@@ -26,11 +27,24 @@ from .sources.sammantradesplaner import MANADER, Planrad, Sammantradesplan
 FALT = ("datum", "starttid", "status", "anmarkning")
 
 
+@dataclass(frozen=True)
+class Kalla:
+    """Var planen kommer ifrån: organets tabell på webbsidan, eller ett beslut i ett protokoll."""
+
+    typ: str = "webbsidan"  # 'webbsidan' | 'beslut'
+    sammantrade_id: int | None = None
+    paragraf: int | None = None
+
+
+WEBBSIDAN = Kalla()
+
+
 def _versioner(conn: psycopg.Connection, organ: str) -> dict[str, dict]:
     return {r["plan_nyckel"]: r for r in conn.execute(
         """
         SELECT id, plan_nyckel, plan_datum AS datum, plan_starttid AS starttid, plan_status AS status,
-               plan_anmarkning AS anmarkning, plan_version AS version
+               plan_anmarkning AS anmarkning, plan_version AS version, plan_kalla AS kalla,
+               plan_beslut_sammantrade_id AS beslut_sammantrade_id, plan_beslut_paragraf AS beslut_paragraf
         FROM sammantrade WHERE organ = %s AND plan_nyckel IS NOT NULL
         """,
         (organ,),
@@ -38,23 +52,25 @@ def _versioner(conn: psycopg.Connection, organ: str) -> dict[str, dict]:
 
 
 def _ny_version(conn: psycopg.Connection, sammantrade_id: int, version: int, varden: dict, kalltext: str,
-                url: str, korning_id: int | None, hamtad: datetime) -> None:
+                url: str | None, korning_id: int | None, hamtad: datetime, kalla: Kalla) -> None:
+    k = {"kalla": kalla.typ, "beslut_s": kalla.sammantrade_id, "beslut_p": kalla.paragraf}
     conn.execute(
         """
         UPDATE sammantrade SET plan_datum = %(datum)s, plan_starttid = %(starttid)s, plan_status = %(status)s,
-               plan_anmarkning = %(anmarkning)s, plan_url = %(url)s, plan_version = %(version)s
+               plan_anmarkning = %(anmarkning)s, plan_url = %(url)s, plan_version = %(version)s,
+               plan_kalla = %(kalla)s, plan_beslut_sammantrade_id = %(beslut_s)s, plan_beslut_paragraf = %(beslut_p)s
         WHERE id = %(id)s
         """,
-        {**varden, "url": url, "version": version, "id": sammantrade_id},
+        {**varden, **k, "url": url, "version": version, "id": sammantrade_id},
     )
     conn.execute(
         """
         INSERT INTO planversion (sammantrade_id, version, datum, starttid, status, anmarkning, kalltext, hamtad,
-                                 korning_id)
+                                 korning_id, kalla, beslut_sammantrade_id, beslut_paragraf)
         VALUES (%(id)s, %(version)s, %(datum)s, %(starttid)s, %(status)s, %(anmarkning)s, %(kalltext)s,
-                %(hamtad)s, %(korning_id)s)
+                %(hamtad)s, %(korning_id)s, %(kalla)s, %(beslut_s)s, %(beslut_p)s)
         """,
-        {**varden, "id": sammantrade_id, "version": version, "kalltext": kalltext, "hamtad": hamtad,
+        {**varden, **k, "id": sammantrade_id, "version": version, "kalltext": kalltext, "hamtad": hamtad,
          "korning_id": korning_id},
     )
 
@@ -77,8 +93,10 @@ def _odaterade_till_datum(rader: list[Planrad], befintliga: dict[str, dict]) -> 
 
 
 def lagra(conn: psycopg.Connection, plan: Sammantradesplan, korning_id: int | None,
-          hamtad: datetime) -> dict[str, int]:
-    """Sparar organets plan. Returnerar antal nya, ändrade och oförändrade planerade sammanträden."""
+          hamtad: datetime, kalla: Kalla = WEBBSIDAN) -> dict[str, int]:
+    """Sparar organets plan. Returnerar antal nya, ändrade och oförändrade planerade sammanträden.
+
+    En plan från webbsidan tar över ett sammanträde som kom från ett beslut, som en ny version."""
     antal = {"nya": 0, "andrade": 0, "oforandrade": 0}
     befintliga = _versioner(conn, plan.organ)
     sedda: set[str] = set()
@@ -89,10 +107,12 @@ def lagra(conn: psycopg.Connection, plan: Sammantradesplan, korning_id: int | No
         varden = {"datum": r.datum, "starttid": r.starttid, "status": r.status, "anmarkning": r.anmarkning}
         b = befintliga.get(r.nyckel)
         if b is not None:
-            if all(b[f] == varden[f] for f in FALT):
+            samma_kalla = (b["kalla"], b["beslut_sammantrade_id"], b["beslut_paragraf"]) == (
+                kalla.typ, kalla.sammantrade_id, kalla.paragraf)
+            if samma_kalla and all(b[f] == varden[f] for f in FALT):
                 antal["oforandrade"] += 1
                 continue
-            _ny_version(conn, b["id"], b["version"] + 1, varden, r.kalltext, plan.url, korning_id, hamtad)
+            _ny_version(conn, b["id"], b["version"] + 1, varden, r.kalltext, plan.url, korning_id, hamtad, kalla)
             antal["andrade"] += 1
             continue
         # Ett hållet sammanträde vars protokoll redan är inläst får planens uppgifter.
@@ -107,24 +127,24 @@ def lagra(conn: psycopg.Connection, plan: Sammantradesplan, korning_id: int | No
             ).fetchall())
         if protokoll is not None:
             sammantrade_id = protokoll["id"]
-            conn.execute("UPDATE sammantrade SET plan_nyckel = %s, plan_status = %s, plan_version = 1 WHERE id = %s",
-                         (r.nyckel, r.status, sammantrade_id))
+            conn.execute("UPDATE sammantrade SET plan_nyckel = %s, plan_status = %s, plan_version = 1, plan_kalla = %s "
+                         "WHERE id = %s", (r.nyckel, r.status, kalla.typ, sammantrade_id))
         else:
             sammantrade_id = conn.execute(
                 """
-                INSERT INTO sammantrade (organ, nyckel, datum, plan_nyckel, plan_status, plan_version)
-                VALUES (%s, %s, %s, %s, %s, 1) RETURNING id
+                INSERT INTO sammantrade (organ, nyckel, datum, plan_nyckel, plan_status, plan_version, plan_kalla)
+                VALUES (%s, %s, %s, %s, %s, 1, %s) RETURNING id
                 """,
-                (plan.organ, f"plan:{r.nyckel}", r.datum, r.nyckel, r.status),
+                (plan.organ, f"plan:{r.nyckel}", r.datum, r.nyckel, r.status, kalla.typ),
             ).fetchone()["id"]
-        _ny_version(conn, sammantrade_id, 1, varden, r.kalltext, plan.url, korning_id, hamtad)
+        _ny_version(conn, sammantrade_id, 1, varden, r.kalltext, plan.url, korning_id, hamtad, kalla)
         antal["nya"] += 1
     # Sammanträden som försvunnit från sidan, för de år sidan visar.
     for nyckel, b in befintliga.items():
         if nyckel in sedda or int(nyckel[:4]) not in plan.ar or b["status"] == "borttaget":
             continue
         varden = {f: b[f] for f in FALT} | {"status": "borttaget"}
-        _ny_version(conn, b["id"], b["version"] + 1, varden, "", plan.url, korning_id, hamtad)
+        _ny_version(conn, b["id"], b["version"] + 1, varden, "", plan.url, korning_id, hamtad, kalla)
         antal["andrade"] += 1
     return antal
 
@@ -183,6 +203,10 @@ def _plan_ut(r: dict) -> dict:
         "anmarkning": r["plan_anmarkning"],
         "version": r["plan_version"],
         "protokoll": r["dokument_id"] is not None,
+        "kalla": r["plan_kalla"],
+        "beslut": {"sammantrade_id": r["plan_beslut_sammantrade_id"], "paragraf": r["plan_beslut_paragraf"],
+                   "datum": r["beslut_datum"].isoformat() if r["beslut_datum"] else None}
+        if r["plan_kalla"] == "beslut" else None,
     }
 
 
@@ -190,23 +214,25 @@ def lista(conn: psycopg.Connection) -> list[dict]:
     """Planerna per organ och år, med versionerna och jämförelsen mot besluten i protokollen."""
     rader = conn.execute(
         """
-        SELECT id, organ, plan_nyckel, plan_datum, plan_starttid, plan_status, plan_anmarkning, plan_version,
-               plan_url, dokument_id
-        FROM sammantrade WHERE plan_nyckel IS NOT NULL
-        ORDER BY organ, plan_nyckel
+        SELECT s.id, s.organ, s.plan_nyckel, s.plan_datum, s.plan_starttid, s.plan_status, s.plan_anmarkning,
+               s.plan_version, s.plan_url, s.dokument_id, s.plan_kalla, s.plan_beslut_sammantrade_id,
+               s.plan_beslut_paragraf, bs.datum AS beslut_datum
+        FROM sammantrade s LEFT JOIN sammantrade bs ON bs.id = s.plan_beslut_sammantrade_id
+        WHERE s.plan_nyckel IS NOT NULL
+        ORDER BY s.organ, s.plan_nyckel
         """
     ).fetchall()
     versioner: dict[int, list[dict]] = {}
     for v in conn.execute(
         """
-        SELECT sammantrade_id, version, datum, starttid, status, anmarkning, kalltext, hamtad
+        SELECT sammantrade_id, version, datum, starttid, status, anmarkning, kalltext, hamtad, kalla
         FROM planversion ORDER BY sammantrade_id, version
         """
     ):
         versioner.setdefault(v["sammantrade_id"], []).append({
             "version": v["version"], "datum": v["datum"].isoformat() if v["datum"] else None,
             "starttid": v["starttid"], "status": v["status"], "anmarkning": v["anmarkning"],
-            "kalltext": v["kalltext"], "hamtad": v["hamtad"].isoformat(),
+            "kalltext": v["kalltext"], "hamtad": v["hamtad"].isoformat(), "kalla": v["kalla"],
         })
     planer: dict[tuple[str, int], dict] = {}
     for r in rader:
@@ -215,12 +241,15 @@ def lista(conn: psycopg.Connection) -> list[dict]:
             "organ": {"id": r["organ"], "namn": ORGAN[r["organ"]].namn}, "ar": ar, "url": r["plan_url"],
             "sammantraden": [],
         })
+        p["url"] = p["url"] or r["plan_url"]  # Sammanträden ur beslut har ingen sida (#99).
         p["sammantraden"].append({**_plan_ut(r), "versioner": versioner.get(r["id"], [])})
     beslut = beslut_om_planer(conn)
     ut = []
     for (organ, ar), p in sorted(planer.items(), key=lambda x: (list(ORGAN).index(x[0][0]), x[0][1])):
         b = beslut.get((organ, ar))
         p["beslut"] = b["beslut"] if b else []
+        # Året har ingen plan på webbsidan än: alla sammanträden kommer från besluten (#99).
+        p["bara_beslut"] = all(x["kalla"] == "beslut" for x in p["sammantraden"])
         # Utan ett beslut som anger datumen går planen inte att jämföra.
         p["skillnader"] = skillnader(p["sammantraden"], b["datum"]) if b and b["fullstandig"] else None
         ut.append(p)
@@ -293,7 +322,8 @@ def tolka_beslut(beslut: str, organ: str, ar: int | None) -> list[tuple[str, obj
 
 def _tom() -> dict:
     # fullstandig: något beslut anger alla datum för året (inte bara "att anta förslaget").
-    return {"beslut": [], "datum": {}, "fullstandig": False}
+    # installda: inställda datum, flyttade: från → till (används när planen lagras ur besluten).
+    return {"beslut": [], "datum": {}, "fullstandig": False, "installda": set(), "flyttade": {}}
 
 
 def beslut_om_planer(conn: psycopg.Connection) -> dict[tuple[str, int], dict]:
@@ -317,13 +347,18 @@ def beslut_om_planer(conn: psycopg.Connection) -> dict[tuple[str, int], dict]:
                     p = ut.setdefault((r["organ"], a), _tom())
                     p["datum"] = {d: tid for d in datum if d.year == a}
                     p["fullstandig"] = True
+                    p["installda"], p["flyttade"] = set(), {}
                     aren.add(a)
                 continue
             fran, till = varde if typ == "flyttat" else (varde, None)
-            tid = ut.setdefault((r["organ"], fran.year), _tom())["datum"].pop(fran, None)
+            p = ut.setdefault((r["organ"], fran.year), _tom())
+            tid = p["datum"].pop(fran, None)
             aren.add(fran.year)
-            if till is not None:
+            if till is None:
+                p["installda"].add(fran)
+            else:
                 ut.setdefault((r["organ"], till.year), _tom())["datum"][till] = tid
+                p["flyttade"][fran] = till
                 aren.add(till.year)
         for a in sorted(aren):
             ut[(r["organ"], a)]["beslut"].append({
@@ -390,4 +425,47 @@ def lagra_kallelser(conn: psycopg.Connection, kallelser: list, webbsandningar: l
             (w.organ, w.datum, w.url, w.titel, hamtad, hamtad, korning_id),
         ).fetchone()
         antal["nya" if rad["ny"] else "oforandrade"] += 1
+    return antal
+
+
+# Planer ur besluten (#99)
+
+
+def _ar_med_webbplan(conn: psycopg.Connection) -> set[tuple[str, int]]:
+    return {(r["organ"], r["ar"]) for r in conn.execute(
+        "SELECT DISTINCT organ, left(plan_nyckel, 4)::int AS ar FROM sammantrade WHERE plan_kalla = 'webbsidan'"
+    )}
+
+
+def lagra_beslut(conn: psycopg.Connection, idag: date, korning_id: int | None = None,
+                 hamtad: datetime | None = None) -> dict[str, int]:
+    """Planerade sammanträden ur organens beslut för år som saknar plan på webbsidan, från och med i år.
+
+    Besluten tolkas som på sidan Planer (`beslut_om_planer`). Planen gäller bara när något beslut anger
+    alla datum för året. Ett flyttat sammanträde är samma sammanträde med nytt datum, och ett inställt
+    finns kvar som inställt. Varje ändring blir en ny version, som för planerna på webbsidan.
+    """
+    hamtad = hamtad or datetime.now().astimezone()
+    antal = {"nya": 0, "andrade": 0, "oforandrade": 0}
+    webb = _ar_med_webbplan(conn)
+    for (organ, ar), p in sorted(beslut_om_planer(conn).items()):
+        if ar < idag.year or not p["fullstandig"] or (organ, ar) in webb or not p["beslut"]:
+            continue
+        b = p["beslut"][-1]
+        kalla = Kalla("beslut", b["sammantrade_id"], b["paragraf"])
+        kalltext = f"{ORGAN[organ].namn} {b['datum']} § {b['paragraf']}: {b['rubrik']}"
+        # Ett flyttat sammanträde behåller sin rad: nyckeln och datumet flyttas innan planen lagras.
+        befintliga = _versioner(conn, organ)
+        for fran, till in p["flyttade"].items():
+            gammal, ny = befintliga.get(fran.isoformat()), till.isoformat()
+            if gammal is not None and gammal["kalla"] == "beslut" and ny not in befintliga and till.year == ar:
+                conn.execute("UPDATE sammantrade SET plan_nyckel = %s, datum = %s WHERE id = %s AND dokument_id IS NULL",
+                             (ny, till, gammal["id"]))
+        rader = [Planrad(organ, ar, d.month, d, tid, "planerat", None, kalltext) for d, tid in sorted(p["datum"].items())
+                 if d.year == ar]
+        rader += [Planrad(organ, ar, d.month, d, befintliga[d.isoformat()]["starttid"]
+                          if d.isoformat() in befintliga else None, "installt", None, kalltext)
+                  for d in sorted(p["installda"]) if d.year == ar]
+        for k, v in lagra(conn, Sammantradesplan(organ, None, [ar], rader), korning_id, hamtad, kalla).items():
+            antal[k] += v
     return antal

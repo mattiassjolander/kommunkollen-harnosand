@@ -8,6 +8,7 @@ som bara anges som inställd) ingår inte.
 - Sluttiden är protokollets, eller starttiden plus medianlängden för organets sammanträden enligt
   protokollen (3 timmar för fullmäktige och 4 för övriga utan historik). Då är den ungefärlig.
 - Platsen är protokollets, eller platsen i organets senaste protokoll, markerad som antagen.
+- Saknar webbsidan plan för året kommer planen från organets beslut i ett protokoll (#99), med länk till paragrafen.
 - Varje sammanträde har ett stabilt UID. SEQUENCE ökar när planen ändras och när protokollet kommer.
 - Ett inställt eller borttaget sammanträde finns kvar med STATUS:CANCELLED.
 - Flödena innehåller de kommande sammanträdena och de senaste 12 månaderna.
@@ -89,9 +90,11 @@ def handelser(conn: psycopg.Connection, organ: str | None = None, sammantrade_id
     rader = conn.execute(
         """
         SELECT s.id, s.organ, s.datum, s.starttid, s.sluttid, s.plats, s.dokument_id, s.plan_nyckel,
-               s.plan_starttid, s.plan_status, s.plan_version, s.plan_url, d.hamtad AS protokoll_hamtad,
+               s.plan_starttid, s.plan_status, s.plan_version, s.plan_url, s.plan_kalla, d.hamtad AS protokoll_hamtad,
+               s.plan_beslut_sammantrade_id, s.plan_beslut_paragraf, bs.organ AS beslut_organ, bs.datum AS beslut_datum,
                (SELECT max(v.hamtad) FROM planversion v WHERE v.sammantrade_id = s.id) AS plan_andrad
         FROM sammantrade s LEFT JOIN dokument d ON d.id = s.dokument_id
+        LEFT JOIN sammantrade bs ON bs.id = s.plan_beslut_sammantrade_id
         WHERE s.datum IS NOT NULL AND s.organ = ANY(%(organ)s)
           AND (%(id)s::bigint IS NULL OR s.id = %(id)s)
           AND (%(id)s::bigint IS NOT NULL OR s.datum >= %(fran)s)
@@ -130,6 +133,11 @@ def handelser(conn: psycopg.Connection, organ: str | None = None, sammantrade_id
             "sekvens": max((r["plan_version"] or 1) - 1, 0) + (1 if hallet and r["plan_nyckel"] else 0),
             "andrad": andrad.isoformat() if andrad else None,
             "plan_url": r["plan_url"],
+            # Planen kommer från ett beslut i ett protokoll, när webbsidan saknar plan för året (#99).
+            "beslut": {"sammantrade_id": r["plan_beslut_sammantrade_id"], "paragraf": r["plan_beslut_paragraf"],
+                       "datum": r["beslut_datum"].isoformat(),
+                       "organ": {"id": r["beslut_organ"], "namn": ORGAN[r["beslut_organ"]].namn}}
+            if r["plan_kalla"] == "beslut" and r["plan_beslut_sammantrade_id"] and r["beslut_datum"] else None,
             "kallelse": None,
             "handlingar": [],
             "webbsandning": None,
@@ -224,6 +232,11 @@ def _tid(datum: str, tid: str) -> str:
     return f"{datum.replace('-', '')}T{tid.replace(':', '')}00"
 
 
+def beslutstext(b: dict) -> str:
+    """'Enligt beslut i protokollet (kommunfullmäktige 2026-09-28 § 130)'."""
+    return f"Enligt beslut i protokollet ({b['organ']['namn'].lower()} {b['datum']} § {b['paragraf']})"
+
+
 def _vevent(h: dict, bas: str) -> list[str]:
     namn = h["organ"]["namn"]
     installt = h["status"] in ("installt", "borttaget")
@@ -267,6 +280,8 @@ def _vevent(h: dict, bas: str) -> list[str]:
         beskrivning.append(f"Protokoll: {sida}")
     else:
         beskrivning.append(f"Sammanträdet i Kommunkollen: {sida}")
+    if b := h["beslut"]:
+        beskrivning.append(f"{beslutstext(b)}: {bas}/politik/sammantraden/{b['sammantrade_id']}/paragraf/{b['paragraf']}")
     if h["plan_url"]:
         beskrivning.append(f"Sammanträdesplanen: {h['plan_url']}")
     rader += [

@@ -16,7 +16,7 @@ Ett möte i ett organ. Före mötet är det planerat enligt sammanträdesplanen,
 _Avoid_: Möte
 
 **Sammanträdesplan**:
-Ett organs fastställda datum och tider för kommande sammanträden. Organet beslutar om planen i ett protokoll, och kommunen publicerar den som en tabell på organets webbsida. Ändringar i tabellen blir reviderade uppgifter.
+Ett organs fastställda datum och tider för kommande sammanträden. Organet beslutar om planen i ett protokoll, och kommunen publicerar den som en tabell på organets webbsida. Ändringar i tabellen blir reviderade uppgifter. Innan kommunen har publicerat tabellen för ett år gäller organets beslut i protokollet. Planen kommer då från beslutet och märks med det.
 _Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
 
 **Kallelse**:
