@@ -16,6 +16,8 @@ Redaktionen kan fastställa en persons parti för en period (ADR-0006): parti el
 
 Fliken Partitillhörighet föreslår perioder för personer som ännu inte har någon (#100, del 2). Förslagen räknas ur partiet som närvarolistorna anger, med publicerade rättelser men utan härledda partier. Den första perioden börjar vid personens första sammanträde. Ett nytt parti blir en egen period när det står vid minst tre sammanträden i följd, eller två vid personens sista sammanträden. Den nya perioden börjar vid det första sammanträdet med det nya partiet, och den föregående slutar dagen före. Enstaka avvikelser visas som krockar. Varje förslag visar belägg: antal sammanträden per parti, hur många som saknar parti, första och sista datum, ett exempel och krockarna. Redaktören ändrar parti eller datum där det behövs och sparar de valda som utkast i en batch, med en gemensam motivering som går att ändra per rad. En utgivare som inte skapade batchen granskar och publicerar den på en gång eller rad för rad. Batchen publiceras helt eller inte alls.
 
+Fliken visar också krockarna (#100, del 3): sammanträden där närvarolistan anger ett annat parti än personens publicerade eller väntande period. De räknas fram när de hämtas, så nya protokoll kommer med. Redaktören väljer krockar, anger om felet finns i protokollet eller i inläsningen och skriver en motivering. Varje krock blir då en rättelse av partiet i närvarolistan med periodens parti, som utkast. Rättelsen granskas under Rättelser, och ett fel i protokollet märker protokollet "Innehåller felaktigheter". En krock med en rättelse som inte är återkallad visas inte. Är det ett partibyte ändrar redaktören perioderna på personens sida. Under Personer finns filtren *saknar fastställd period*, *har krockar* och *väntar på granskning*.
+
 Partiet visas alltid med förkortning. Partiets färg är bara en prick bredvid (design.md, Partifärger).
 
 ## Ledamotens sida
@@ -35,6 +37,8 @@ Namn på sammanträdets och behandlingens sidor länkar till ledamotens sida.
 - `POST /api/partitillhorighet` med `ledamot_id`, `parti`, `fran`, `till` och `motivering`: en period som utkast. Kräver rollen redaktör. 409 om den överlappar en publicerad period.
 - `GET /api/partitillhorighet/forslag`: förslagen per person, med belägg och krockar. Kräver rollen redaktör.
 - `POST /api/partitillhorighet/batcher` med `motivering` och `perioder` (`ledamot_id`, `parti`, `fran`, `till` och en valfri egen `motivering`): utkast i en batch. Allt eller inget. `POST /api/partitillhorighet/batcher/{batch}/granskning` och `/publicering`: kräver rollen utgivare, och inte den som skapade batchen.
+- `GET /api/partitillhorighet/krockar`: obekräftade krockar per person. `POST /api/partitillhorighet/krockar/bekraftelser` med `felet_i`, `motivering` och `krockar` (`sammantrade_id`, `namn`): rättelser som utkast, allt eller inget. Kräver rollen redaktör.
+- `GET /api/partitillhorighet/personer`: personerna med publicerade perioder, antal väntande och antal krockar, för filtren.
 - `PATCH` och `DELETE /api/partitillhorighet/{id}`: ändrar eller tar bort ett utkast.
 - `POST /api/partitillhorighet/{id}/granskning` och `/publicering`: kräver rollen utgivare, och inte den som registrerade perioden.
 - `POST /api/partitillhorighet/{id}/versioner`: en ny version av en granskad eller publicerad period, som utkast. `POST /api/partitillhorighet/{id}/aterkallelse` med `motivering`: en utgivare återkallar en publicerad period.

@@ -1405,3 +1405,33 @@ export const granskaPeriodbatch = (batch: number) =>
   skrivRattelse(`/api/partitillhorighet/batcher/${batch}/granskning`, 'POST') as unknown as Promise<Partitillhorighet[]>
 export const publiceraPeriodbatch = (batch: number) =>
   skrivRattelse(`/api/partitillhorighet/batcher/${batch}/publicering`, 'POST') as unknown as Promise<Partitillhorighet[]>
+
+/** En krock: närvarolistan anger ett annat parti än personens fastställda partitillhörighet (#100, del 3). */
+export interface Krock {
+  sammantrade: { id: number; datum: string; organ: Organ }
+  /** Namnet som i närvarolistan. */
+  namn: string
+  protokollet: string
+  period: { id: number; parti: string; fran: string; till: string | null; status: Periodstatus }
+}
+export interface Personkrockar {
+  ledamot: { id: number; namn: string }
+  krockar: Krock[]
+}
+export interface Periodperson {
+  ledamot: { id: number; namn: string }
+  antal_sammantraden: number
+  senast: string | null
+  publicerade: Partitillhorighet[]
+  /** Perioder som är utkast eller granskade. */
+  vantande: number
+  krockar: number
+}
+export const hamtaKrockar = () => hamta<Personkrockar[]>('/api/partitillhorighet/krockar')
+export const hamtaPeriodpersoner = () => hamta<Periodperson[]>('/api/partitillhorighet/personer')
+/** Bekräftar krockar som rättelser av partiet i närvarolistan, som utkast. */
+export const bekraftaKrockar = (data: {
+  felet_i: FeletI | null
+  motivering: string
+  krockar: { sammantrade_id: number; namn: string }[]
+}) => skrivRattelse('/api/partitillhorighet/krockar/bekraftelser', 'POST', data) as unknown as Promise<Rattelse[]>

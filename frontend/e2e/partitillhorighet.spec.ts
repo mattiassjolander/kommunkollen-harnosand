@@ -125,3 +125,56 @@ test('förslag bekräftas i en batch och publiceras tillsammans', async ({ page,
     expect((await request.post(`${api}/api/partitillhorighet/${t.id}/aterkallelse`, { data: { motivering: 'Test.' } })).ok()).toBeTruthy()
   }
 })
+
+// Söm 2 (#100, del 3): en krock syns i fliken, redaktören bekräftar den som fel i protokollet, och när rättelsen är
+// publicerad är protokollet märkt med felaktigheter. Rättelsen och perioden återkallas sist.
+test('en krock bekräftas som fel i protokollet', async ({ page, request }) => {
+  const sammantrade = (await (await request.get(`${api}/api/sammantraden?organ=KF`)).json()).find(
+    (s: { datum: string }) => s.datum === '2026-03-23',
+  )
+  const narvaro = (await (await request.get(`${api}/api/sammantraden/${sammantrade.id}`)).json()).narvaro
+  const person = narvaro.find(
+    (p: { parti: string | null; ledamot_id: number | null; kategori: string; parti_harlett?: unknown }) =>
+      p.parti && p.parti !== '-' && p.ledamot_id && p.kategori === 'beslutande' && !p.parti_harlett,
+  )
+  await request.post(`${api}/api/auth/test/redaktor`)
+  const period = await (await request.post(`${api}/api/partitillhorighet`, {
+    data: { ledamot_id: person.ledamot_id, parti: '-', fran: '2026-03-23', till: '2026-03-23', motivering: 'Prov.' },
+  })).json()
+  await request.post(`${api}/api/auth/test/utgivare`)
+  await request.post(`${api}/api/partitillhorighet/${period.id}/granskning`)
+  await request.post(`${api}/api/partitillhorighet/${period.id}/publicering`)
+
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik/partitillhorighet')
+  await page.getByTestId('filter-krockar').click()
+  await expect(page.locator(`[data-testid="periodperson"][data-ledamot="${person.ledamot_id}"] [data-testid="antal-krockar"]`)).toHaveText('1')
+  const krock = page.locator(`[data-testid="krockperson"][data-ledamot="${person.ledamot_id}"] [data-testid="krock"]`)
+  await expect(krock).toHaveCount(1)
+  await expect(krock).toContainText('protokollet anger')
+  await krock.getByTestId('valj-krock').check()
+  const formular = page.getByTestId('bekrafta-krockar-formular')
+  await formular.getByTestId('felet-i-protokollet').check()
+  await formular.getByTestId('krock-motivering').fill('Partilös enligt beslut i fullmäktige.')
+  await formular.getByTestId('bekrafta-krockar').click()
+  await expect(page.getByTestId('krockar-bekraftade')).toContainText('1 krock är bekräftad')
+  await expect(krock).toHaveCount(0)
+
+  // Utgivaren publicerar rättelsen, och protokollet är märkt med felaktigheter.
+  await request.post(`${api}/api/auth/test/utgivare`)
+  const rattelse = (await (await request.get(`${api}/api/rattelser?status=utkast`)).json()).find(
+    (r: { namn: string; sammantrade: { id: number } }) => r.namn === person.namn && r.sammantrade.id === sammantrade.id,
+  )
+  await request.post(`${api}/api/rattelser/${rattelse.id}/granskning`)
+  await request.post(`${api}/api/rattelser/${rattelse.id}/publicering`)
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto(`/politik/sammantraden/${sammantrade.id}`)
+  await expect(page.getByTestId('felaktigheter')).toContainText('Innehåller felaktigheter')
+
+  for (const [url, motivering] of [
+    [`${api}/api/rattelser/${rattelse.id}/aterkallelse`, 'Test.'],
+    [`${api}/api/partitillhorighet/${period.id}/aterkallelse`, 'Test.'],
+  ]) {
+    expect((await request.post(url, { data: { motivering } })).ok()).toBeTruthy()
+  }
+})

@@ -18,7 +18,9 @@ import {
 } from '../../api'
 import { datum } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
+import Krocklista from '../../components/Krocklista.vue'
 import Periodforslag from '../../components/Periodforslag.vue'
+import Periodpersoner from '../../components/Periodpersoner.vue'
 import Periodformular from '../../components/Periodformular.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
@@ -45,9 +47,15 @@ const STATUS: { status: Periodstatus; titel: string; text: string }[] = [
   { status: 'aterkallad', titel: 'Återkallade', text: 'Gäller inte längre. Protokollens uppgifter gäller igen.' },
 ]
 
+// Personerna och krockarna (#100, del 3) räknas om när perioderna ändras.
+const personlista = ref<InstanceType<typeof Periodpersoner> | null>(null)
+const krocklista = ref<InstanceType<typeof Krocklista> | null>(null)
+
 async function ladda() {
   try {
     alla.value = await hamtaPartitillhorigheter()
+    personlista.value?.ladda()
+    krocklista.value?.ladda()
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
@@ -122,6 +130,8 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
   <template v-else>
     <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
     <p v-if="meddelande" class="meddelande" role="status" data-testid="batch-sparad">{{ meddelande }}</p>
+    <Periodpersoner ref="personlista" @utloggad="utloggad" />
+    <Krocklista ref="krocklista" @utloggad="utloggad" />
     <Periodforslag v-if="arRedaktor" @skapade="skapade" @utloggad="utloggad" />
     <section v-for="g in STATUS" :key="g.status" :aria-labelledby="`rubrik-${g.status}`" class="grupp">
       <h2 :id="`rubrik-${g.status}`">
