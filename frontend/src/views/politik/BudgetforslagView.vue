@@ -65,6 +65,8 @@ onMounted(async () => {
 watch(valtAr, ladda)
 
 const forslag = computed(() => j.value?.forslag ?? [])
+// Partierna bakom ett återkallat förslag, för notisen: "L", "L och M", "S, C och KD".
+const partitext = (p: string[]) => (p.length > 1 ? `${p.slice(0, -1).join(', ')} och ${p[p.length - 1]}` : (p[0] ?? ''))
 const plan = computed(() => j.value?.planforutsattningar ?? null)
 const antagen = computed(() => forslag.value.find((f) => f.id === j.value?.antagen) ?? null)
 // Länk till sidan i originalet. Ett Word-dokument har inga fasta sidor, så där blir siffran ingen länk.
@@ -178,6 +180,10 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
           förslagets eget resultat saknar förslaget finansiering för skillnaden, eller redovisar den inte.
           <template v-if="antagen">Skillnaden mot den antagna budgeten står sist i varje ruta.</template>
         </p>
+        <p v-else-if="j.aterkallat.planforutsattningar" class="notis" data-testid="aterkallat-planforutsattningar">
+          Planförutsättningarna för {{ j.budgetar }} är tillbakadragna för rättning. Förslagens ramar visas därför utan
+          förändring och utan beräknat resultat.
+        </p>
         <p v-else class="forklaring" data-testid="utan-planforutsattningar">
           Planförutsättningarna för {{ j.budgetar }} finns inte här, så förslagens ramar visas utan förändring och utan
           beräknat resultat.
@@ -187,6 +193,10 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
           <button type="button" class="vaxla" data-testid="visa-alla-atgarder" :aria-pressed="allaOppna" @click="vaxlaAlla">
             {{ allaOppna ? 'Dölj alla åtgärder' : 'Visa alla åtgärder' }}
           </button>
+        </p>
+
+        <p v-for="a in j.aterkallat.forslag" :key="a.nyckel" class="notis" data-testid="aterkallat-forslag" :data-nyckel="a.nyckel">
+          {{ a.typ === 'tillagg' ? 'Tilläggsförslaget' : 'Förslaget' }} från {{ partitext(a.partier) }} är tillbakadraget för rättning.
         </p>
 
         <div class="rulla">
@@ -495,6 +505,14 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
 .kort h2 {
   font-size: 15px;
   margin: 0 0 8px;
+}
+.notis {
+  font-size: 13px;
+  max-width: 70ch;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
 }
 .forklaring {
   font-size: 13px;

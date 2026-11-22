@@ -574,6 +574,11 @@ def create_app(
     def publicera_budgetforslag(forslag_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         return _budget(budgetforslag.publicera, forslag_id, anv.epost, datetime.now(timezone.utc))
 
+    @app.post("/api/budgetforslag/{forslag_id}/aterkallelse")
+    def aterkalla_budgetforslag(forslag_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        """En utgivare återkallar ett publicerat förslag direkt, med motivering (#76)."""
+        return _budget(budgetforslag.aterkalla, forslag_id, data, anv.epost, datetime.now(timezone.utc))
+
     @app.get("/api/budgetforslag/{forslag_id}/original")
     def budgetforslagets_original(forslag_id: int, request: Request,
                                   anv: Anvandare | None = Depends(krav_roll("lasare"))) -> Response:
@@ -601,6 +606,11 @@ def create_app(
     @app.post("/api/planforutsattningar/{pf_id}/publicering")
     def publicera_planforutsattningar(pf_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         return _budget(planforutsattningar.publicera, pf_id, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/planforutsattningar/{pf_id}/aterkallelse")
+    def aterkalla_planforutsattningar(pf_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        """En utgivare återkallar publicerade planförutsättningar direkt, med motivering (#76)."""
+        return _budget(planforutsattningar.aterkalla, pf_id, data, anv.epost, datetime.now(timezone.utc))
 
     @app.get("/api/motionarer/parti", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
     def motionarens_parti(person_id: int, sammantrade_id: int) -> dict:

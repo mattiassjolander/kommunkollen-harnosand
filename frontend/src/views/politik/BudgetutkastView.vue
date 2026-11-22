@@ -5,10 +5,14 @@
 // Varje ram kan ha åtgärder och satsningar med belopp och sida (#57), som granskas med förslaget.
 // Redaktören anger behandlingen där förslaget ställdes och skriver summeringen med samma frågor för alla
 // förslag (#48). Summeringen märks Analys.
+// En utgivare kan återkalla publicerade planförutsättningar och förslag direkt, med motivering, när de innehåller
+// fel (#76). Läsaren ser då en notis i stället, tills en rättad version har lästs in och publicerats.
 import { computed, inject, onMounted, reactive, ref, type Ref } from 'vue'
 import {
   EjInloggad,
   andraBudgetforslag,
+  aterkallaBudgetforslag,
+  aterkallaPlanforutsattningar,
   granskaBudgetforslag,
   granskaPlanforutsattningar,
   hamtaBudgetutkast,
@@ -38,6 +42,13 @@ const laddar = ref(true)
 const fel = ref<string | null>(null)
 const oppen = ref<number | null>(null)
 const meddelande = reactive<Record<string, string>>({})
+// Publicerade och återkallade, för att återkalla och för att se varför något återkallades.
+const publPlaner = ref<Planutkast[]>([])
+const publForslag = ref<Budgetutkast[]>([])
+const aterPlaner = ref<Planutkast[]>([])
+const aterForslag = ref<Budgetutkast[]>([])
+const aterkallas = ref<string | null>(null)
+const aterkallelse = ref('')
 
 interface Formular {
   titel: string
@@ -67,12 +78,20 @@ async function ladda() {
   laddar.value = true
   fel.value = null
   try {
-    const [utkast, granskade, pu, pg] = await Promise.all([
+    const [utkast, granskade, pu, pg, bp, pp, ba, pa] = await Promise.all([
       hamtaBudgetutkast('utkast'),
       hamtaBudgetutkast('granskad'),
       hamtaPlanutkast('utkast'),
       hamtaPlanutkast('granskad'),
+      hamtaBudgetutkast('publicerad'),
+      hamtaPlanutkast('publicerad'),
+      hamtaBudgetutkast('aterkallad'),
+      hamtaPlanutkast('aterkallad'),
     ])
+    publForslag.value = bp
+    publPlaner.value = pp
+    aterForslag.value = ba
+    aterPlaner.value = pa
     lista.value = [...utkast, ...granskade].sort((a, b) => b.budgetar - a.budgetar || a.nyckel.localeCompare(b.nyckel))
     planer.value = [...pu, ...pg].sort((a, b) => b.budgetar - a.budgetar)
   } catch (e) {
@@ -183,6 +202,44 @@ const publicera = (f: Budgetutkast) => steg(`f${f.id}`, lista, f.id, () => publi
 const granskaPlan = (p: Planutkast) => steg(`p${p.id}`, planer, p.id, () => granskaPlanforutsattningar(p.id), 'Granskat.')
 const publiceraPlan = (p: Planutkast) =>
   steg(`p${p.id}`, planer, p.id, () => publiceraPlanforutsattningar(p.id), 'Publicerat.')
+async function aterkalla(slag: 'p' | 'f', id: number) {
+  const nyckel = `${slag}${id}`
+  meddelande[nyckel] = ''
+  try {
+    if (slag === 'p') {
+      const ny = await aterkallaPlanforutsattningar(id, aterkallelse.value)
+      publPlaner.value = publPlaner.value.filter((x) => x.id !== id)
+      aterPlaner.value = [ny, ...aterPlaner.value]
+    } else {
+      const ny = await aterkallaBudgetforslag(id, aterkallelse.value)
+      publForslag.value = publForslag.value.filter((x) => x.id !== id)
+      aterForslag.value = [ny, ...aterForslag.value]
+    }
+    aterkallas.value = null
+    aterkallelse.value = ''
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    meddelande[nyckel] = e instanceof Error ? e.message : String(e)
+  }
+}
+function borjaAterkalla(nyckel: string) {
+  aterkallas.value = nyckel
+  aterkallelse.value = ''
+}
+const forslagsnamn = (f: Budgetutkast) => `${f.titel} (${f.partier.join(', ')})`
+// Planförutsättningarna och förslagen i en lista. `data` är förslagets nyckel, tom för planförutsättningarna.
+const rad = (slag: 'p' | 'f', x: Planutkast | Budgetutkast) => ({
+  nyckel: `${slag}${x.id}`,
+  slag,
+  id: x.id,
+  namn: slag === 'p' ? `Planförutsättningar ${x.budgetar}` : `${x.budgetar} ${forslagsnamn(x as Budgetutkast)}`,
+  budgetar: x.budgetar,
+  data: slag === 'f' ? (x as Budgetutkast).nyckel : '',
+  a: x,
+})
+const publicerade = computed(() => [...publPlaner.value.map((p) => rad('p', p)), ...publForslag.value.map((f) => rad('f', f))])
+const aterkallade = computed(() => [...aterPlaner.value.map((p) => rad('p', p)), ...aterForslag.value.map((f) => rad('f', f))])
+
 const andrat = (f: Budgetutkast) => JSON.stringify(f.uppgifter) !== JSON.stringify(f.inlast)
 const egen = (f: { redaktorer: string[] }) => !!jag.value && f.redaktorer.includes(jag.value.epost)
 
@@ -211,15 +268,16 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
     <h1>Politik och beslut</h1>
     <p class="ingress">
       Planförutsättningar och budgetförslag som lästs in och väntar på publicering. Kontrollera varje siffra mot sidan i
-      originalet. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem.
+      originalet. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem. En utgivare kan
+      återkalla det som är publicerat när det innehåller fel.
     </p>
   </header>
   <PolitikFlikar />
 
   <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
   <p v-else-if="laddar">Hämtar utkast…</p>
-  <p v-else-if="!lista.length && !planer.length" class="saknas" data-testid="inga-utkast">Inga budgetförslag väntar på publicering.</p>
   <template v-else>
+    <p v-if="!lista.length && !planer.length" class="saknas" data-testid="inga-utkast">Inga budgetförslag väntar på publicering.</p>
     <section v-if="planer.length" aria-labelledby="planer-rubrik">
       <h2 id="planer-rubrik" class="sektion">Planförutsättningar</h2>
       <ul class="lista">
@@ -454,6 +512,67 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
               <button type="button" @click="oppen = null">Avbryt</button>
             </div>
           </form>
+        </li>
+      </ul>
+    </section>
+
+    <section v-if="publPlaner.length || publForslag.length" aria-labelledby="publicerade-rubrik">
+      <h2 id="publicerade-rubrik" class="sektion">Publicerade</h2>
+      <p class="meta">
+        Det läsaren ser nu. Innehåller en uppgift fel kan en utgivare återkalla den, med en motivering. Läsaren ser då en
+        notis om att den är tillbakadragen för rättning, tills en rättad version har lästs in och publicerats.
+      </p>
+      <ul class="lista">
+        <li
+          v-for="x in publicerade"
+          :key="x.nyckel"
+          class="kort"
+          data-testid="publicerad"
+          :data-slag="x.slag === 'p' ? 'planforutsattningar' : 'forslag'"
+          :data-budgetar="x.budgetar"
+          :data-nyckel="x.data || undefined"
+        >
+          <div class="huvud">
+            <strong>{{ x.namn }}</strong>
+            <span class="etikett" data-status="publicerad">Publicerad</span>
+            <span class="meta-inline">{{ datumTid(x.a.publicerad) }}</span>
+          </div>
+          <div class="knappar">
+            <button v-if="arUtgivare && aterkallas !== x.nyckel" type="button" data-testid="aterkalla" @click="borjaAterkalla(x.nyckel)">Återkalla</button>
+            <span v-if="meddelande[x.nyckel]" class="meddelande" role="status">{{ meddelande[x.nyckel] }}</span>
+          </div>
+          <form v-if="aterkallas === x.nyckel" class="formular" data-testid="aterkalla-formular" @submit.prevent="aterkalla(x.slag, x.id)">
+            <label class="bred">
+              Varför återkallas uppgiften? Ange gärna vem som påpekade felet och när.
+              <textarea v-model="aterkallelse" rows="2" required data-testid="aterkalla-motivering" />
+            </label>
+            <div class="knappar">
+              <button type="submit" class="primar" :disabled="!aterkallelse.trim()" data-testid="spara-aterkallelse">Återkalla</button>
+              <button type="button" @click="aterkallas = null">Avbryt</button>
+            </div>
+          </form>
+        </li>
+      </ul>
+    </section>
+
+    <section v-if="aterPlaner.length || aterForslag.length" aria-labelledby="aterkallade-rubrik">
+      <h2 id="aterkallade-rubrik" class="sektion">Återkallade</h2>
+      <p class="meta">Tillbakadragna för rättning. De visas igen först när en rättad version har lästs in och publicerats.</p>
+      <ul class="lista">
+        <li
+          v-for="x in aterkallade"
+          :key="x.nyckel"
+          class="kort"
+          data-testid="aterkallad"
+          :data-budgetar="x.budgetar"
+          :data-nyckel="x.data || undefined"
+        >
+          <div class="huvud">
+            <strong>{{ x.namn }}</strong>
+            <span class="etikett" data-status="aterkallad">Återkallad</span>
+            <span class="meta-inline">av {{ x.a.aterkallad_av }}, {{ datumTid(x.a.aterkallad) }}</span>
+          </div>
+          <p class="meta" data-testid="aterkallelse">{{ x.a.aterkallelse }}</p>
         </li>
       </ul>
     </section>

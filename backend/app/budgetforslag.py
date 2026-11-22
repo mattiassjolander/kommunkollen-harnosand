@@ -21,6 +21,10 @@ Ett utkast rättas av en redaktör och publiceras av en utgivare (utkast → gra
 Ingen godkänner ett förslag som hen själv läst in eller ändrat. Läsaren ser bara publicerade
 förslag, bredvid varandra och bredvid den antagna budgeten för året när den finns.
 
+En utgivare kan återkalla ett publicerat förslag direkt, med motivering, när det innehåller fel (#76).
+Förslaget försvinner då ur jämförelsen och en notis står i stället, tills en rättad version har
+publicerats. Voteringarna och yrkandena i protokollet påverkas inte.
+
 Ett förslag kan ha en summering med samma frågor för alla förslag (`MALL`), som märks Analys, och en
 hänvisning till behandlingen i kommunfullmäktige där det ställdes. Ur behandlingen kopplas partiets
 yrkande och voteringarna automatiskt (#48).
@@ -492,7 +496,7 @@ def for_over(conn: psycopg.Connection, nyckeltal: dict[int, dict], redaktor: str
     Planåren tas bort, ett resultat i mnkr räknas om till procent och en skattesats i procent till en
     förändring i öre, mot årets planförutsättningar. Redaktörens ändringar följer med. Ett öppet utkast
     ändras och blir utkast igen, ett publicerat förslag får ett nytt utkast (om inget redan är öppet),
-    och ett ersatt ändras där det står. Committar inte."""
+    och ett ersatt eller återkallat ändras där det står och behåller sin status. Committar inte."""
     antal = {"utkast": 0, "nya_utkast": 0, "ersatta": 0}
     rader = conn.execute(
         "SELECT id, budgetar, nyckel, filnamn, status, uppgifter, inlast, redaktorer FROM budgetforslag ORDER BY id"
@@ -519,7 +523,7 @@ def for_over(conn: psycopg.Connection, nyckeltal: dict[int, dict], redaktor: str
                 """, (Jsonb(inlast), Jsonb(ny), [redaktor], nu, nu, r["id"]),
             )
             antal["nya_utkast"] += 1
-        elif r["status"] == "ersatt":
+        elif r["status"] in ("ersatt", "aterkallad"):
             conn.execute("UPDATE budgetforslag SET uppgifter = %s, inlast = %s WHERE id = %s",
                          (Jsonb(ny), Jsonb(inlast), r["id"]))
             antal["ersatta"] += 1
@@ -593,7 +597,8 @@ def _summering(u: dict) -> list[dict] | None:
 # Redigering och publicering
 
 _KOLUMNER = ("id, budgetar, nyckel, partier, titel, typ, antagen, filnamn, sha256, uppgifter, anmarkning, status, "
-             "redaktorer, skapad, andrad, granskad_av, granskad, publicerad_av, publicerad, inlast")
+             "redaktorer, skapad, andrad, granskad_av, granskad, publicerad_av, publicerad, inlast, aterkallad_av, aterkallad, "
+             "aterkallelse")
 
 
 def _ut(conn: psycopg.Connection, r: dict, nyckeltal: dict[int, dict], redaktion: bool = False) -> dict:
@@ -609,6 +614,8 @@ def _ut(conn: psycopg.Connection, r: dict, nyckeltal: dict[int, dict], redaktion
         ut |= {"redaktorer": r["redaktorer"], "granskad_av": r["granskad_av"], "publicerad_av": r["publicerad_av"],
                "andrad": r["andrad"].isoformat(), "inlast": r["inlast"]["uppgifter"],
                "granskad": r["granskad"].isoformat() if r["granskad"] else None,
+               "aterkallad_av": r["aterkallad_av"], "aterkallelse": r["aterkallelse"],
+               "aterkallad": r["aterkallad"].isoformat() if r["aterkallad"] else None,
                "mall": [{"id": f, "fraga": fraga} for f, fraga in MALL]}
     return ut
 
@@ -694,6 +701,22 @@ def publicera(conn: psycopg.Connection, forslag_id: int, utgivare: str, nu: date
     return las(conn, forslag_id)
 
 
+def aterkalla(conn: psycopg.Connection, forslag_id: int, data: dict, utgivare: str, nu: datetime) -> dict:
+    """En utgivare återkallar ett publicerat förslag direkt, med motivering. Ingen annan godkänner det."""
+    r = _hamta(conn, forslag_id)
+    if r["status"] != "publicerad":
+        raise Konflikt(f"Bara ett publicerat förslag kan återkallas, det här är {r['status']}")
+    motivering = (data.get("motivering") or "").strip()
+    if not motivering:
+        raise Ogiltig("Ange varför förslaget återkallas, till exempel vem som påpekade felet och när")
+    conn.execute(
+        "UPDATE budgetforslag SET status = 'aterkallad', aterkallad_av = %s, aterkallad = %s, aterkallelse = %s "
+        "WHERE id = %s", (utgivare, nu, motivering, forslag_id),
+    )
+    conn.commit()
+    return las(conn, forslag_id)
+
+
 def original(conn: psycopg.Connection, forslag_id: int, redaktion: bool) -> tuple[bytes, str, str]:
     """(innehåll, mediatyp, filnamn). Ett opublicerat förslag visas bara för redaktionen."""
     r = conn.execute("SELECT original, filnamn, status, budgetar FROM budgetforslag WHERE id = %s", (forslag_id,)).fetchone()
@@ -712,10 +735,25 @@ def _differens(varde: float | None, mot: float | None) -> dict | None:
 
 
 def budgetar(conn: psycopg.Connection) -> list[dict]:
-    """Budgetåren med publicerade förslag."""
+    """Budgetåren med publicerade förslag, och år där förslag är återkallade, så att läsaren ser notisen."""
     return conn.execute(
-        "SELECT budgetar, count(*) AS forslag, bool_or(antagen AND typ = 'budget') AS antagen FROM budgetforslag "
-        "WHERE status = 'publicerad' GROUP BY budgetar ORDER BY budgetar DESC"
+        "SELECT budgetar, count(*) FILTER (WHERE status = 'publicerad') AS forslag, "
+        "coalesce(bool_or(antagen AND typ = 'budget') FILTER (WHERE status = 'publicerad'), false) AS antagen "
+        "FROM budgetforslag WHERE status IN ('publicerad', 'aterkallad') GROUP BY budgetar ORDER BY budgetar DESC"
+    ).fetchall()
+
+
+def aterkallade(conn: psycopg.Connection, ar: int) -> list[dict]:
+    """De återkallade förslagen för budgetåret som inte har fått en rättad publicerad version, i jämförelsens ordning."""
+    return conn.execute(
+        """
+        SELECT * FROM (
+          SELECT DISTINCT ON (a.nyckel) a.nyckel, a.partier, a.titel, a.typ, a.antagen FROM budgetforslag a
+          WHERE a.budgetar = %(ar)s AND a.status = 'aterkallad' AND NOT EXISTS (
+            SELECT 1 FROM budgetforslag p WHERE p.budgetar = a.budgetar AND p.nyckel = a.nyckel AND p.status = 'publicerad')
+          ORDER BY a.nyckel, a.aterkallad DESC
+        ) x ORDER BY antagen DESC, typ, nyckel
+        """, {"ar": ar},
     ).fetchall()
 
 
@@ -748,9 +786,12 @@ def jamforelse(conn: psycopg.Connection, ar: int) -> dict:
         }
     # Planförutsättningarnas skatteintäkter och generella bidrag och utjämning mot SKR:s prognoser (#62).
     skr = skatteunderlag.jamforelse(conn, ar, round(nt[ar]["skatteintakter"] + nt[ar]["bidrag"], 3) if nt else None)
+    # Det som är återkallat för rättning visas som en notis, utan uppgifter ur den återkallade versionen (#76).
+    aterkallat = {"planforutsattningar": plan is None and pf.aterkallad(conn, ar),
+                  "forslag": [{k: x[k] for k in ("nyckel", "partier", "titel", "typ")} for x in aterkallade(conn, ar)]}
     return {"budgetar": ar, "organ": organ, "antagen": antagen["id"] if antagen else None,
             "planforutsattningar": plan, "mall": [{"id": f, "fraga": fraga} for f, fraga in MALL],
-            "forslag": forslag, "skr": skr}
+            "forslag": forslag, "skr": skr, "aterkallat": aterkallat}
 
 
 # Kommandot
