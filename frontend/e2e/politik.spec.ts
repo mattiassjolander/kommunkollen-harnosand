@@ -108,6 +108,34 @@ test('avvikelser vid tolkningen visas på sammanträdet', async ({ page }) => {
   await expect(page.getByTestId('avvikelser')).toContainText('saknas: 53, 54')
 })
 
+test('ett protokoll med två sittningar visar dem var för sig, med presidiets beslut på delegation', async ({ page }) => {
+  // Kommunstyrelsen 2022-01-18: hela styrelsen §§ 1–14, presidiet § 15 (#85).
+  await page.goto('/politik?organ=KS&ar=2022')
+  await page.locator('[data-testid="sammantrade"][data-datum="2022-01-18"]').getByRole('rowheader').getByRole('link').click()
+  await expect(page.getByTestId('avvikelser')).toHaveCount(0)
+  const sittningar = page.getByTestId('sittning')
+  await expect(sittningar).toHaveCount(2)
+  await expect(sittningar.nth(0)).toContainText('Sittning 1 · §§ 1–14')
+  await expect(sittningar.nth(0)).toContainText('kl. 08:15–14:10 · Digitalt möte via Zoom')
+  await expect(sittningar.nth(0).getByTestId('sittningens-beslutande')).toContainText('Beslutande (15)')
+  await expect(sittningar.nth(1)).toContainText('Sittning 2 · § 15')
+  await expect(sittningar.nth(1)).toContainText('kl. 14:10–14:30 · Kommunstyrelsesalen')
+  await expect(sittningar.nth(1).getByTestId('delegation')).toHaveText('Beslut av kommunstyrelsens presidium på delegation')
+  await expect(sittningar.nth(1).getByTestId('sittningens-beslutande')).toHaveText(
+    'Beslutande (3): Andreas Sjölander (S), Carl Fredrik Edgren (V), Christina Lindberg (C)',
+  )
+  await expect(page.getByTestId('narvaro-beslutande').getByRole('row', { name: /Glenn Sehlin/ })).toContainText(
+    'Beslutande vid §§ 1–14',
+  )
+  const p15 = page.locator('[data-testid="behandling"][data-paragraf="15"]')
+  await expect(p15.getByTestId('pa-delegation')).toBeVisible()
+
+  await p15.getByRole('link').click()
+  await expect(page.getByTestId('sittning')).toContainText('Beslut av kommunstyrelsens presidium på delegation.')
+  await expect(page.getByTestId('sittning')).toContainText('Sittning 2, kl. 14:10–14:30 · Kommunstyrelsesalen')
+  await expect(page.getByTestId('beslutande').getByTestId('person')).toHaveCount(3)
+})
+
 test('ett protokoll som inte gick att tolka visas med markering', async ({ page }) => {
   await page.route('**/api/sammantraden', async (route) => {
     const svar = await route.fetch()

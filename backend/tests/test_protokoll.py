@@ -119,6 +119,7 @@ def test_sammantradet_med_narvaro_tjanstgoring_och_jav(api):
     assert (s["starttid"], s["sluttid"]) == ("13:15", "16:30")
     assert s["paragrafer"] == [121, 136]
     assert s["avvikelser"] == []
+    assert s["sittningar"] == []  # en enda sittning (#85)
 
     ordf = person(s, "Monica Fahlén")
     assert (ordf["parti"], ordf["roll"], ordf["kategori"]) == ("S", "Ordförande", "beslutande")
