@@ -1188,3 +1188,52 @@ export async function hamtaKalender(): Promise<Kalender> {
   if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
   return svar.json()
 }
+
+// Kommande: ärenden som inte är avslutade (automatiskt tolkade uppgifter)
+
+export type Kommandestatus = 'motion' | 'medborgarforslag' | 'aterremiss' | 'bordlaggning' | 'forslag' | 'uppdrag'
+
+export interface Kommandearende {
+  arende_id: number
+  rubrik: string
+  status: Kommandestatus
+  /** Organet som ska fatta nästa beslut, när det framgår. */
+  vantar_pa: Organ | null
+  /** Sedan när ärendet väntar: väckt (motioner) eller senaste behandlingen. */
+  sedan: string
+  /** För motioner: om datumet är när motionen väcktes, annars är det första behandlingen. */
+  vackt: boolean
+  dagar: number
+  /** Obesvarad motion eller medborgarförslag i mer än ett år. */
+  over_ett_ar: boolean
+  /** Tidpunkt för återrapportering som beslutet anger, som det står. */
+  frist: string | null
+  /** Som protokollet anger dem. Namnet saknas när bara partiet anges. */
+  motionarer: { namn: string | null; parti: string | null }[]
+  diarienummer: string[]
+  antal_behandlingar: number
+  senaste: Behandlingsref & { beslut: string | null }
+}
+
+export interface Kommande {
+  idag: string
+  manader: number
+  statusar: { id: Kommandestatus; namn: string; antal: number }[]
+  arenden: Kommandearende[]
+}
+
+export interface Underlagsbehandling extends Behandlingsref {
+  diarienummer: string[]
+  beslut: string | null
+  protokoll: Protokollkalla | null
+  /** Hänvisningar i beslutsunderlaget, med behandlingen de pekar på när den finns i protokollen. */
+  hanvisningar: { text: string; behandling: { sammantrade_id: number; paragraf: number } | null }[]
+}
+
+export interface Arendeunderlag extends Omit<Arende, 'behandlingar'> {
+  behandlingar: Underlagsbehandling[]
+}
+
+export const hamtaKommande = (manader?: number) =>
+  hamta<Kommande>(`/api/kommande${manader ? `?manader=${manader}` : ''}`)
+export const hamtaArendeunderlag = (id: number | string) => hamtaEllerSaknas<Arendeunderlag>(`/api/kommande/${id}`)

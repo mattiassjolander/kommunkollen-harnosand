@@ -8,6 +8,7 @@ import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
 import SkatteunderlagView from './views/SkatteunderlagView.vue'
 import FlodenView from './views/FlodenView.vue'
+import KommandeView from './views/KommandeView.vue'
 import OversiktView from './views/OversiktView.vue'
 import ArendeView from './views/politik/ArendeView.vue'
 import AvvikelserView from './views/politik/AvvikelserView.vue'
@@ -49,6 +50,7 @@ const router = createRouter({
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
     { path: '/kalender', component: KalenderView, meta: { titel: 'Kalender' } },
+    { path: '/kommande', component: KommandeView, meta: { titel: 'Kommande' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
   ],
 })

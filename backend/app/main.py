@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -250,6 +250,21 @@ def create_app(
         with db.connect(database_url) as conn:
             fran, till = intervall(conn, fran, till, organ)
             return aterkommande.aterkommande(conn, fran, till, organ)
+
+    @app.get("/api/kommande", dependencies=[Depends(krav_roll("lasare"))])
+    def kommande_arenden(manader: int = Query(kommande.MANADER, ge=1, le=120)) -> dict:
+        """Ärenden som inte är avslutade: obesvarade motioner, uppskjutna ärenden, förslag och uppdrag."""
+        with db.connect(database_url) as conn:
+            return kommande.kommande(conn, manader)
+
+    @app.get("/api/kommande/{arende_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def kommande_underlag(arende_id: int) -> dict:
+        """Ärendet med protokollen och hänvisningarna i beslutsunderlaget bakom varje behandling."""
+        with db.connect(database_url) as conn:
+            resultat = kommande.underlag(conn, arende_id)
+        if resultat is None:
+            raise HTTPException(404, f"Ärendet {arende_id} finns inte")
+        return resultat
 
     @app.get("/api/avvikelser", dependencies=[Depends(krav_roll("lasare"))])
     def protokollens_avvikelser(fran: int | None = None, till: int | None = None, organ: str | None = None) -> dict:
