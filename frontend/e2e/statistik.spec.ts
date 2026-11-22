@@ -46,7 +46,7 @@ test('statistik över behandlingar per år, organ och typ, med filter i URL:en',
 test('behandlingens typ visas och kan rättas av en redaktör', async ({ page }) => {
   await page.request.post('/api/auth/test/redaktor')
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
   await page.getByTestId('behandling').first().getByRole('link').click()
   await expect(page.getByTestId('typ')).toContainText('Typ:')
   const nu = (await page.getByTestId('typ').textContent()) ?? ''
@@ -54,6 +54,7 @@ test('behandlingens typ visas och kan rättas av en redaktör', async ({ page })
   await formular.getByTestId('rattelse-uppgift').selectOption('typ')
   await formular.getByTestId('rattelse-varde').selectOption(nu.includes('Formalia') ? 'information' : 'formalia')
   await formular.getByTestId('rattelse-motivering').fill('Prov av typrättelse.')
+  await formular.getByTestId('felet-i-inlasningen').check()
   await formular.getByTestId('spara-rattelse').click()
   await expect(formular.getByTestId('rattelse-sparad')).toBeVisible()
 })
@@ -134,6 +135,7 @@ test('redaktören rättar en motion utan motionär, utgivaren publicerar och lä
   await expect(rad.getByTestId('motionar-parti')).toHaveValue('L')
   await expect(rad.getByTestId('parti-kalla')).toBeVisible()
   await formular.getByTestId('motionar-motivering').fill('Motionen är undertecknad av Olle Löfgren (L).')
+  await formular.getByTestId('felet-i-inlasningen').check()
   await formular.getByTestId('spara-motionarer').click()
   await expect(page.getByTestId('motionarer-sparade')).toBeVisible()
 

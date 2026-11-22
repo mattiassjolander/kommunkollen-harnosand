@@ -12,6 +12,10 @@ Rättningsbara uppgifter:
 - motionärerna för en motion, på ärendets behandling där motionen väcktes (motionarer.py, #78),
 - en röst i en votering (rösten och partiet),
 - partiet för en person i närvarolistan.
+
+Varje rättelse anger var felet finns (#74): i protokollet (källan saknar eller anger fel uppgift)
+eller i inläsningen (plattformen läste eller tolkade fel). Ett protokoll med publicerade rättelser
+av fel i protokollet märks "Innehåller felaktigheter". Rättelser från före #74 saknar valet.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ ROSTER = ("ja", "nej", "avstar", "franvarande")
 KOPPLANDE_FALT = ("rubrik", "diarienummer")
 _PARTI = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
 _DNR = re.compile(r"[\w/ .:-]{2,40}")
+FELET_I = ("protokollet", "inlasningen")
 
 
 class Ogiltig(ValueError):
@@ -141,6 +146,12 @@ def _motivering(data: dict) -> str:
     return text
 
 
+def _felet_i(data: dict) -> str:
+    if data.get("felet_i") not in FELET_I:
+        raise Ogiltig("Ange om felet finns i protokollet eller i inläsningen")
+    return data["felet_i"]
+
+
 def skapa(conn: psycopg.Connection, data: dict, redaktor: str) -> dict:
     m = _mal(data)
     ursprungligt = _ursprungligt(conn, m)
@@ -150,12 +161,13 @@ def skapa(conn: psycopg.Connection, data: dict, redaktor: str) -> dict:
     rid = conn.execute(
         """
         INSERT INTO rattelse (sammantrade_id, objekt, paragraf, votering, namn, falt, ursprungligt, nytt,
-                              motivering, status, redaktor)
+                              motivering, felet_i, status, redaktor)
         VALUES (%(sammantrade_id)s, %(objekt)s, %(paragraf)s, %(votering)s, %(namn)s, %(falt)s, %(u)s, %(n)s,
-                %(mot)s, 'utkast', %(red)s)
+                %(mot)s, %(felet_i)s, 'utkast', %(red)s)
         RETURNING id
         """,
-        m | {"u": Jsonb(ursprungligt), "n": Jsonb(nytt), "mot": _motivering(data), "red": redaktor},
+        m | {"u": Jsonb(ursprungligt), "n": Jsonb(nytt), "mot": _motivering(data), "felet_i": _felet_i(data),
+             "red": redaktor},
     ).fetchone()["id"]
     return las(conn, rid)
 
@@ -176,7 +188,9 @@ def andra(conn: psycopg.Connection, rattelse_id: int, data: dict, redaktor: str)
         raise Konflikt("Bara ett utkast kan ändras")
     nytt = _nytt(r["falt"], data.get("nytt", r["nytt"]), conn)
     motivering = _motivering(data) if "motivering" in data else r["motivering"]
-    conn.execute("UPDATE rattelse SET nytt = %s, motivering = %s WHERE id = %s", (Jsonb(nytt), motivering, rattelse_id))
+    felet_i = _felet_i(data) if "felet_i" in data else r["felet_i"]
+    conn.execute("UPDATE rattelse SET nytt = %s, motivering = %s, felet_i = %s WHERE id = %s",
+                 (Jsonb(nytt), motivering, felet_i, rattelse_id))
     return las(conn, rattelse_id)
 
 
@@ -250,7 +264,7 @@ def _ut(r: dict) -> dict:
                         "organ": {"id": r["organ"], "namn": organ.namn if organ else r["organ"]}},
         "objekt": r["objekt"], "paragraf": r["paragraf"], "votering": r["votering"], "namn": r["namn"] or None,
         "rubrik": r["rubrik"], "falt": r["falt"], "ursprungligt": r["ursprungligt"], "nytt": r["nytt"],
-        "motivering": r["motivering"], "status": r["status"],
+        "motivering": r["motivering"], "felet_i": r["felet_i"], "status": r["status"],
         "redaktor": r["redaktor"], "skapad": r["skapad"],
         "granskad_av": r["granskad_av"], "granskad": r["granskad"],
         "publicerad_av": r["publicerad_av"], "publicerad": r["publicerad"],
@@ -292,7 +306,7 @@ class Publicerade:
         ut_falt = ut_falt or falt
         mal.setdefault("rattelser", {})[ut_falt] = {
             "id": r["id"], "ursprungligt": mal.get(ut_falt), "nytt": r["nytt"], "motivering": r["motivering"],
-            "publicerad": r["publicerad"],
+            "felet_i": r["felet_i"], "publicerad": r["publicerad"],
         }
         mal[ut_falt] = r["nytt"]
 

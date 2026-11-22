@@ -9,11 +9,13 @@ import {
   hamtaLedamoter,
   hamtaMotionarParti,
   skapaRattelse,
+  type FeletI,
   type Ledamotsrad,
   type Motionar,
   type Partiforslag,
 } from '../api'
 import { sammantradesdatum } from '../format'
+import FeletIVal from './FeletIVal.vue'
 
 const props = defineProps<{
   rubrik: string
@@ -38,6 +40,7 @@ const rader = ref<Rad[]>(
 const register = ref<Ledamotsrad[]>([])
 const sok = ref('')
 const motivering = ref('')
+const feletI = ref<FeletI | null>(null)
 const fel = ref<string | null>(null)
 const sparar = ref(false)
 
@@ -93,6 +96,10 @@ async function spara() {
     fel.value = 'Ange minst en motionär, en person eller ett parti.'
     return
   }
+  if (!feletI.value) {
+    fel.value = 'Ange om felet finns i protokollet eller i inläsningen.'
+    return
+  }
   sparar.value = true
   try {
     const r = await skapaRattelse({
@@ -102,6 +109,7 @@ async function spara() {
       falt: 'motionarer',
       nytt: rader.value.map((x) => ({ person_id: x.person?.id ?? null, parti: x.parti.trim() || null })),
       motivering: motivering.value,
+      felet_i: feletI.value,
     })
     emit('sparad', r.id)
   } catch (e) {
@@ -152,6 +160,7 @@ async function spara() {
       Motivering
       <textarea v-model="motivering" rows="2" required placeholder="Var det står, t.ex. i motionen eller protokollet" data-testid="motionar-motivering" />
     </label>
+    <FeletIVal v-model="feletI" />
     <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
     <div class="knappar">
       <button type="submit" class="knapp primar" :disabled="sparar" data-testid="spara-motionarer">Spara som utkast</button>

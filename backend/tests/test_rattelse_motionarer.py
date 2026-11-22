@@ -58,7 +58,7 @@ def test_motionar_som_saknas_rattas_med_person_och_parti_ur_narvaron(api, databa
 
     def rattelse(nytt, **extra) -> dict:
         return {"sammantrade_id": mal["sammantrade_id"], "objekt": "behandling", "paragraf": mal["paragraf"],
-                "falt": "motionarer", "nytt": nytt, "motivering": "Motionen är undertecknad av Monica Fahlén (S)."} | extra
+                "falt": "motionarer", "nytt": nytt, "motivering": "Motionen är undertecknad av Monica Fahlén (S).", "felet_i": "inlasningen"} | extra
 
     # Bara personer i registret, och en partigrupp ska ha ett parti.
     assert api.post("/api/rattelser", json=rattelse([{"person_id": 999999, "parti": "S"}])).status_code == 422
@@ -108,7 +108,7 @@ def test_utgivare_kan_skriva_rattelse_av_motionarer_men_inte_andra_uppgifter(api
     logga_in(api, "utgivare")
     fahlen = person(api, "Monica Fahlén")
     bas = {"sammantrade_id": mal["sammantrade_id"], "objekt": "behandling", "paragraf": mal["paragraf"],
-           "motivering": "Enligt motionen."}
+           "motivering": "Enligt motionen.", "felet_i": "inlasningen"}
     assert api.post("/api/rattelser", json=bas | {"falt": "rubrik", "nytt": "Ny rubrik"}).status_code == 403
     svar = api.post("/api/rattelser", json=bas | {"falt": "motionarer", "nytt": [{"person_id": fahlen["id"], "parti": "S"}]})
     assert svar.status_code == 201, svar.text

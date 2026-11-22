@@ -1,3 +1,5 @@
+import { BEHANDLINGSTYPER } from './api'
+
 // Svenskt talformat: mellanslag som tusentalsavgränsare, komma som decimaltecken.
 
 const heltal = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 })
@@ -122,4 +124,27 @@ export function rosttext(r: keyof typeof ROST): string {
 /** Motionärerna som text: "Monica Fahlén (S), partiet V". */
 export function motionarstext(m: { namn: string | null; parti: string | null }[]): string {
   return m.map((p) => (p.namn ? (p.parti ? `${p.namn} (${p.parti})` : p.namn) : `partiet ${p.parti}`)).join(', ')
+}
+
+// Rättelser (#33, #74): vad en rättelse rättar och värdena före och efter, som text.
+const RATTAT_FALT: Record<string, string> = {
+  rubrik: 'Rubrik', beslut: 'Beslut', diarienummer: 'Diarienummer', typ: 'Typ', rost: 'Röst', parti: 'Parti',
+  motionarer: 'Motionärer',
+}
+
+export function rattelseuppgift(r: { objekt: string; falt: string; namn: string | null; votering: number | null }): string {
+  if (r.objekt === 'rost') return `${RATTAT_FALT[r.falt]} för ${r.namn}, votering ${r.votering}`
+  if (r.objekt === 'narvaro') return `Parti för ${r.namn} i närvarolistan`
+  return RATTAT_FALT[r.falt]
+}
+
+export function rattelsevarde(falt: string, v: unknown): string {
+  if (v === null || v === undefined || (Array.isArray(v) && !v.length)) {
+    return falt === 'parti' ? 'inget parti' : falt === 'typ' ? 'kunde inte klassas' : 'inget'
+  }
+  if (falt === 'motionarer') return motionarstext(v as { namn: string | null; parti: string | null }[])
+  if (falt === 'parti') return parti(v as string)
+  if (falt === 'rost') return rosttext(v as keyof typeof ROST)
+  if (falt === 'typ') return BEHANDLINGSTYPER.find((t) => t.id === v)?.namn ?? String(v)
+  return Array.isArray(v) ? v.join(', ') : String(v)
 }

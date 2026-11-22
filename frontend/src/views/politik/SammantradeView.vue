@@ -9,6 +9,7 @@ import Rattelseformular from '../../components/Rattelseformular.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
+import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -78,7 +79,10 @@ const tid = computed(() =>
           · {{ s.paragrafer[0] === s.paragrafer[1] ? `§ ${s.paragrafer[0]}` : `§§ ${s.paragrafer[0]}–${s.paragrafer[1]}` }}
         </template>
       </p>
-      <p class="markering"><Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" /></p>
+      <p class="markering">
+        <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" />
+        <Felaktighetsmarkering :sammantrade="s" />
+      </p>
       <Protokollkalla :protokoll="s.protokoll" />
     </header>
 
@@ -187,6 +191,10 @@ const tid = computed(() =>
 }
 .markering {
   margin: 12px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
 }
 .kort {
   background: var(--surface);

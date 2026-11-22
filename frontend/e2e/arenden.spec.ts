@@ -13,7 +13,7 @@ test.beforeAll(async ({ request }) => {
 
 test('från behandling till ärende till ärendets väg genom organen', async ({ page }) => {
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
   await page.locator('[data-testid="behandling"][data-paragraf="38"]').getByRole('link').click()
   await expect(page).toHaveURL(/\/paragraf\/38$/)
 

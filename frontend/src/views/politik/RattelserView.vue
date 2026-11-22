@@ -12,8 +12,8 @@ import {
   type Rattelse,
   type Rattelsestatus,
 } from '../../api'
-import { BEHANDLINGSTYPER } from '../../api'
-import { datum, motionarstext, parti, rosttext } from '../../format'
+import { FELET_I } from '../../api'
+import { datum, rattelseuppgift, rattelsevarde } from '../../format'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -60,25 +60,8 @@ async function steg(r: Rattelse, gor: (id: number) => Promise<unknown>) {
 }
 
 const egen = (r: Rattelse) => r.redaktor === jag.value?.epost
-const FALT: Record<string, string> = {
-  rubrik: 'Rubrik', beslut: 'Beslut', diarienummer: 'Diarienummer', typ: 'Typ', rost: 'Röst', parti: 'Parti', motionarer: 'Motionärer',
-}
-
-function visa(r: Rattelse, v: unknown): string {
-  if (v === null || v === undefined || (Array.isArray(v) && !v.length)) {
-    return r.falt === 'parti' ? 'inget parti' : r.falt === 'typ' ? 'kunde inte klassas' : 'inget'
-  }
-  if (r.falt === 'motionarer') return motionarstext(v as { namn: string | null; parti: string | null }[])
-  if (r.falt === 'parti') return parti(v as string)
-  if (r.falt === 'rost') return rosttext(v as 'ja')
-  if (r.falt === 'typ') return BEHANDLINGSTYPER.find((t) => t.id === v)?.namn ?? String(v)
-  return Array.isArray(v) ? v.join(', ') : String(v)
-}
-function uppgift(r: Rattelse): string {
-  if (r.objekt === 'rost') return `${FALT[r.falt]} för ${r.namn}, votering ${r.votering}`
-  if (r.objekt === 'narvaro') return `Parti för ${r.namn} i närvarolistan`
-  return FALT[r.falt]
-}
+const visa = (r: Rattelse, v: unknown) => rattelsevarde(r.falt, v)
+const uppgift = (r: Rattelse) => rattelseuppgift(r)
 function lank(r: Rattelse): string {
   const s = `/politik/sammantraden/${r.sammantrade.id}`
   return r.paragraf === null ? s : `${s}/paragraf/${r.paragraf}`
@@ -128,6 +111,8 @@ function lank(r: Rattelse): string {
             <dd class="varde" data-testid="nytt">{{ visa(r, r.nytt) }}</dd>
             <dt>Motivering</dt>
             <dd>{{ r.motivering }}</dd>
+            <dt>Felet finns</dt>
+            <dd data-testid="felet-i" :data-felet-i="r.felet_i ?? 'ej_angivet'">{{ FELET_I[r.felet_i ?? 'ej_angivet'] }}</dd>
           </dl>
           <p class="anteckning">
             Skriven av {{ r.redaktor }} {{ datum(r.skapad) }}<template v-if="r.granskad_av">

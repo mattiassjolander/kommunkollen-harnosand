@@ -11,7 +11,7 @@ test.beforeAll(async ({ request }) => {
 
 test('votering per parti och per ledamot, med yrkanden och reservationer', async ({ page }) => {
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('rowheader').getByRole('link').click()
   const rad = page.locator('[data-testid="behandling"][data-paragraf="5"]')
   await expect(rad.getByTestId('har-votering')).toHaveText('Votering')
   await expect(rad.getByTestId('har-reservation')).toBeVisible()
@@ -57,7 +57,7 @@ test('votering per parti och per ledamot, med yrkanden och reservationer', async
 
 test('avstår enligt voteringslistan, med ankare till voteringen', async ({ page }) => {
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
   await page.locator('[data-testid="behandling"][data-paragraf="39"]').getByRole('link').click()
   const v = page.getByTestId('votering')
   await expect(v).toHaveCount(1)

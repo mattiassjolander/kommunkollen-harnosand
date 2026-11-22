@@ -104,7 +104,7 @@ test('sökning på diarienummer hittar ärendet i flera organ', async ({ page })
 
 test('avvikelser vid tolkningen visas på sammanträdet', async ({ page }) => {
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
   await expect(page.getByTestId('avvikelser')).toContainText('saknas: 53, 54')
 })
 
@@ -129,6 +129,6 @@ test('ett sammanträde ur ett paragrafprotokoll säger det', async ({ page }) =>
     await route.fulfill({ response: svar, json: data })
   })
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
   await expect(page.getByTestId('paragrafprotokoll')).toContainText('ersätts när hela protokollet publiceras')
 })
