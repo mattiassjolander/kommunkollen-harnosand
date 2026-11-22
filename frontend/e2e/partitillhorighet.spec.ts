@@ -76,3 +76,52 @@ test('en fastställd partitillhörighet från personsidan till sammanträdet', a
   await expect(rad.getByTestId('parti')).toHaveAttribute('data-parti', person.parti)
   await expect(rad.getByTestId('partitillhorighet')).toHaveCount(0)
 })
+
+// Söm 2 (#100, del 2): redaktören ändrar ett förslag och bekräftar det i en batch, en utgivare publicerar
+// batchen, och läsaren ser partiet med markering och vad protokollet anger. Perioderna återkallas sist.
+test('förslag bekräftas i en batch och publiceras tillsammans', async ({ page, request }) => {
+  await request.post(`${api}/api/auth/test/redaktor`)
+  const forslag = await (await request.get(`${api}/api/partitillhorighet/forslag`)).json()
+  const person = forslag.find(
+    (f: { perioder: { parti: string; krockar: unknown[] }[] }) =>
+      f.perioder.length === 1 && f.perioder[0].parti !== '-' && !f.perioder[0].krockar.length,
+  )
+  expect(person).toBeTruthy()
+
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik/partitillhorighet')
+  const sektion = page.getByTestId('periodforslag')
+  await sektion.getByTestId('forslag-sok').fill(person.ledamot.namn)
+  const rad = sektion.locator(`[data-testid="forslag"][data-ledamot="${person.ledamot.id}"]`)
+  await expect(rad.getByTestId('forslag-parti')).toHaveValue(person.perioder[0].parti)
+  await expect(rad.getByTestId('belagg')).toContainText(String(person.perioder[0].antal_per_parti[person.perioder[0].parti]))
+  await rad.getByTestId('forslag-parti').fill('-')
+  await rad.getByTestId('forslag-motivering').fill('Partilös enligt prov.')
+  await rad.getByTestId('valj').check()
+  await sektion.getByTestId('bekrafta-forslag').click()
+  await expect(page.getByTestId('batch-sparad')).toContainText('1 period är sparad som utkast')
+  await expect(sektion.locator(`[data-testid="forslag"][data-ledamot="${person.ledamot.id}"]`)).toHaveCount(0)
+
+  await page.request.post('/api/auth/test/utgivare')
+  await page.goto('/politik/partitillhorighet')
+  await page.getByTestId('perioder-utkast').locator('..').getByTestId('granska-batch').first().click()
+  await page.getByTestId('publicera-batch').first().click()
+  await expect(page.getByTestId('perioder-publicerad').getByTestId('period')).toHaveCount(1)
+
+  // Läsaren ser partiet med markering och vad protokollet anger.
+  await page.request.post('/api/auth/logga-ut')
+  const sida = await (await request.get(`${api}/api/ledamoter/${person.ledamot.id}`)).json()
+  const s = sida.sammantraden.find((x: { partitillhorighet: unknown }) => x.partitillhorighet)
+  await page.goto(`/politik/sammantraden/${s.sammantrade.id}`)
+  const markering = page.getByTestId('person').filter({ hasText: s.namn }).first().getByTestId('partitillhorighet')
+  await expect(markering).toContainText('Fastställt av redaktionen')
+  await markering.locator('summary').click()
+  await expect(markering).toHaveAttribute('data-protokollet', person.perioder[0].parti)
+  await expect(markering).toContainText('Partilös enligt prov.')
+
+  // Återkalla, så att protokollens uppgifter gäller igen för följande tester.
+  await request.post(`${api}/api/auth/test/utgivare`)
+  for (const t of await (await request.get(`${api}/api/partitillhorighet?status=publicerad`)).json()) {
+    expect((await request.post(`${api}/api/partitillhorighet/${t.id}/aterkallelse`, { data: { motivering: 'Test.' } })).ok()).toBeTruthy()
+  }
+})

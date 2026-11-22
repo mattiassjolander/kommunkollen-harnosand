@@ -7,8 +7,10 @@ import {
   aterkallaPartitillhorighet,
   EjInloggad,
   granskaPartitillhorighet,
+  granskaPeriodbatch,
   hamtaPartitillhorigheter,
   publiceraPartitillhorighet,
+  publiceraPeriodbatch,
   taBortPartitillhorighet,
   type Jag,
   type Partitillhorighet,
@@ -16,6 +18,7 @@ import {
 } from '../../api'
 import { datum } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
+import Periodforslag from '../../components/Periodforslag.vue'
 import Periodformular from '../../components/Periodformular.vue'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
@@ -75,6 +78,31 @@ const vantar = (t: Partitillhorighet) =>
   alla.value.some((x) => x.ersatter_id === t.id && ['utkast', 'granskad'].includes(x.status))
 const kanNyVersion = (t: Partitillhorighet) =>
   arRedaktor.value && ['granskad', 'publicerad'].includes(t.status) && !vantar(t)
+// Batcher (#100, del 2): perioder som bekräftades tillsammans granskas och publiceras tillsammans.
+const meddelande = ref<string | null>(null)
+function skapade(batch: number, antal: number) {
+  meddelande.value = `${antal} ${antal === 1 ? 'period är sparad' : 'perioder är sparade'} som utkast i batch ${batch}.`
+  ladda()
+}
+function batcher(status: Periodstatus) {
+  const ut = new Map<number, Partitillhorighet[]>()
+  for (const t of alla.value) if (t.batch !== null && t.status === status) ut.set(t.batch, [...(ut.get(t.batch) ?? []), t])
+  return [...ut].map(([batch, perioder]) => ({ batch, perioder, egen: perioder.some(egen) }))
+}
+async function batchsteg(batch: number, gor: (b: number) => Promise<unknown>) {
+  arbetar.value = -batch
+  fel.value = null
+  try {
+    await gor(batch)
+    await ladda()
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    fel.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    arbetar.value = null
+  }
+}
+
 const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ersatter_id)
 </script>
 
@@ -93,11 +121,29 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
   <p v-else-if="laddar">Hämtar partitillhörigheter…</p>
   <template v-else>
     <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
+    <p v-if="meddelande" class="meddelande" role="status" data-testid="batch-sparad">{{ meddelande }}</p>
+    <Periodforslag v-if="arRedaktor" @skapade="skapade" @utloggad="utloggad" />
     <section v-for="g in STATUS" :key="g.status" :aria-labelledby="`rubrik-${g.status}`" class="grupp">
       <h2 :id="`rubrik-${g.status}`">
         {{ g.titel }} <span class="antal">({{ alla.filter((t) => t.status === g.status).length }})</span>
       </h2>
       <p class="anteckning">{{ g.text }}</p>
+      <template v-if="arUtgivare && (g.status === 'utkast' || g.status === 'granskad')">
+        <div v-for="b in batcher(g.status)" :key="b.batch" class="batch" data-testid="batch" :data-batch="b.batch">
+          <span>Batch {{ b.batch }}: {{ b.perioder.length }} {{ b.perioder.length === 1 ? 'period' : 'perioder' }}</span>
+          <button
+            v-if="!b.egen"
+            type="button"
+            class="knapp primar"
+            :disabled="arbetar === -b.batch"
+            :data-testid="g.status === 'utkast' ? 'granska-batch' : 'publicera-batch'"
+            @click="batchsteg(b.batch, g.status === 'utkast' ? granskaPeriodbatch : publiceraPeriodbatch)"
+          >
+            {{ g.status === 'utkast' ? 'Markera hela batchen som granskad' : 'Publicera hela batchen' }}
+          </button>
+          <span v-else class="anteckning">Din egen batch. En annan utgivare godkänner den.</span>
+        </div>
+      </template>
       <ul class="lista" :data-testid="`perioder-${g.status}`">
         <li
           v-for="t in alla.filter((x) => x.status === g.status)"
@@ -127,7 +173,7 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
             </template>
           </dl>
           <p class="anteckning">
-            Registrerad av {{ t.redaktor }} {{ datum(t.skapad) }}<template v-if="t.granskad_av">
+            <template v-if="t.batch !== null">Batch {{ t.batch }} · </template>Registrerad av {{ t.redaktor }} {{ datum(t.skapad) }}<template v-if="t.granskad_av">
               · granskad av {{ t.granskad_av }}</template
             ><template v-if="t.publicerad_av"> · publicerad av {{ t.publicerad_av }}</template>
           </p>
@@ -320,6 +366,16 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 6px 8px;
+}
+.batch {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.meddelande {
+  color: var(--ink-secondary);
 }
 .saknas {
   color: var(--ink-muted);

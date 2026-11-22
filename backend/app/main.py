@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -462,6 +462,26 @@ def create_app(
     def skapa_partitillhorighet(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
         """En period som utkast: {ledamot_id, parti, fran, till, motivering}. till kan vara null (tills vidare)."""
         return _period(partitillhorighet.skapa, data, anv.epost)
+
+    @app.get("/api/partitillhorighet/forslag", dependencies=[Depends(krav_roll("redaktor"))])
+    def partitillhorighet_forslag() -> list[dict]:
+        """Föreslagna perioder per person ur närvarolistorna, med belägg och krockar (#100, del 2)."""
+        with db.connect(database_url) as conn:
+            return partiforslag.forslag(conn)
+
+    @app.post("/api/partitillhorighet/batcher", status_code=201)
+    def skapa_partitillhorighet_batch(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> list[dict]:
+        """Bekräftade förslag som utkast i en batch: {motivering, perioder: [{ledamot_id, parti, fran, till,
+        motivering?}]}."""
+        return _period(partitillhorighet.skapa_batch, data, anv.epost)
+
+    @app.post("/api/partitillhorighet/batcher/{batch}/granskning")
+    def granska_partitillhorighet_batch(batch: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> list[dict]:
+        return _period(partitillhorighet.granska_batch, batch, anv.epost)
+
+    @app.post("/api/partitillhorighet/batcher/{batch}/publicering")
+    def publicera_partitillhorighet_batch(batch: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> list[dict]:
+        return _period(partitillhorighet.publicera_batch, batch, anv.epost)
 
     @app.patch("/api/partitillhorighet/{period_id}")
     def andra_partitillhorighet(period_id: int, data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
