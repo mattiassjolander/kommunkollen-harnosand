@@ -486,7 +486,7 @@ export interface Aterkommande {
   summa: { arenden: number; aterremisser: number; bordlaggningar: number }
 }
 
-export type Avvikelsekategori = 'motsagelse' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
+export type Avvikelsekategori = 'motsagelse' | 'felskrivet' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
 
 export interface Avvikelser {
   fran: number
