@@ -391,7 +391,7 @@ def create_app(
 
     @app.get("/api/rattelser", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
     def lista_rattelser(
-        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt)$"),
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt|aterkallad)$"),
     ) -> list[dict]:
         return _rattelse(rattelser.lista, status)
 
@@ -423,6 +423,18 @@ def create_app(
     def publicera_rattelse(rattelse_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         return _rattelse(rattelser.publicera, rattelse_id, anv.epost)
 
+    # Ändra en granskad eller publicerad rättelse genom en ny version, och återkalla en publicerad (#74).
+    @app.post("/api/rattelser/{rattelse_id}/versioner", status_code=201)
+    def ny_version_av_rattelse(rattelse_id: int, data: dict,
+                               anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
+        """En ny version som utkast: {nytt, motivering, felet_i}. Saknade fält tas från den gamla versionen."""
+        return _rattelse(rattelser.ny_version, rattelse_id, data, anv.epost, set(anv.roller))
+
+    @app.post("/api/rattelser/{rattelse_id}/aterkallelse")
+    def aterkalla_rattelse(rattelse_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        """Återkalla en publicerad rättelse direkt: {motivering}. Tolkningen gäller igen."""
+        return _rattelse(rattelser.aterkalla, rattelse_id, data, anv.epost)
+
     # Partiernas budgetförslag (#48): läses in som utkast, rättas av redaktör och publiceras av utgivare.
 
     def _budget(steg, *args):
@@ -450,7 +462,7 @@ def create_app(
 
     @app.get("/api/budgetforslag", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
     def lista_budgetforslag(
-        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt)$"),
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt|aterkallad)$"),
     ) -> list[dict]:
         return _budget(budgetforslag.lista, status)
 
@@ -483,7 +495,7 @@ def create_app(
 
     @app.get("/api/planforutsattningar", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
     def lista_planforutsattningar(
-        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt)$"),
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt|aterkallad)$"),
     ) -> list[dict]:
         return _budget(planforutsattningar.lista, status)
 

@@ -74,6 +74,38 @@ test('en rättelse från utkast till publicerad, sedd som läsare', async ({ pag
   await expect(felaktighet).toContainText('Beslutet på sidan 3.')
   await page.getByTestId('filter-felet').selectOption('inlasningen')
   await expect(page.getByTestId('felaktighet')).toHaveCount(0)
+
+  // Söm 3 (#74): redaktören ändrar den publicerade rättelsen till fel i inläsningen genom en ny version.
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik/rattelser')
+  const publicerad = page.getByTestId('rattelser-publicerad').getByTestId('rattelse').first()
+  await publicerad.getByTestId('ny-version').click()
+  const version = publicerad.getByTestId('ny-version-formular')
+  await expect(version.getByTestId('version-varde')).toHaveValue('Kommunfullmäktige godkänner dagordningen med ändringar.')
+  await expect(version.getByTestId('felet-i-protokollet')).toBeChecked()
+  await version.getByTestId('felet-i-inlasningen').check()
+  await version.getByTestId('andring-motivering').fill('Beslutet står rätt i protokollet, tolkningen missade det.')
+  await version.getByTestId('spara-andring').click()
+  await expect(publicerad.getByTestId('version-vantar')).toBeVisible()
+
+  // En annan person med rollen utgivare granskar och publicerar den nya versionen.
+  await page.request.post('/api/auth/test/utgivare')
+  await page.reload()
+  const nyVersion = page.getByTestId('rattelser-utkast').getByTestId('rattelse').first()
+  await expect(nyVersion.getByTestId('felet-i')).toHaveText('I inläsningen')
+  await expect(nyVersion.getByTestId('tidigare-versioner')).toContainText('Ersätter (1)')
+  await nyVersion.getByTestId('granska').click()
+  await page.getByTestId('rattelser-granskad').getByTestId('rattelse').first().getByTestId('publicera').click()
+  await expect(page.getByTestId('rattelser-ersatt').getByTestId('rattelse')).toHaveCount(1)
+  await expect(page.getByTestId('rattelser-publicerad').getByTestId('felet-i')).toHaveText('I inläsningen')
+
+  // Markeringen försvinner, och läsaren ser den gamla versionen i historiken.
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik?organ=KF')
+  await expect(page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByTestId('felaktigheter')).toHaveCount(0)
+  await page.goto(adress)
+  await markering.locator('summary').click()
+  await expect(markering.getByTestId('tidigare-versioner')).toContainText('Beslutet på sidan 3.')
 })
 
 test('en redaktör som också är utgivare kan inte godkänna sin egen rättelse', async ({ page }) => {

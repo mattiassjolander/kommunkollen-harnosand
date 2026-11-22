@@ -246,7 +246,7 @@ _Avoid_: Ogranskad uppgift, maskinuppgift
 En uppgift som plattformen har läst med textigenkänning ur ett protokoll som bara innehåller bilder. Den kan innehålla läsfel utöver dem som tolkningen kan ge.
 
 **Rättelse**:
-En redaktörs ändring av en automatiskt tolkad uppgift, med en motivering. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad rättelse visas med markering, och läsaren kan se vad tolkningen sa. Tolkningen ändras inte. Rättelsen anger om felet finns i protokollet eller i inläsningen.
+En redaktörs ändring av en automatiskt tolkad uppgift, med en motivering. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad rättelse visas med markering, och läsaren kan se vad tolkningen sa. Tolkningen ändras inte. Rättelsen anger om felet finns i protokollet eller i inläsningen. En granskad eller publicerad rättelse ändras genom en ny version, som ersätter den gamla när den publiceras. En utgivare kan återkalla en publicerad rättelse, och då gäller tolkningen igen.
 _Avoid_: Korrigering, redigering
 
 **Felaktighet i protokollet**:

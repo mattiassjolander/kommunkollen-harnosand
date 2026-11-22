@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Redaktionella rättelser (#33): utkast → granskad → publicerad. En utgivare granskar och
-// publicerar, men aldrig sin egen rättelse.
-import { computed, inject, onMounted, ref, type Ref } from 'vue'
+// publicerar, men aldrig sin egen rättelse. En granskad eller publicerad rättelse ändras genom en ny version, och
+// en utgivare kan återkalla en publicerad. Ersatta och återkallade versioner visas som historik (#74).
+import { computed, inject, nextTick, onMounted, ref, type Ref } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   EjInloggad,
   granskaRattelse,
@@ -15,12 +17,20 @@ import {
 import { FELET_I } from '../../api'
 import { datum, rattelseuppgift, rattelsevarde } from '../../format'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
+import Rattelseandring from '../../components/Rattelseandring.vue'
 
+const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
 const roller = computed(() => jag.value?.roller ?? [])
 const behorig = computed(() => roller.value.includes('redaktor') || roller.value.includes('utgivare'))
 const arUtgivare = computed(() => roller.value.includes('utgivare'))
+const arRedaktor = computed(() => roller.value.includes('redaktor'))
+// Formuläret för en ny version eller en återkallelse, för en rättelse i taget.
+const andras = ref<{ id: number; lage: 'version' | 'aterkalla' } | null>(null)
+const vantar = (r: Rattelse) => alla.value.some((x) => x.ersatter_id === r.id && ['utkast', 'granskad'].includes(x.status))
+const kanNyVersion = (r: Rattelse) =>
+  ['granskad', 'publicerad'].includes(r.status) && !vantar(r) && (arRedaktor.value || r.falt === 'motionarer')
 
 const alla = ref<Rattelse[]>([])
 const laddar = ref(true)
@@ -31,11 +41,15 @@ const STATUS: { status: Rattelsestatus; titel: string; text: string }[] = [
   { status: 'utkast', titel: 'Utkast', text: 'Väntar på att en utgivare granskar dem.' },
   { status: 'granskad', titel: 'Granskade', text: 'Väntar på att en utgivare publicerar dem.' },
   { status: 'publicerad', titel: 'Publicerade', text: 'Visas för läsarna med markering.' },
+  { status: 'ersatt', titel: 'Ersatta versioner', text: 'Har ersatts av en nyare version. Bevaras som historik.' },
+  { status: 'aterkallad', titel: 'Återkallade', text: 'Gäller inte längre. Tolkningen gäller igen.' },
 ]
 
 async function ladda() {
   try {
     alla.value = await hamtaRattelser()
+    // En länk från listan över felaktigheter pekar på en rättelse.
+    if (route.hash) nextTick(() => document.getElementById(route.hash.slice(1))?.scrollIntoView())
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
@@ -90,6 +104,7 @@ function lank(r: Rattelse): string {
       <ul class="lista" :data-testid="`rattelser-${g.status}`">
         <li
           v-for="r in alla.filter((x) => x.status === g.status)"
+          :id="`rattelse-${r.id}`"
           :key="r.id"
           class="kort"
           data-testid="rattelse"
@@ -113,7 +128,20 @@ function lank(r: Rattelse): string {
             <dd>{{ r.motivering }}</dd>
             <dt>Felet finns</dt>
             <dd data-testid="felet-i" :data-felet-i="r.felet_i ?? 'ej_angivet'">{{ FELET_I[r.felet_i ?? 'ej_angivet'] }}</dd>
+            <template v-if="r.aterkallad">
+              <dt>Återkallad</dt>
+              <dd data-testid="aterkallelse">{{ r.aterkallelse }} ({{ r.aterkallad_av }} {{ datum(r.aterkallad) }})</dd>
+            </template>
           </dl>
+          <details v-if="r.tidigare.length" class="tidigare" data-testid="tidigare-versioner">
+            <summary>{{ r.ersatter_id ? 'Ersätter' : 'Tidigare versioner' }} ({{ r.tidigare.length }})</summary>
+            <ol>
+              <li v-for="t in r.tidigare" :key="t.id" :data-status="t.status">
+                {{ visa(t, t.nytt) }}, {{ FELET_I[t.felet_i ?? 'ej_angivet'].toLowerCase() }}.
+                {{ t.motivering }} <span class="anteckning">({{ t.status }})</span>
+              </li>
+            </ol>
+          </details>
           <p class="anteckning">
             Skriven av {{ r.redaktor }} {{ datum(r.skapad) }}<template v-if="r.granskad_av">
               · granskad av {{ r.granskad_av }}</template
@@ -155,7 +183,34 @@ function lank(r: Rattelse): string {
             >
               Ta bort utkastet
             </button>
+            <button
+              v-if="kanNyVersion(r) && andras?.id !== r.id"
+              type="button"
+              class="knapp"
+              data-testid="ny-version"
+              @click="andras = { id: r.id, lage: 'version' }"
+            >
+              {{ r.felet_i ? 'Ändra genom ny version' : 'Ange var felet finns' }}
+            </button>
+            <p v-else-if="vantar(r)" class="anteckning" data-testid="version-vantar">En ny version väntar på granskning.</p>
+            <button
+              v-if="arUtgivare && r.status === 'publicerad' && andras?.id !== r.id"
+              type="button"
+              class="knapp"
+              data-testid="aterkalla"
+              @click="andras = { id: r.id, lage: 'aterkalla' }"
+            >
+              Återkalla
+            </button>
           </div>
+          <Rattelseandring
+            v-if="andras?.id === r.id"
+            :rattelse="r"
+            :lage="andras.lage"
+            @klar="andras = null; ladda()"
+            @avbryt="andras = null"
+            @utloggad="utloggad"
+          />
         </li>
       </ul>
     </section>
@@ -196,6 +251,14 @@ function lank(r: Rattelse): string {
 }
 .var a {
   color: var(--accent);
+}
+.tidigare {
+  font-size: 13px;
+  margin-top: 8px;
+}
+.tidigare ol {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
 .falt {
   display: grid;

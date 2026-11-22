@@ -2,7 +2,7 @@
 // Avvikelser i protokollen: en samlad lista att gå igenom och vid behov lämna till kommunen.
 // Varje publicerad rättelse listas med före och efter och var felet finns (#74).
 // Organ, årsintervall, kategori och var felet finns speglas i URL:en (design.md, Filter).
-import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, ref, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   EjInloggad,
@@ -11,6 +11,7 @@ import {
   hamtaOrgan,
   type Avvikelser,
   type Avvikelserattelse,
+  type Jag,
   type Organ,
 } from '../../api'
 import { rattelseuppgift, rattelsevarde, sammantradesdatum, tal } from '../../format'
@@ -19,6 +20,8 @@ import PolitikFlikar from '../../components/PolitikFlikar.vue'
 const route = useRoute()
 const router = useRouter()
 const utloggad = inject<() => void>('utloggad', () => {})
+const jag = inject<Ref<Jag | null>>('jag', ref(null))
+const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
 
 function fraga(namn: string) {
   return computed<string>({
@@ -203,6 +206,12 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
                 <span class="varde" data-testid="rattat">{{ rattelsevarde(x.falt, x.nytt) }}</span>.
               </span>
               <span class="motivering">{{ x.motivering }}</span>
+              <RouterLink
+                v-if="arRedaktor && !x.felet_i"
+                :to="`/politik/rattelser#rattelse-${x.id}`"
+                class="komplettera"
+                data-testid="komplettera"
+              >Ange var felet finns</RouterLink>
             </li>
           </ul>
         </li>
