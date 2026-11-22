@@ -70,6 +70,13 @@ def _ursprungligt(conn: psycopg.Connection, m: dict) -> Any:
             return klassa(rad["rubrik"], rad["beslut"])
         if m["falt"] == "motionarer":
             return rad["motionarer"] or []
+        if m["falt"] == "diarienummer" and not rad["diarienummer"]:
+            # Saknar protokollet diarienummer gäller kallelsens (#109).
+            ur_kallelsen = conn.execute(
+                "SELECT diarienummer FROM kallelse_diarienummer WHERE sammantrade_id = %s AND paragraf = %s",
+                (m["sammantrade_id"], m["paragraf"]),
+            ).fetchone()
+            return ur_kallelsen["diarienummer"] if ur_kallelsen else rad["diarienummer"]
         return rad[m["falt"]]
     if m["objekt"] == "rost":
         rad = conn.execute(

@@ -363,10 +363,21 @@ export interface PartiHarlett {
   sammantrade: { id: number; datum: string | null; organ: Organ } | null
 }
 
+/** Kallelsen som diarienumret kommer från, när protokollet saknar det (#109). */
+export interface Diarienummerkallelse {
+  titel: string
+  typ: 'kallelse' | 'kungorelse' | 'handlingar'
+  /** Till sidan i kallelsen (#page=N). */
+  url: string
+  sida: number | null
+}
+
 export interface Behandlingsrad {
   paragraf: number
   rubrik: string
   diarienummer: string[]
+  /** Satt när diarienumret står i kallelsen men inte i protokollet. */
+  diarienummer_kallelse?: Diarienummerkallelse | null
   beslut: string | null
   /** Behandlingstyp, automatiskt klassad ur rubrik och beslut (eller rättad). null = kunde inte klassas. */
   typ?: Behandlingstyp | null
@@ -502,7 +513,7 @@ export interface Aterkommande {
   summa: { arenden: number; aterremisser: number; bordlaggningar: number }
 }
 
-export type Avvikelsekategori = 'motsagelse' | 'felskrivet' | 'ofullstandigt' | 'paragrafer' | 'tolkning'
+export type Avvikelsekategori = 'motsagelse' | 'felskrivet' | 'ofullstandigt' | 'paragrafer' | 'kallelsen' | 'tolkning'
 
 /** En publicerad rättelse i listan över felaktigheter (#74). */
 export interface Avvikelserattelse {
@@ -614,6 +625,8 @@ export interface Soktraff {
   paragraf: number
   rubrik: string
   diarienummer: string[]
+  /** Diarienumret står i kallelsen, inte i protokollet (#109). */
+  diarienummer_ur_kallelsen?: boolean
   sammantrade: { id: number; datum: string | null; tolkning: 'tolkad' | 'ej_tolkad'; organ: Organ }
 }
 export interface Sokresultat {
@@ -793,7 +806,11 @@ export interface Arende {
   rubrik: string | null
   diarienummer: string[]
   /** I tidsordning. */
-  behandlingar: (Behandlingsref & { diarienummer: string[]; beslut: string | null })[]
+  behandlingar: (Behandlingsref & {
+    diarienummer: string[]
+    diarienummer_kallelse?: Diarienummerkallelse | null
+    beslut: string | null
+  })[]
   kopplingar: Koppling[]
   /** Det senaste beslutet, om det inte är ett förslag till ett annat organ. */
   slutligt_beslut: { sammantrade_id: number; paragraf: number; organ: Organ; datum: string | null; beslut: string } | null

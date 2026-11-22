@@ -32,7 +32,8 @@ class _Via(httpx.BaseTransport):
         self.client = client
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
-        return self.client.send(request)
+        # Svaret läses av den yttre klienten, så att en stor fil kan hämtas med `stream` (kallelser, #109).
+        return self.client.send(request, stream=True)
 
 
 class RobustTransport(httpx.BaseTransport):

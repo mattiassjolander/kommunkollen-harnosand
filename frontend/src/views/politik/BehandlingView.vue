@@ -5,6 +5,7 @@ import {
   BEHANDLINGSTYPER, EjInloggad, hamtaBehandling, Saknas, type Behandling, type Jag, type Votering } from '../../api'
 import { namnOchParti, rosttext, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
+import Kallelsemarkering from '../../components/Kallelsemarkering.vue'
 import Periodmarkering from '../../components/Periodmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
@@ -83,6 +84,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
       </p>
       <p v-if="b.diarienummer.length || b.rattelser?.diarienummer" class="ingress" data-testid="diarienummer">
         Diarienummer {{ b.diarienummer.join(', ') || 'saknas' }}
+        <Kallelsemarkering v-if="b.diarienummer_kallelse" :kalla="b.diarienummer_kallelse" />
         <Rattelsemarkering v-if="b.rattelser?.diarienummer" :rattelse="b.rattelser.diarienummer" falt="diarienummer" />
       </p>
       <p class="ingress" data-testid="typ">

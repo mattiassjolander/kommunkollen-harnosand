@@ -7,7 +7,10 @@ en del av protokollet. Listan skiljer på dem så gott det går, men säger inte
 förrän någon har tittat på originalet.
 
 Publicerade rättelser (ADR-0002) räknas med, eftersom en rättelse visar att protokollet eller
-tolkningen innehöll något som en redaktör har rättat. Varje rättelse listas med vad den rättar, före
+tolkningen innehöll något som en redaktör har rättat.
+
+Avvikelser mellan kallelsen och protokollet (#109) räknas också med: en kallelse som bara delvis kunde
+läsas, och ett diarienummer i kallelsen vars rubrik inte liknar någon paragraf i protokollet. Varje rättelse listas med vad den rättar, före
 och efter, motiveringen och var felet finns (#74): i protokollet, i inläsningen eller inte angivet.
 Rättelser av fel i protokollet är felaktigheter i protokollet.
 """
@@ -27,6 +30,7 @@ KATEGORIER = {
     "felskrivet": "Felskrivet i protokollet",
     "ofullstandigt": "Ofullständigt dokument",
     "paragrafer": "Paragraferna stämmer inte",
+    "kallelsen": "Stämmer inte med kallelsen",
     "tolkning": "Kunde inte läsas av plattformen",
 }
 I_PROTOKOLLET = {"motsagelse", "felskrivet", "ofullstandigt"}
@@ -35,6 +39,7 @@ _REGLER = [
     ("felskrivet", re.compile(r"felskriven i protokollet", re.I)),
     ("ofullstandigt", re.compile(r"PDF:en (?:har \d+ av|saknar text)|paragrafprotokoll", re.I)),
     ("paragrafer", re.compile(r"paragrafintervall|samma paragraf förekommer", re.I)),
+    ("kallelsen", re.compile(r"liknar ingen paragraf i protokollet", re.I)),
 ]
 
 
@@ -46,7 +51,8 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
     """Sammanträden för åren fran–till med avvikelser, ett otolkat protokoll eller publicerade rättelser."""
     rader = conn.execute(
         """
-        SELECT s.id, s.organ, s.datum, s.tolkning, s.avvikelser, d.typ AS dokument_typ, d.url,
+        SELECT s.id, s.organ, s.datum, s.tolkning, s.avvikelser || s.kallelse_avvikelser AS avvikelser,
+               d.typ AS dokument_typ, d.url,
                EXISTS (SELECT 1 FROM rattelse r WHERE r.sammantrade_id = s.id AND r.status = 'publicerad')
                  AS har_rattelser
         FROM sammantrade s JOIN dokument d ON d.id = s.dokument_id

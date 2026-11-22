@@ -151,9 +151,23 @@ def test_lasta_kallelser_hamtas_inte_igen(database_url, google):
     [forsta] = kor(app)["kallor"]
     assert forsta["status"] == "lyckad", forsta["fel"]
     pdf_forsta = [a for a in transport.adresser if a.endswith(".pdf")]
-    assert len(pdf_forsta) == 10  # åtta kungörelser och två små kallelser från skolnämnden
+    # Åtta kungörelser, två små kallelser från skolnämnden och fullmäktiges små handlingar 2026-10-26 kl. 11
+    # (för föredragningslistan, #109). Varje fil hämtas en gång, också när både platsen och listan läses.
+    assert len(pdf_forsta) == len(set(pdf_forsta)) == 11
 
     transport.adresser.clear()
     [andra] = kor(app)["kallor"]
     assert andra["status"] == "inga_nya"
     assert [a for a in transport.adresser if a.endswith(".pdf")] == []
+
+
+def test_foredragningslistan_lases_ur_nya_kallelser_och_kompletterar_protokollet(api):
+    # Fullmäktige 2026-10-26 kl. 11: protokollet saknar diarienummer, handlingarna har dem (#109).
+    [s] = [x for x in api.get("/api/sammantraden", params={"organ": "KF"}).json()
+           if x["datum"] == "2026-10-26" and x["starttid"] == "11:10"]
+    per_nr = {b["paragraf"]: b for b in api.get(f"/api/sammantraden/{s['id']}").json()["behandlingar"]}
+    b = per_nr[141]
+    assert b["diarienummer"] == ["KS/2026-533"]
+    assert b["diarienummer_kallelse"]["titel"] == "Handlingar kommunfullmäktige 2026-10-26, 11 00"
+    assert b["diarienummer_kallelse"]["url"].endswith("#page=6")
+    assert per_nr[137]["diarienummer_kallelse"] is None  # val av justerare har inget diarienummer

@@ -37,6 +37,8 @@ def utan_anropsgrans(monkeypatch):
     monkeypatch.setenv("PROTOKOLL_ANROP_PER_SEKUND", "0")
     # Inspelningarna har två protokoll per sida och årsmapp (spela_in med PROTOKOLL_URVAL=2).
     monkeypatch.setenv("PROTOKOLL_URVAL", "2")
+    # Föredragningslistan läses bara ur de små kallelserna, som finns i inspelningarna (#109).
+    monkeypatch.setenv("KALLELSE_MAX_STORLEK_FOR_LISTA", "2000000")
 
 
 @pytest.fixture(scope="session")

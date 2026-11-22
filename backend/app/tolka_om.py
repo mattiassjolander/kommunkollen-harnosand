@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from . import db, kalender, sammantradesplan
+from . import db, kalender, kallelsepunkter, sammantradesplan
 from .arenden import koppla
 from .protokoll import tolka_om
 
@@ -20,6 +20,7 @@ def main() -> None:
     db.migrate(url)
     with db.connect(url) as conn:
         antal = tolka_om(conn, datetime.now(timezone.utc))
+        kallelsepunkter.komplettera(conn)
         arenden = koppla(conn)
         sammantradesplan.lagra_beslut(conn, kalender.idag())
     print(
