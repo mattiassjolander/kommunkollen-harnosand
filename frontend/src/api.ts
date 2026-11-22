@@ -1055,7 +1055,13 @@ export interface Differens {
   mnkr: number
   procent: number | null
 }
-export type Budgetstatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt'
+export type Budgetstatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt' | 'aterkallad'
+/** Vem som återkallade en publicerad uppgift, när och varför (#76). Bara för redaktionen. */
+export interface Aterkallelse {
+  aterkallad_av: string | null
+  aterkallad: string | null
+  aterkallelse: string | null
+}
 export interface Budgetforslag {
   id: number
   budgetar: number
@@ -1083,7 +1089,7 @@ export interface Budgetforslag {
     ramar: (Differens & { organ: string })[]
   } | null
 }
-export interface Budgetutkast extends Budgetforslag {
+export interface Budgetutkast extends Budgetforslag, Aterkallelse {
   redaktorer: string[]
   granskad_av: string | null
   granskad: string | null
@@ -1124,7 +1130,7 @@ export interface Planforutsattningar {
   kontroller: Kontroll[]
   publicerad: string | null
 }
-export interface Planutkast extends Planforutsattningar {
+export interface Planutkast extends Planforutsattningar, Aterkallelse {
   redaktorer: string[]
   granskad_av: string | null
   granskad: string | null
@@ -1140,6 +1146,11 @@ export interface Budgetjamforelse {
   forslag: Budgetforslag[]
   /** Planförutsättningarnas skatteintäkter och generella bidrag och utjämning mot SKR:s prognoser (#62). */
   skr: SkrJamforelse
+  /** Det som är återkallat för rättning och inte har fått en rättad publicerad version (#76). */
+  aterkallat: {
+    planforutsattningar: boolean
+    forslag: Pick<Budgetforslag, 'nyckel' | 'partier' | 'titel' | 'typ'>[]
+  }
 }
 
 export interface SkrJamforelse {
@@ -1176,6 +1187,9 @@ export const granskaBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/granskning`, 'POST') as unknown as Promise<Budgetutkast>
 export const publiceraBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/publicering`, 'POST') as unknown as Promise<Budgetutkast>
+/** En utgivare återkallar ett publicerat förslag direkt, med motivering (#76). */
+export const aterkallaBudgetforslag = (id: number, motivering: string) =>
+  skrivRattelse(`/api/budgetforslag/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Budgetutkast>
 export async function hamtaPlanutkast(status?: Budgetstatus): Promise<Planutkast[]> {
   const svar = await fetch(`/api/planforutsattningar${status ? `?status=${status}` : ''}`)
   if (svar.status === 401) throw new EjInloggad()
@@ -1187,6 +1201,9 @@ export const granskaPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/granskning`, 'POST') as unknown as Promise<Planutkast>
 export const publiceraPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/publicering`, 'POST') as unknown as Promise<Planutkast>
+/** En utgivare återkallar publicerade planförutsättningar direkt, med motivering (#76). */
+export const aterkallaPlanforutsattningar = (id: number, motivering: string) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Planutkast>
 
 // Sammanträdesplaner (#68): organens planer så som webbsidan visar dem, och skillnaderna mot besluten i
 // protokollen. Bara för redaktionen.

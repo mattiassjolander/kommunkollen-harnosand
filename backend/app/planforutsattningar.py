@@ -9,6 +9,10 @@ längst ner läses inte. Övriga kolumner och flikar som inte heter ett år hopp
 Planförutsättningarna går utkast → granskad → publicerad (ADR-0002). Ingen godkänner det hen själv
 läst in. Förslagens förändringar och beräknade resultat visas publikt först när årets
 planförutsättningar är publicerade.
+
+En utgivare kan återkalla publicerade planförutsättningar direkt, med motivering, när de innehåller fel
+(#76). Läsaren ser då året utan planförutsättningar och en notis, tills en rättad version har publicerats.
+Den förra publicerade versionen kommer inte tillbaka.
 """
 
 from __future__ import annotations
@@ -231,7 +235,7 @@ def kallor(text: str, forslag: dict[str, int]) -> list[dict]:
 # Granskning och publicering
 
 _KOLUMNER = ("id, budgetar, filnamn, uppgifter, status, redaktorer, andrad, granskad_av, granskad, publicerad_av, "
-             "publicerad")
+             "publicerad, aterkallad_av, aterkallad, aterkallelse")
 
 
 def _forslag(conn: psycopg.Connection, budgetar: int, publicerade: bool) -> dict[str, int]:
@@ -254,7 +258,9 @@ def _ut(conn: psycopg.Connection, r: dict, redaktion: bool) -> dict:
           "publicerad": r["publicerad"].isoformat() if r["publicerad"] else None}
     if redaktion:
         ut |= {"redaktorer": r["redaktorer"], "granskad_av": r["granskad_av"], "publicerad_av": r["publicerad_av"],
-               "andrad": r["andrad"].isoformat(), "granskad": r["granskad"].isoformat() if r["granskad"] else None}
+               "andrad": r["andrad"].isoformat(), "granskad": r["granskad"].isoformat() if r["granskad"] else None,
+               "aterkallad_av": r["aterkallad_av"], "aterkallelse": r["aterkallelse"],
+               "aterkallad": r["aterkallad"].isoformat() if r["aterkallad"] else None}
     return ut
 
 
@@ -308,3 +314,28 @@ def publicera(conn: psycopg.Connection, pf_id: int, utgivare: str, nu: datetime)
                  (utgivare, nu, pf_id))
     conn.commit()
     return las(conn, pf_id)
+
+
+def aterkalla(conn: psycopg.Connection, pf_id: int, data: dict, utgivare: str, nu: datetime) -> dict:
+    """En utgivare återkallar publicerade planförutsättningar direkt, med motivering. Ingen annan godkänner det."""
+    r = _hamta(conn, pf_id)
+    if r["status"] != "publicerad":
+        raise Konflikt(f"Bara publicerade planförutsättningar kan återkallas, de här är {r['status']}")
+    motivering = (data.get("motivering") or "").strip()
+    if not motivering:
+        raise Ogiltig("Ange varför planförutsättningarna återkallas, till exempel vem som påpekade felet och när")
+    conn.execute(
+        "UPDATE planforutsattningar SET status = 'aterkallad', aterkallad_av = %s, aterkallad = %s, aterkallelse = %s "
+        "WHERE id = %s", (utgivare, nu, motivering, pf_id),
+    )
+    conn.commit()
+    return las(conn, pf_id)
+
+
+def aterkallad(conn: psycopg.Connection, budgetar: int) -> bool:
+    """Om budgetårets planförutsättningar är återkallade och ingen rättad version är publicerad."""
+    return conn.execute(
+        "SELECT 1 FROM planforutsattningar a WHERE a.budgetar = %(b)s AND a.status = 'aterkallad' "
+        "AND NOT EXISTS (SELECT 1 FROM planforutsattningar p WHERE p.budgetar = %(b)s AND p.status = 'publicerad')",
+        {"b": budgetar},
+    ).fetchone() is not None

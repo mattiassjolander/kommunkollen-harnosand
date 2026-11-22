@@ -221,3 +221,54 @@ test('planförutsättningarna jämförs med SKR:s skatteunderlagsprognoser (#62)
   await expect(c28.getByRole('link', { name: '26:28' })).toHaveAttribute('href', /26028\.xlsm$/)
   await expect(skr.getByTestId('skr-forklaring')).toContainText('En differens behöver därför inte vara ett fel')
 })
+
+// Söm 1 (#76): en utgivare återkallar planförutsättningarna för 2027 och Sverigedemokraternas förslag. Läsaren ser
+// förslagen utan förändringar och notiser i stället för det återkallade. Testet körs sist i filen, eftersom de
+// återkallade uppgifterna inte kommer tillbaka förrän en rättad version läses in och publiceras.
+test('utgivaren återkallar planförutsättningarna och ett förslag (#76)', async ({ page }) => {
+  const motivering = 'Kommunstyrelsens ram är fel avläst. Påpekat av en läsare 2026-11-20.'
+  const planPubl = page.locator('[data-testid="publicerad"][data-slag="planforutsattningar"][data-budgetar="2027"]')
+  const sdPubl = page.locator('[data-testid="publicerad"][data-nyckel="SD"]')
+  const laddad = () => expect(page.getByTestId('publicerad').or(page.getByTestId('aterkallad')).first()).toBeVisible()
+
+  // En redaktör kan inte återkalla.
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik/budgetutkast')
+  await laddad()
+  await expect(page.getByTestId('aterkalla')).toHaveCount(0)
+
+  await page.request.post('/api/auth/test/utgivare')
+  await page.goto('/politik/budgetutkast')
+  await laddad()
+  for (const publ of [planPubl, sdPubl]) {
+    if ((await publ.count()) === 0) continue // återkallad i en tidigare körning
+    await publ.getByTestId('aterkalla').click()
+    await expect(publ.getByTestId('spara-aterkallelse')).toBeDisabled()
+    await publ.getByTestId('aterkalla-motivering').fill(motivering)
+    await publ.getByTestId('spara-aterkallelse').click()
+    await expect(publ).toHaveCount(0)
+  }
+  const planAter = page.locator('[data-testid="aterkallad"][data-budgetar="2027"]:not([data-nyckel])')
+  await expect(planAter.getByTestId('aterkallelse')).toHaveText(motivering)
+  await expect(planAter).toContainText('test-utgivare@kommunkollen.test')
+  await expect(page.locator('[data-testid="aterkallad"][data-nyckel="SD"]').getByTestId('aterkallelse')).toHaveText(motivering)
+
+  // Läsaren ser året utan planförutsättningar och utan Sverigedemokraternas förslag, med notiser.
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik/budget')
+  await expect(page.getByTestId('aterkallat-planforutsattningar')).toContainText(
+    'Planförutsättningarna för 2027 är tillbakadragna för rättning.',
+  )
+  await expect(page.locator('[data-testid="aterkallat-forslag"][data-nyckel="SD"]')).toHaveText(
+    'Förslaget från SD är tillbakadraget för rättning.',
+  )
+  const tabell = page.getByTestId('budgetjamforelse')
+  await expect(tabell.locator('thead th[data-nyckel]')).toHaveCount(3)
+  await expect(tabell.locator('thead th[data-nyckel="SD"]')).toHaveCount(0)
+  await expect(tabell.getByTestId('plankolumn')).toHaveCount(0)
+  await expect(tabell.getByTestId('forandring')).toHaveCount(0)
+  await expect(tabell.getByTestId('resultatdifferens')).toHaveCount(0)
+  await expect(page.getByTestId('planforutsattningar')).toHaveCount(0)
+  // Ramarna står kvar som förslagen anger dem.
+  await expect(tabell.locator('tr[data-organ="Kommunstyrelsen"] td').nth(1)).toContainText('150,0 mnkr')
+})
