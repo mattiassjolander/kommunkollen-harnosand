@@ -17,7 +17,7 @@ import psycopg
 
 from . import partier
 from .rattelser import Publicerade
-from .sources.harnosand import ORGAN
+from .sources.harnosand import organ_ref, ORGAN
 
 KATEGORIER = ("beslutande", "ej_tjanstgorande", "franvarande")
 
@@ -39,11 +39,6 @@ def personer_for(conn: psycopg.Connection, namn: Iterable[str]) -> dict[str, int
         "SELECT namn, coalesce(huvud_id, id) AS person FROM ledamot WHERE namn = ANY(%s)", (list(set(namn)),)
     ).fetchall()
     return {r["namn"]: r["person"] for r in rader}
-
-
-def _organ(organ_id: str) -> dict:
-    o = ORGAN.get(organ_id)
-    return {"id": organ_id, "namn": o.namn if o else organ_id}
 
 
 def _sorteringsnyckel(namn: str) -> str:
@@ -94,7 +89,7 @@ def lista(conn: psycopg.Connection, q: str | None = None, parti: str | None = No
             "parti": r["senaste_parti"],
             # Partierna personen haft enligt protokollen ('-' = partilös). Saknat parti räknas inte.
             "partier": sorted(p for p in r["partier"] if p),
-            "organ": [_organ(o) for o in sorted(r["organ"], key=list(ORGAN).index)],
+            "organ": [organ_ref(o) for o in sorted(r["organ"], key=list(ORGAN).index)],
             "antal_sammantraden": r["antal_sammantraden"],
             "senast": r["senast"],
         })
@@ -165,7 +160,7 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
     per_organ: dict[str, dict] = {}
     for f in forekomster:
         o = per_organ.setdefault(f["organ"], {
-            "organ": _organ(f["organ"]), "roller": [], "antal": 0, "fran": f["datum"], "till": f["datum"],
+            "organ": organ_ref(f["organ"]), "roller": [], "antal": 0, "fran": f["datum"], "till": f["datum"],
             **{k: 0 for k in KATEGORIER},
         })
         o["antal"] += 1
@@ -188,7 +183,7 @@ def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
         "sammantraden": [
             {
                 "sammantrade": {"id": f["sammantrade_id"], "datum": f["datum"], "starttid": f["starttid"],
-                                "organ": _organ(f["organ"]), "tolkning": f["tolkning"]},
+                                "organ": organ_ref(f["organ"]), "tolkning": f["tolkning"]},
                 "namn": f["namn"], "parti": f["parti"], "parti_harlett": f.get("parti_harlett"),
                 "rattelser": f.get("rattelser"),
                 "roll": f["roll"], "kategori": f["kategori"],
@@ -222,7 +217,7 @@ def _roster(conn: psycopg.Connection, namn: list[str]) -> list[dict]:
     ).fetchall()
     return [
         {
-            "sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": _organ(r["organ"])},
+            "sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": organ_ref(r["organ"])},
             "paragraf": r["paragraf"], "rubrik": r["rubrik"],
             "votering": r["ordning"] + 1, "antal_voteringar": r["antal_voteringar"],
             "namn": r["namn"], "parti": r["parti"], "rost": r["rost"],

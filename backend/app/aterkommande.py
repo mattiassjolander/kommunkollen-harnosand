@@ -16,17 +16,12 @@ from collections import defaultdict
 
 import psycopg
 
+from .behandlingar import las as behandlingar_las
 from .arenden import NIVA, SAMLING
-from .rattelser import Publicerade
-from .sources.harnosand import ORGAN
+from .sources.harnosand import organ_ref
 
 _ATERREMISS = re.compile(r"\båterremitter", re.I)
 _BORDLAGG = re.compile(r"\bbordlägg", re.I)
-
-
-def _organ(organ_id: str) -> dict:
-    o = ORGAN.get(organ_id)
-    return {"id": organ_id, "namn": o.namn if o else organ_id}
 
 
 def handelse(beslut: str | None) -> str | None:
@@ -39,25 +34,11 @@ def handelse(beslut: str | None) -> str | None:
 
 
 def aterkommande(conn: psycopg.Connection, fran: int, till: int, organ: str | None = None) -> dict:
-    rader = conn.execute(
-        """
-        SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.sammantrade_id, b.paragraf, b.rubrik, b.beslut,
-               b.diarienummer, s.organ, s.datum, a.arende_id
-        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-        JOIN arende_behandling a ON a.sammantrade_id = b.sammantrade_id AND a.paragraf = b.paragraf
-        WHERE s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
-          AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
-        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
-        """,
-        {"fran": fran, "till": till, "organ": organ},
-    ).fetchall()
-    pub = Publicerade(conn, list({r["sammantrade_id"] for r in rader}))
     per: dict[int, list[dict]] = defaultdict(list)
-    for r in rader:
-        b = pub.behandling(r["sammantrade_id"], {k: r[k] for k in ("paragraf", "rubrik", "beslut", "diarienummer")})
-        if SAMLING.search(b["rubrik"]):
+    for r in behandlingar_las(conn, fran=fran, till=till, organ=organ):
+        if r["arende_id"] is None or SAMLING.search(r["rubrik"]):
             continue
-        per[r["arende_id"]].append(r | {"rubrik": b["rubrik"], "beslut": b["beslut"]})
+        per[r["arende_id"]].append(r)
     per = {a: bs for a, bs in per.items() if len({b["sammantrade_id"] for b in bs}) >= 2}
 
     forslag: dict[int, int] = defaultdict(int)
@@ -78,7 +59,7 @@ def aterkommande(conn: psycopg.Connection, fran: int, till: int, organ: str | No
     for arende_id, bs in per.items():
         bs.sort(key=lambda r: (r["datum"], NIVA.get(r["organ"], 0), r["paragraf"]))
         behandlingar = [{
-            "sammantrade": {"id": b["sammantrade_id"], "datum": b["datum"], "organ": _organ(b["organ"])},
+            "sammantrade": {"id": b["sammantrade_id"], "datum": b["datum"], "organ": organ_ref(b["organ"])},
             "paragraf": b["paragraf"], "rubrik": b["rubrik"], "handelse": handelse(b["beslut"]),
         } for b in bs]
         arenden.append({
@@ -97,7 +78,7 @@ def aterkommande(conn: psycopg.Connection, fran: int, till: int, organ: str | No
     return {
         "fran": fran,
         "till": till,
-        "organ": _organ(organ) if organ else None,
+        "organ": organ_ref(organ) if organ else None,
         "arenden": arenden,
         "summa": {
             "arenden": len(arenden),

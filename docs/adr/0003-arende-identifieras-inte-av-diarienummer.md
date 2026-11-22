@@ -5,3 +5,7 @@ I Härnösand har nämnderna egna diarieserier. När ett ärende går vidare til
 ## Considered Options
 
 - Diarienummer som nyckel: enkelt, men delar varje nämnd→KS-kedja i två ärenden, och då fungerar inte ärendespårningen.
+
+## Tillägg: kopplingar bygger på publicerade rättelser (#101)
+
+Kopplingarna räknas på behandlingarna med publicerade rättelser (ADR-0002), inte på den råa tolkningen. En redaktör som rättar ett felläst diarienummer eller en rubrik ändrar därmed också vilka behandlingar som hör till samma ärende. Kopplingarna och ärendena räknas om när en sådan rättelse publiceras. Redaktörernas kopplingsbeslut står kvar, och ärendena behåller sina id. Alla listor läser behandlingarna genom samma modul (`behandlingar.py`), så att en publicerad rättelse gäller överallt.

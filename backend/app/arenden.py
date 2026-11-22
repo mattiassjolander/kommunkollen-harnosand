@@ -27,11 +27,8 @@ from datetime import date, datetime, timezone
 
 import psycopg
 
-from .rattelser import Publicerade
-from .sources.harnosand import ORGAN
-
-# Beslutsnivå: nämnderna bereder åt kommunstyrelsen, som bereder åt kommunfullmäktige.
-NIVA = {"SAM": 0, "SOC": 0, "SKOL": 0, "KS": 1, "KF": 2}
+from . import behandlingar
+from .sources.harnosand import NIVA, organ_ref
 STAENDE_GRANS = 6
 LIKHETSGRANS = 0.5
 
@@ -88,17 +85,10 @@ class _Beh:
 
 
 def _las(conn: psycopg.Connection) -> dict[Nyckel, _Beh]:
-    rader = conn.execute(
-        """
-        SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.id, b.sammantrade_id, b.paragraf, b.rubrik,
-               b.diarienummer, s.organ, s.datum
-        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
-        """
-    ).fetchall()
+    """Alla behandlingar med publicerade rättelser (ADR-0003), i ordningen sammanträde, paragraf."""
     beh = {}
     per_id = {}
-    for r in rader:
+    for r in sorted(behandlingar.las(conn), key=lambda r: (r["sammantrade_id"], r["paragraf"])):
         b = _Beh((r["sammantrade_id"], r["paragraf"]), r["organ"], r["datum"], r["rubrik"], r["diarienummer"])
         beh[b.nyckel] = b
         per_id[r["id"]] = b
@@ -225,24 +215,16 @@ def _bilda_arenden(conn: psycopg.Connection, beh: dict[Nyckel, _Beh]) -> dict[st
 
 # Läsning
 
-def _organ(organ_id: str) -> dict:
-    o = ORGAN.get(organ_id)
-    return {"id": organ_id, "namn": o.namn if o else organ_id}
-
-
-_BEHANDLING = """
-    SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.sammantrade_id, b.paragraf, b.rubrik, b.diarienummer,
-           b.beslut, s.organ, s.datum, s.tolkning
-    FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-"""
-
-
 def _beh(r: dict) -> dict:
-    return {
-        "sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": _organ(r["organ"]),
+    b = {
+        "sammantrade": {"id": r["sammantrade_id"], "datum": r["datum"], "organ": organ_ref(r["organ"]),
                         "tolkning": r["tolkning"]},
         "paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"], "beslut": r["beslut"],
+        "typ": r["typ"],
     }
+    if "rattelser" in r:
+        b["rattelser"] = r["rattelser"]
+    return b
 
 
 def arende_for(conn: psycopg.Connection, sammantrade_id: int, paragraf: int) -> dict | None:
@@ -262,31 +244,21 @@ _FORESLAR = re.compile(r"föreslår\s+(kommunfullmäktige|kommunstyrelsen)|förs
 def las_arende(conn: psycopg.Connection, arende_id: int) -> dict | None:
     if not conn.execute("SELECT 1 FROM arende WHERE id = %s", (arende_id,)).fetchone():
         return None
-    rader = conn.execute(
-        f"""{_BEHANDLING}
-        JOIN arende_behandling a ON a.sammantrade_id = b.sammantrade_id AND a.paragraf = b.paragraf
-        WHERE a.arende_id = %s
-        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
-        """,
-        (arende_id,),
-    ).fetchall()
-    rader.sort(key=lambda r: (r["datum"] or date.max, NIVA.get(r["organ"], 0), r["paragraf"]))
-    pub = Publicerade(conn, list({r["sammantrade_id"] for r in rader}))
-    behandlingar = [pub.behandling(r["sammantrade_id"], _beh(r)) for r in rader]
+    behandlingslista = [_beh(r) for r in behandlingar.las(conn, arende=arende_id)]
     # Alla kopplingar som rör ärendets behandlingar, också förslag och avvisade kopplingar till andra ärenden.
     medlem = "IN (SELECT sammantrade_id, paragraf FROM arende_behandling WHERE arende_id = %(a)s)"
     kopplingar = _kopplingar(
         conn, f"WHERE (k.fran_sammantrade_id, k.fran_paragraf) {medlem} OR (k.till_sammantrade_id, k.till_paragraf) {medlem}",
         {"a": arende_id})
-    diarienummer = list(dict.fromkeys(d for b in behandlingar for d in b["diarienummer"]))
+    diarienummer = list(dict.fromkeys(d for b in behandlingslista for d in b["diarienummer"]))
     # Slutligt beslut: det senaste beslutet, om det inte är ett förslag till ett annat organ.
-    sista = behandlingar[-1] if behandlingar else None
+    sista = behandlingslista[-1] if behandlingslista else None
     slutligt = sista if sista and sista["beslut"] and not _FORESLAR.search(sista["beslut"]) else None
     return {
         "id": arende_id,
         "rubrik": sista["rubrik"] if sista else None,
         "diarienummer": diarienummer,
-        "behandlingar": behandlingar,
+        "behandlingar": behandlingslista,
         "kopplingar": kopplingar,
         "slutligt_beslut": {"sammantrade_id": slutligt["sammantrade"]["id"], "paragraf": slutligt["paragraf"],
                             "organ": slutligt["sammantrade"]["organ"], "datum": slutligt["sammantrade"]["datum"],
@@ -330,7 +302,7 @@ def _kopplingar(conn: psycopg.Connection, villkor: str, parametrar: dict) -> lis
 def _koppling(r: dict) -> dict:
     def sida(s: str) -> dict:
         return {"sammantrade": {"id": r[f"{s}_sammantrade_id"], "datum": r[f"{s}_datum"],
-                                "organ": _organ(r[f"{s}_organ"])},
+                                "organ": organ_ref(r[f"{s}_organ"])},
                 "paragraf": r[f"{s}_paragraf"], "rubrik": r[f"{s}_rubrik"]}
 
     return {"id": r["id"], "fran": sida("fran"), "till": sida("till"), "grund": r["grund"],

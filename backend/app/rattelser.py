@@ -28,6 +28,8 @@ from .behandlingstyper import TYPER, klassa
 
 FALT = {"behandling": ("rubrik", "beslut", "diarienummer", "typ", "motionarer"), "rost": ("rost", "parti"), "narvaro": ("parti",)}
 ROSTER = ("ja", "nej", "avstar", "franvarande")
+# Fält som kopplingarna mellan behandlingar bygger på.
+KOPPLANDE_FALT = ("rubrik", "diarienummer")
 _PARTI = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
 _DNR = re.compile(r"[\w/ .:-]{2,40}")
 
@@ -217,6 +219,11 @@ def publicera(conn: psycopg.Connection, rattelse_id: int, utgivare: str) -> dict
     )
     conn.execute("UPDATE rattelse SET status = 'publicerad', publicerad_av = %s, publicerad = %s WHERE id = %s",
                  (utgivare, datetime.now(timezone.utc), rattelse_id))
+    if r["objekt"] == "behandling" and r["falt"] in KOPPLANDE_FALT:
+        # Kopplingarna bygger på de publicerade rättelserna (ADR-0003) och räknas om direkt.
+        from .arenden import koppla
+
+        koppla(conn)
     return las(conn, rattelse_id)
 
 

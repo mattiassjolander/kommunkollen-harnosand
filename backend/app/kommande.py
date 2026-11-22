@@ -29,8 +29,8 @@ import psycopg
 from . import motioner
 from .arenden import NIVA, SAMLING, las_arende
 from .aterkommande import handelse
-from .protokoll import _SAMMANTRADE, _sammantrade
-from .sources.harnosand import ORGAN
+from .protokoll import protokoll_for
+from .sources.harnosand import organ_ref
 
 STATUS = {
     "motion": "Obesvarad motion",
@@ -56,11 +56,6 @@ _FRIST = re.compile(
     rf"|(?:våren|hösten|sommaren|vintern|årsskiftet)\s+\d{{4}}|kvartal\s+\d\s+\d{{4}}|\d{{4}})",
     re.I,
 )
-
-
-def _organ(organ_id: str) -> dict:
-    o = ORGAN.get(organ_id)
-    return {"id": organ_id, "namn": o.namn if o else organ_id}
 
 
 def frist(beslut: str | None) -> str | None:
@@ -91,13 +86,13 @@ def status_for(senaste: dict) -> str | None:
 
 
 def _ref(b: dict) -> dict:
-    return {"sammantrade": {"id": b["sammantrade_id"], "datum": b["datum"], "organ": _organ(b["organ"])},
+    return {"sammantrade": {"id": b["sammantrade_id"], "datum": b["datum"], "organ": organ_ref(b["organ"])},
             "paragraf": b["paragraf"], "rubrik": b["rubrik"], "beslut": b["beslut"]}
 
 
 def kommande(conn: psycopg.Connection, manader: int = MANADER, idag: date | None = None) -> dict:
     idag = idag or date.today()
-    rader = motioner._las(conn)
+    rader = motioner.daterade(conn)
     return berakna(rader, manader, idag)
 
 
@@ -125,7 +120,7 @@ def berakna(rader: list[dict], manader: int, idag: date) -> dict:
                     "arende_id": f["arende_id"],
                     "rubrik": f["rubrik"],
                     "status": typ,
-                    "vantar_pa": _organ("KF") if typ == "motion" else None,
+                    "vantar_pa": organ_ref("KF") if typ == "motion" else None,
                     "sedan": start,
                     "vackt": f["vackt"] is not None,
                     "dagar": (idag - start).days,
@@ -151,7 +146,7 @@ def berakna(rader: list[dict], manader: int, idag: date) -> dict:
             "arende_id": arende_id,
             "rubrik": senaste["rubrik"],
             "status": status,
-            "vantar_pa": _organ(till) if till else None,
+            "vantar_pa": organ_ref(till) if till else None,
             "sedan": senaste["datum"],
             "vackt": False,
             "dagar": (idag - senaste["datum"]).days,
@@ -188,8 +183,7 @@ def underlag(conn: psycopg.Connection, arende_id: int) -> dict | None:
     if arende is None:
         return None
     ids = list({b["sammantrade"]["id"] for b in arende["behandlingar"]})
-    protokoll = {r["id"]: _sammantrade(r)["protokoll"]
-                 for r in conn.execute(f"{_SAMMANTRADE} WHERE s.id = ANY(%s)", (ids,))}
+    protokoll = protokoll_for(conn, ids)
     hanvisningar: dict[tuple[int, int], list[dict]] = defaultdict(list)
     for h in conn.execute(
         """

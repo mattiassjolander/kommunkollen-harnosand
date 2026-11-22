@@ -10,15 +10,10 @@ from __future__ import annotations
 import psycopg
 
 from .behandlingstyper import TYPER
-from .rattelser import Publicerade
-from .sources.harnosand import ORGAN
+from .behandlingar import las as behandlingar_las
+from .sources.harnosand import ORGAN, organ_ref
 
 OKAND = "okand"
-
-
-def _organ(organ_id: str) -> dict:
-    o = ORGAN.get(organ_id)
-    return {"id": organ_id, "namn": o.namn if o else organ_id}
 
 
 def _organordning(organ_id: str) -> int:
@@ -46,26 +41,15 @@ def behandlingar(conn: psycopg.Connection, fran: int, till: int, organ: str | No
         """,
         param,
     ).fetchall()
-    rader = conn.execute(
-        """
-        SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.sammantrade_id, b.paragraf, b.rubrik, b.beslut,
-               b.diarienummer
-        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-        WHERE s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
-          AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
-        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
-        """,
-        param,
-    ).fetchall()
+    rader = behandlingar_las(conn, fran=fran, till=till, organ=organ)
 
     sammantrade = {s["id"]: s for s in sammantraden}
-    pub = Publicerade(conn, list(sammantrade))
     tomt = lambda: {t: 0 for t in [*TYPER, OKAND]}  # noqa: E731
     per: dict[tuple[int, str], dict] = {}
     for s in sammantraden:
         r = per.setdefault((s["ar"], s["organ"]), {"sammantraden": 0, "behandlingar": 0, "antal": tomt()})
         r["sammantraden"] += 1
-    for s, _, typ in _med_typ(sammantrade, rader, pub):
+    for s, _, typ in _med_typ(sammantrade, rader):
         r = per[(s["ar"], s["organ"])]
         r["behandlingar"] += 1
         r["antal"][typ or OKAND] += 1
@@ -78,7 +62,7 @@ def behandlingar(conn: psycopg.Connection, fran: int, till: int, organ: str | No
             summa["antal"][t] += n
 
     def kort(s: dict) -> dict:
-        return {"id": s["id"], "datum": s["datum"], "organ": _organ(s["organ"])}
+        return {"id": s["id"], "datum": s["datum"], "organ": organ_ref(s["organ"])}
 
     utan_datum = conn.execute(
         "SELECT count(*) AS n FROM sammantrade WHERE datum IS NULL AND dokument_id IS NOT NULL "
@@ -88,10 +72,10 @@ def behandlingar(conn: psycopg.Connection, fran: int, till: int, organ: str | No
     return {
         "fran": fran,
         "till": till,
-        "organ": _organ(organ) if organ else None,
+        "organ": organ_ref(organ) if organ else None,
         "typer": [{"id": t, "namn": n} for t, n in TYPER.items()] + [{"id": OKAND, "namn": "Kunde inte klassas"}],
         "rader": [
-            {"ar": ar, "organ": _organ(o)} | r
+            {"ar": ar, "organ": organ_ref(o)} | r
             for (ar, o), r in sorted(per.items(), key=lambda x: (x[0][0], _organordning(x[0][1])))
         ],
         "summa": summa,
@@ -107,12 +91,11 @@ def behandlingar(conn: psycopg.Connection, fran: int, till: int, organ: str | No
     }
 
 
-def _med_typ(sammantrade: dict[int, dict], rader: list[dict], pub: Publicerade):
-    """(sammanträde, behandling med rättelser pålagda, typ) för varje behandling."""
+def _med_typ(sammantrade: dict[int, dict], rader: list[dict]):
+    """(sammanträde, behandling, typ) för varje behandling på de protokollförda sammanträdena."""
     for b in rader:
-        s = sammantrade[b["sammantrade_id"]]
-        r = pub.behandling(s["id"], {k: b[k] for k in ("paragraf", "rubrik", "beslut", "diarienummer")})
-        yield s, r, r["typ"]
+        if (s := sammantrade.get(b["sammantrade_id"])) is not None:
+            yield s, b, b["typ"]
 
 
 def behandlingar_av_typ(conn: psycopg.Connection, fran: int, till: int, organ: str | None, typ: str) -> list[dict]:
@@ -124,19 +107,10 @@ def behandlingar_av_typ(conn: psycopg.Connection, fran: int, till: int, organ: s
         WHERE s.dokument_id IS NOT NULL AND s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
           AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
         """, param).fetchall()}
-    rader = conn.execute(
-        """
-        SELECT DISTINCT ON (b.sammantrade_id, b.paragraf) b.sammantrade_id, b.paragraf, b.rubrik, b.beslut,
-               b.diarienummer
-        FROM behandling b JOIN sammantrade s ON s.id = b.sammantrade_id
-        WHERE s.datum >= make_date(%(fran)s, 1, 1) AND s.datum < make_date(%(till)s + 1, 1, 1)
-          AND (%(organ)s::text IS NULL OR s.organ = %(organ)s)
-        ORDER BY b.sammantrade_id, b.paragraf, b.ordning
-        """, param).fetchall()
-    pub = Publicerade(conn, list(sammantrade))
-    ut = [{"sammantrade": {"id": s["id"], "datum": s["datum"], "organ": _organ(s["organ"])},
+    rader = behandlingar_las(conn, fran=fran, till=till, organ=organ)
+    ut = [{"sammantrade": {"id": s["id"], "datum": s["datum"], "organ": organ_ref(s["organ"])},
            "paragraf": b["paragraf"], "rubrik": b["rubrik"], "diarienummer": b["diarienummer"]}
-          for s, b, t in _med_typ(sammantrade, rader, pub) if (t or OKAND) == typ]
+          for s, b, t in _med_typ(sammantrade, rader) if (t or OKAND) == typ]
     ut.sort(key=lambda x: (x["sammantrade"]["datum"], _organordning(x["sammantrade"]["organ"]["id"]), x["paragraf"]),
             reverse=True)
     return ut
