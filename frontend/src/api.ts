@@ -389,6 +389,8 @@ export interface Behandlingsrad {
   /** Satt när diarienumret står i kallelsen men inte i protokollet. */
   diarienummer_kallelse?: Diarienummerkallelse | null
   beslut: string | null
+  /** Paragrafens text när den saknar underrubriker och beslut, t.ex. "Inga frågor har inkommit …" (#124). */
+  paragraftext?: string
   /** Behandlingstyp, automatiskt klassad ur rubrik och beslut (eller rättad). null = kunde inte klassas. */
   typ?: Behandlingstyp | null
   /** Saknas när behandlingen saknar voteringar respektive reservationer. */

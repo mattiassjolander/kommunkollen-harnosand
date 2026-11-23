@@ -172,11 +172,11 @@ def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: in
     behandling_id = conn.execute(
         """
         INSERT INTO behandling (sammantrade_id, ordning, paragraf, rubrik, rubrik_ur_arendelistan, diarienummer, beslut,
-                                propositionsordning, motionarer)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+                                paragraftext, propositionsordning, motionarer)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """,
         (sammantrade_id, ordning, b.paragraf, b.rubrik, b.rubrik_ur_arendelistan, b.diarienummer, b.beslut,
-         b.propositionsordning, Jsonb([{"namn": n, "parti": p} for n, p in b.motionarer])),
+         b.paragraftext, b.propositionsordning, Jsonb([{"namn": n, "parti": p} for n, p in b.motionarer])),
     ).fetchone()["id"]
     with conn.cursor() as cur:
         cur.executemany(
@@ -340,6 +340,8 @@ def _behandling(r: dict) -> dict:
     ut = {"paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"], "beslut": r["beslut"]}
     if r.get("rubrik_ur_arendelistan"):
         ut["rubrik_ur_arendelistan"] = True
+    if r.get("paragraftext"):
+        ut["paragraftext"] = r["paragraftext"]
     for k in ("antal_voteringar", "antal_reservationer"):
         if k in r:
             ut[k] = r[k]
