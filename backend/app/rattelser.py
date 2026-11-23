@@ -412,6 +412,8 @@ class Publicerade:
         nyckel = (sammantrade_id, "behandling", b["paragraf"], None, "")
         for falt in ("rubrik", "beslut", "diarienummer"):
             self._lagg_pa(b, nyckel, falt)
+        if "rubrik" in (b.get("rattelser") or {}) and b.get("rubrik_ur_arendelistan"):
+            b["rubrik_ur_arendelistan"] = False  # den rättade rubriken går före ärendelistan
         # Typen räknas fram ur den (ev. rättade) rubriken och beslutet, och kan själv vara rättad.
         b["typ"] = klassa(b.get("rubrik"), b.get("beslut"))
         self._lagg_pa(b, nyckel, "typ")

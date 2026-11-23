@@ -168,6 +168,8 @@ Tolkningen är reglerbaserad (ADR-0002) och gissar aldrig. Det som inte går att
 - Övriga närvarande tas med när de står med parti eller i en egen kolumn med roll. Tjänstepersoner i löptext ("Namn, förvaltningschef, …") tas inte med.
 - **Partitillhörighet** är den protokollet anger vid sammanträdet (ADR-0004). "(-)" visas som partilös. Saknas parti, eller står det "()", härleds partiet och markeras "Härlett" med källan: i första hand samma protokoll (voteringslistan eller "för Namn (S)"), annars närvarolistan i det närmaste sammanträdet där personen har ett parti. Går det inte att härleda visas "parti anges inte i protokollet". En publicerad rättelse går före det härledda partiet. En publicerad fastställd partitillhörighet (ADR-0006, docs/ledamoter.md) gäller före protokollets uppgift och efter en rättelse, och då härleds inget parti. Ändrar den protokollets uppgift markeras det "Fastställt av redaktionen".
 - **Behandlingar**: paragrafraden "§ N" med eventuellt diarienummer ("KS/2026-584" eller "Dnr 2026-000025"), rubriken och beslutet under "…s beslut" eller "… beslutar". Innehållsförteckningen räknas inte som behandlingar.
+- **Läsordning** (#88): en ensam "§ N"-rad som står sist på en sida i löptexten men direkt före rubriken i layouttexten är lagrad sist i PDF:ens textflöde. Raden flyttas till sidans början innan paragraferna delas upp. Inget annat flyttas.
+- **Motkontroll mot ärendelistan** (#88): när protokollet har en ärendelista eller innehållsförteckning jämförs varje rubrik med den, utan hänsyn till mellanslag, radbrytningar, skiljetecken, bindestreck mot tankstreck och versaler. Saknas rubriken i paragrafen tas den ur ärendelistan och märks "Rubriken hämtad ur ärendelistan". Skiljer sig rubrikerna åt skrivs en avvikelse: är paragrafens rubrik längre eller kortare än ärendelistans, eller liknar den inte alls, har inläsningen troligen fel. Liknar den ärendelistans men skiljer sig på något ställe står det så i protokollet.
 - **Beslutande vid en paragraf** räknas fram ur närvaron: beslutande, minus jäv vid paragrafen, och ersättare som bara tjänstgjorde vid vissa paragrafer räknas bara där.
 
 - **Protokollets sidor**: en kallelse före protokollet tolkas inte, och inte heller ett protokollsutdrag eller bilagor efter det. De börjar med en ny förstasida, med "Plats och tid", "Beslutande" och sidnummer 1. En andra sittning samma dag fortsätter sidnumreringen och hör till protokollet.
@@ -226,11 +228,11 @@ Fliken Avvikelser samlar alla protokoll med avvikelser eller publicerade rättel
 
 | Kategori | Avvikelser | Var felet troligen finns |
 |---|---|---|
-| Motsägelse i protokollet | Voteringslistan stämmer inte med protokollets text | I protokollet |
+| Motsägelse i protokollet | Voteringslistan stämmer inte med protokollets text, eller en paragrafs rubrik skiljer sig från ärendelistan | I protokollet |
 | Felskrivet i protokollet | En paragrafrubrik är felskriven, t.ex. "Ko§ 168" | I protokollet |
 | Ofullständigt dokument | PDF:en saknar sidor eller text, eller bara paragrafprotokoll finns | I protokollet |
 | Paragraferna stämmer inte | Paragraferna stämmer inte med paragrafintervallet, eller samma paragraf förekommer flera gånger | I protokollet eller i tolkningen |
-| Kunde inte läsas av plattformen | Övrigt, t.ex. att närvarolistan eller en rubrik inte hittades | I tolkningen |
+| Kunde inte läsas av plattformen | Övrigt, t.ex. att närvarolistan eller en rubrik inte hittades, eller att en rubrik troligen är fel läst enligt ärendelistan | I tolkningen |
 
 Indelningen är en hjälp att välja vad som ska kontrolleras mot originalet, inte ett påstående om att kommunens protokoll är fel. API:t: `/api/avvikelser?fran=&till=&organ=`.
 
