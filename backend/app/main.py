@@ -41,7 +41,7 @@ def _anropsgrans(namn: str, standard: float) -> float | None:
 
 def standardkallor() -> list[Datakalla]:
     return [
-        Kolada(nyckeltal=[*ekonomi.KOLADA, floden.INVANARE.split(":")[1]], kommun=KOMMUN,
+        Kolada(nyckeltal=[*ekonomi.KOLADA, floden.INVANARE.split(":")[1]], kommun=KOMMUN, riket=ekonomi.KOLADA,
                anrop_per_sekund=_anropsgrans("KOLADA", 5)),
         Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
             anrop_per_sekund=_anropsgrans("SCB", 2)),
@@ -139,11 +139,18 @@ def create_app(
     def ekonomiska_nyckeltal(omrade: str = KOMMUN) -> dict:
         """Alla ekonomiska nyckeltal i katalogen, grupperade som kort, och huvudtalen för översikten.
         Ett mått som inte samlats in än har serie null. Ett kort med växeln Totalt / Per invånare har
-        varianten per invånare i `per_invanare`."""
+        varianten per invånare i `per_invanare`. Kolada-måtten har genomsnittet för riket i `riket`."""
 
         def nyckeltal(conn, matt_id: str) -> dict:
             s = ekonomi.las_nyckeltal(conn, matt_id, omrade)
-            return {"id": matt_id, "prisniva": ekonomi.prisniva(s["matt"]["enhet"]) if s else None, "serie": s}
+            # Genomsnittet för riket finns bara för Kolada-måtten (#82). Övriga har riket null.
+            riket = ekonomi.las_riket(conn, matt_id)
+            return {
+                "id": matt_id,
+                "prisniva": ekonomi.prisniva(s["matt"]["enhet"]) if s else None,
+                "serie": s,
+                "riket": riket,
+            }
 
         with db.connect(database_url) as conn:
             grupper = [

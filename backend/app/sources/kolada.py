@@ -10,6 +10,8 @@ import httpx
 from .base import Hamtning, Matt, Uppgift
 
 BAS = "https://api.kolada.se/v3"
+# Koladas kommun-id för riket: genomsnittet för alla kommuner.
+RIKET = "0000"
 
 
 def _datum(s: str | None) -> date | None:
@@ -30,10 +32,19 @@ class Kolada:
     titel = "Kolada"
     url = "https://www.kolada.se"
 
-    def __init__(self, nyckeltal: list[str], kommun: str = "2280", anrop_per_sekund: float | None = 5.0) -> None:
+    def __init__(
+        self,
+        nyckeltal: list[str],
+        kommun: str = "2280",
+        anrop_per_sekund: float | None = 5.0,
+        riket: list[str] | None = None,
+    ) -> None:
         self.anrop_per_sekund = anrop_per_sekund
         self.nyckeltal = nyckeltal
         self.kommun = kommun
+        # Nyckeltal som också hämtas för riket (kommun-id 0000), som jämförelse (#82).
+        self.riket = riket or []
+        self._publicerad: dict[str, date | None] = {}
 
     def _hamta_alla(self, client: httpx.Client, url: str, params: dict | None = None) -> list[dict]:
         varden: list[dict] = []
@@ -54,27 +65,42 @@ class Kolada:
             except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:
                 senaste_fel = e
                 resultat.fel.append(f"{kpi_id}: {type(e).__name__}: {e}")
-        if senaste_fel is not None and len(resultat.fel) == len(self.nyckeltal):
+        # Riket hämtas i samma insamling. Ett fel redovisas per nyckeltal som för kommunen.
+        for kpi_id in self.riket:
+            try:
+                self._hamta_varden(client, kpi_id, RIKET, None, resultat)
+            except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:
+                senaste_fel = e
+                resultat.fel.append(f"{kpi_id} (riket): {type(e).__name__}: {e}")
+        if senaste_fel is not None and len(resultat.fel) == len(self.nyckeltal) + len(self.riket):
             raise senaste_fel
         return resultat
 
     def _hamta_nyckeltal(self, client: httpx.Client, kpi_id: str, sedan: datetime | None, resultat: Hamtning) -> None:
         kpi = self._hamta_alla(client, f"{BAS}/kpi/{kpi_id}")[0]
         publicerad = _datum(kpi.get("publication_date"))
-        matt_id = f"kolada:{kpi_id}"
-        # Hela serien hämtas varje gång (den är liten). Med from_date skulle ett nyckeltal som lagts
-        # till i katalogen efter källans senaste kontroll bara få de senast ändrade åren.
-        # Insamlingen lagrar ändå bara det som är nytt eller ändrat.
-        rader = self._hamta_alla(client, f"{BAS}/data/kpi/{kpi_id}/municipality/{self.kommun}")
+        self._publicerad[kpi_id] = publicerad
         resultat.matt.append(
             Matt(
-                id=matt_id,
+                id=f"kolada:{kpi_id}",
                 titel=kpi["title"],
                 beskrivning=kpi.get("description") or "",
                 enhet=_enhet(kpi["title"]),
                 kallans_publicering=publicerad,
             )
         )
+        self._hamta_varden(client, kpi_id, self.kommun, publicerad, resultat)
+
+    def _hamta_varden(
+        self, client: httpx.Client, kpi_id: str, kommun: str, publicerad: date | None, resultat: Hamtning
+    ) -> None:
+        # Hela serien hämtas varje gång (den är liten). Med from_date skulle ett nyckeltal som lagts
+        # till i katalogen efter källans senaste kontroll bara få de senast ändrade åren.
+        # Insamlingen lagrar ändå bara det som är nytt eller ändrat.
+        if kommun == RIKET:
+            publicerad = self._publicerad.get(kpi_id)
+        matt_id = f"kolada:{kpi_id}"
+        rader = self._hamta_alla(client, f"{BAS}/data/kpi/{kpi_id}/municipality/{kommun}")
         for rad in rader:
             for v in rad["values"]:
                 if v.get("gender") != "T" or v.get("isdeleted"):

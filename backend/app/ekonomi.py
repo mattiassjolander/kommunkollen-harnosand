@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import serier
+from .sources.kolada import RIKET
 from .sources.scb import Differens, ScbMatt
 
 KOLADA = [
@@ -316,6 +317,15 @@ def laneskuld_per_invanare(lan: dict | None, invanare: dict | None) -> dict | No
         "omrade": lan["omrade"],
         "punkter": punkter,
     }
+
+
+def las_riket(conn, matt_id: str) -> dict | None:
+    """Genomsnittet för riket (Kolada, kommun-id 0000) för ett Kolada-mått, annars None. SCB-måtten och
+    de beräknade måtten har ingen motsvarighet för riket i insamlingen."""
+    if not matt_id.startswith("kolada:"):
+        return None
+    serie = serier.las_serie(conn, matt_id, RIKET)
+    return serie if serie and serie["punkter"] else None
 
 
 def las_nyckeltal(conn, matt_id: str, omrade: str) -> dict | None:
