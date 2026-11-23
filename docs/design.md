@@ -94,8 +94,11 @@ Partifärger används **bara** för att märka ut ett parti: i voteringar, i led
 | Kristdemokraterna | KD | `--parti-kd` | `#000077` |
 | Liberalerna | L | `--parti-l` | `#006ab3` |
 | Miljöpartiet | MP | `--parti-mp` | `#83cf39` |
+| Norrlandspartiet | NP | ingen | neutral prick i `--ink-muted` |
 
 Färgerna är närmevärden till partiernas etablerade profilfärger, så som de brukar återges i valrapportering. De är inte hämtade ur partiernas grafiska manualer och kan bytas mot exakta värden utan att något annat ändras. Samma värden används i ljust och mörkt läge.
+
+Norrlandspartiet skriver sig "NorrP" i protokollen. Plattformen förkortar det NP, som de andra partiernas förkortningar med versaler. Partiet har ännu ingen egen färg och visas med den neutrala pricken.
 
 **Validering** (dataviz-metodens `validate_palette.js`, alla par, november 2026):
 
