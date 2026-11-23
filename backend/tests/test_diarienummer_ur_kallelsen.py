@@ -175,7 +175,8 @@ def test_behandlingen_far_diarienumret_ur_kallelsen(api):
         99: ["SKN/2026-738"], 100: ["SKN/2026-737"], 101: ["SKN/2026-736"], 102: ["SKN/2026-294"],
         104: ["SKN/2026-734"], 105: ["SKN/2026-717"], 106: ["SKN/2026-202"]}
     assert per_nr[96]["diarienummer_kallelse"] is None
-    assert sammantrade["avvikelser"] == [a for a in sammantrade["avvikelser"] if "kallelse" not in a.lower()]
+    # Alla punkter i föredragningslistan paras ihop med protokollets paragrafer.
+    assert [a for a in sammantrade["avvikelser"] if a["lank"]] == []
     # Sökningen hittar kallelsens diarienummer.
     [t] = api.get("/api/behandlingar", params={"q": "SKN/2026-717"}).json()["traffar"]
     assert (t["paragraf"], t["diarienummer_ur_kallelsen"]) == (105, True)
@@ -227,27 +228,69 @@ def test_kopplingarna_anvander_kallelsens_diarienummer(api, database_url):
     assert all(b["diarienummer_kallelse"] for b in a["behandlingar"])
 
 
-def test_olik_rubrik_ger_ingen_komplettering_utan_en_avvikelse(api, database_url):
-    s = skol(api)
+def med_andrade_punkter(database_url, andra) -> None:
+    """Skolnämndens föredragningslista med punkterna ändrade av `andra(punkt) -> punkt | None`."""
     with db.connect(database_url) as conn:
         [kallelse_id] = [r["id"] for r in conn.execute("SELECT id FROM kallelse")]
         f = fl.las(KALLELSER / "skol-2026-10-01-foredragningslista.pdf", "SKOL")
-        punkter = tuple(p if p.paragraf != 105 else fl.Punkt(105, "Uppföljning av kostverksamheten", p.diarienummer,
-                                                               p.sida, "Uppföljning av kostverksamheten")
-                        for p in f.punkter)
+        punkter = tuple(x for x in map(andra, f.punkter) if x is not None)
         kallelsepunkter.lagra_punkter(conn, kallelse_id, fl.Foredragningslista("last", punkter), datetime.now(timezone.utc))
         kallelsepunkter.komplettera(conn)
         conn.commit()
+
+
+def kallelsens_avvikelser(api, s: int) -> list[dict]:
+    return [a for a in api.get(f"/api/sammantraden/{s}").json()["avvikelser"] if a["lank"]]
+
+
+def test_en_punkt_som_inte_behandlas_ger_en_avvikelse_med_lank_till_kallelsen(api, database_url):
+    s = skol(api)
+    med_andrade_punkter(database_url, lambda p: p if p.paragraf != 105 else fl.Punkt(
+        105, "Uppföljning av kostverksamheten", p.diarienummer, p.sida, "Uppföljning av kostverksamheten"))
     b = api.get(f"/api/sammantraden/{s}/behandlingar/105").json()
     assert (b["diarienummer"], b["diarienummer_kallelse"]) == ([], None)
-    avv = [a for a in api.get(f"/api/sammantraden/{s}").json()["avvikelser"] if "kallelse" in a.lower()]
-    assert avv == ["Kallelse skolnämnden 2026-10-01, med bilagor: diarienumret SKN/2026-717 "
-                   "(§ 105 Uppföljning av kostverksamheten) liknar ingen paragraf i protokollet"]
-    assert avvikelser.kategori(avv[0]) == "kallelsen"
+    # Kallelsens paragrafnummer är preliminärt och anges inte. Sidan anges i stället (#121).
+    [a] = kallelsens_avvikelser(api, s)
+    assert a == {
+        "text": 'Kallelse skolnämnden 2026-10-01, med bilagor, sidan 13: punkten "Uppföljning av kostverksamheten" '
+                "(SKN/2026-717) behandlas inte i protokollet. Den kan ha strukits från dagordningen eller "
+                "flyttats till ett annat sammanträde.",
+        "lank": {"titel": "Kallelse skolnämnden 2026-10-01, med bilagor", "url": f"{SKOL_URL}#page=13", "sida": 13},
+    }
+    assert "§" not in a["text"]
+    assert avvikelser.kategori(a) == avvikelser.kategori(a["text"]) == "kallelsen"
+    assert "kallelsen" not in avvikelser.I_PROTOKOLLET
     logga_in(api, "lasare")
     lista = api.get("/api/avvikelser", params={"fran": 2026, "till": 2026}).json()
     [rad] = [x for x in lista["sammantraden"] if x["sammantrade"]["id"] == s]
-    assert {"text": avv[0], "kategori": "kallelsen"} in rad["avvikelser"]
+    assert a | {"kategori": "kallelsen"} in rad["avvikelser"]
+
+
+def test_en_punkt_utan_diarienummer_som_inte_behandlas_ger_ocksa_en_avvikelse(api, database_url):
+    s = skol(api)
+    med_andrade_punkter(database_url, lambda p: p if p.paragraf != 96 else fl.Punkt(
+        96, "Information om lokalförsörjningen", (), None, "Information om lokalförsörjningen"))
+    # Utan sida länkas kallelsen som helhet.
+    assert kallelsens_avvikelser(api, s) == [{
+        "text": 'Kallelse skolnämnden 2026-10-01, med bilagor: punkten "Information om lokalförsörjningen" '
+                "behandlas inte i protokollet. Den kan ha strukits från dagordningen eller flyttats till ett "
+                "annat sammanträde.",
+        "lank": {"titel": "Kallelse skolnämnden 2026-10-01, med bilagor", "url": SKOL_URL, "sida": None},
+    }]
+
+
+def test_formalia_och_punkter_utan_rubrik_ger_ingen_avvikelse(api, database_url):
+    s = skol(api)
+    extra = (fl.Punkt(108, "", (), None), fl.Punkt(109, "Eventuellt tillkommande ärende", (), 16, "Eventuellt tillkommande ärende"),
+             fl.Punkt(110, "Ärenden för kännedom", (), None, "Extra ärenden"))
+    with db.connect(database_url) as conn:
+        [kallelse_id] = [r["id"] for r in conn.execute("SELECT id FROM kallelse")]
+        f = fl.las(KALLELSER / "skol-2026-10-01-foredragningslista.pdf", "SKOL")
+        kallelsepunkter.lagra_punkter(conn, kallelse_id, fl.Foredragningslista("last", f.punkter + extra),
+                                      datetime.now(timezone.utc))
+        kallelsepunkter.komplettera(conn)
+        conn.commit()
+    assert kallelsens_avvikelser(api, s) == []
 
 
 def test_en_kallelse_som_bara_delvis_kunde_lasas_ger_en_avvikelse(api, database_url):
@@ -260,10 +303,18 @@ def test_en_kallelse_som_bara_delvis_kunde_lasas_ger_en_avvikelse(api, database_
         kallelsepunkter.komplettera(conn)
         conn.commit()
     avv = api.get(f"/api/sammantraden/{s}").json()["avvikelser"]
-    assert ("Kallelse skolnämnden 2026-10-01, med bilagor: kunde bara delvis läsas "
-            "(Sidan 14 i föredragningslistan hittades inte)") in avv
+    assert {"text": "Kallelse skolnämnden 2026-10-01, med bilagor: kunde bara delvis läsas "
+                    "(Sidan 14 i föredragningslistan hittades inte)",
+            "lank": {"titel": "Kallelse skolnämnden 2026-10-01, med bilagor", "url": SKOL_URL, "sida": None}} in avv
     # Det som kunde läsas används ändå.
     assert api.get(f"/api/sammantraden/{s}/behandlingar/105").json()["diarienummer"] == ["SKN/2026-717"]
+
+
+def test_avvikelser_sparade_som_strangar_far_formen_text_och_lank():
+    assert avvikelser.objekt("Inga behandlingar hittades") == {"text": "Inga behandlingar hittades", "lank": None}
+    # Kallelsens avvikelser före #121 kategoriseras som förut.
+    assert avvikelser.kategori("Handlingar kommunstyrelsen 2026-09-29: diarienumret KS/2026-102 "
+                               "(§ 129 Kommunstyrelsens uppdragsbeslut 2026) liknar ingen paragraf i protokollet") == "kallelsen"
 
 
 def test_sidor_som_saknas_i_foredragningslistan_ger_delvis_fel(tmp_path):
@@ -280,3 +331,13 @@ def test_sidor_som_saknas_i_foredragningslistan_ger_delvis_fel(tmp_path):
     assert f.status == "delvis_fel"
     assert f.fel == ("Sidan 13 i föredragningslistan hittades inte",)
     assert 105 not in dnr(f) and dnr(f)[104] == ["SKN/2026-734"]
+
+
+def test_migreringen_slar_in_sparade_strangar(api, database_url):
+    s = skol(api)
+    sql = (Path(kallelsepunkter.__file__).parent / "migrations" / "0031_kallelseavvikelser_med_lank.sql").read_text("utf-8")
+    with db.connect(database_url) as conn:
+        conn.execute("UPDATE sammantrade SET kallelse_avvikelser = '[\"a\", \"b\"]' WHERE id = %s", (s,))
+        conn.execute(sql)
+        assert conn.execute("SELECT kallelse_avvikelser FROM sammantrade WHERE id = %s", (s,)).fetchone()[
+            "kallelse_avvikelser"] == [{"text": "a", "lank": None}, {"text": "b", "lank": None}]

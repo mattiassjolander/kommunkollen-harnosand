@@ -16,6 +16,7 @@ import {
 } from '../../api'
 import { rattelseuppgift, rattelsevarde, sammantradesdatum, tal } from '../../format'
 import PolitikFlikar from '../../components/PolitikFlikar.vue'
+import Avvikelsetext from '../../components/Avvikelsetext.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,7 +93,7 @@ function plats(x: Avvikelserattelse): string {
 function csv(): string {
   const huvud = ['Datum', 'Organ', 'Kategori', 'Avvikelse', 'Protokoll']
   const rader = visade.value.flatMap((s) => [
-    ...s.avvikelser.map((x) => [s.sammantrade.datum ?? '', s.sammantrade.organ.namn, namn.value[x.kategori], x.text, s.url]),
+    ...s.avvikelser.map((x) => [s.sammantrade.datum ?? '', s.sammantrade.organ.namn, namn.value[x.kategori], x.lank ? `${x.text} ${x.lank.url}` : x.text, s.url]),
     ...s.rattelser.filter(matchar).map((x) => [
       s.sammantrade.datum ?? '',
       s.sammantrade.organ.namn,
@@ -185,7 +186,7 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
           <ul class="avvikelser">
             <template v-if="!felet">
               <li v-for="(x, i) in s.avvikelser" :key="i" :data-kategori="x.kategori">
-                <span class="kategori">{{ namn[x.kategori] }}</span> {{ x.text }}
+                <span class="kategori">{{ namn[x.kategori] }}</span> <Avvikelsetext :avvikelse="x" />
               </li>
             </template>
             <li

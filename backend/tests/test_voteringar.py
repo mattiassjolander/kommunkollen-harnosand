@@ -122,7 +122,7 @@ def test_listan_som_inte_stammer_med_texten_visas_som_den_ar(api):
     # KF 2026-06-15 § 112: texten säger 21 ja, listan har 20. Ärendet remitterades åter trots fler
     # ja-röster (minoritetsåterremiss), så vinnaren räknas inte fram ur siffrorna.
     s = sammantrade(api, "2026-06-15")
-    assert "§ 112, votering 1: voteringslistan har 20 ja, 18 nej, protokollets text 21 ja, 18 nej" in s["avvikelser"]
+    assert "§ 112, votering 1: voteringslistan har 20 ja, 18 nej, protokollets text 21 ja, 18 nej" in [a["text"] for a in s["avvikelser"]]
     [v] = behandling(api, "2026-06-15", 112)["voteringar"]
     assert (v["angivet"]["ja"], v["lista"]["ja"]) == (21, 20)
     assert v["vinnare"] is None

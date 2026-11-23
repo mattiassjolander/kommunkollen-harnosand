@@ -11,8 +11,11 @@ protokollets paragrafer:
 - En behandling utan diarienummer i protokollet får punktens diarienummer, med kallelsen som källa.
   Protokollets eget diarienummer går alltid före, och en publicerad rättelse går före båda
   (`satt` läggs på före `Publicerade.behandling`).
-- En punkt med diarienummer som inte liknar någon paragraf ger ingen komplettering, utan en avvikelse
-  för sammanträdet. Det gör också en kallelse som bara delvis kunde läsas.
+- En punkt som inte kan paras ihop med någon paragraf behandlas inte i protokollet (#121). Den ger en
+  avvikelse för sammanträdet, med eller utan diarienummer, och med en länk till kallelsen på punktens
+  sida. Det gör också en kallelse som bara delvis kunde läsas. Kallelsens paragrafnummer anges inte i
+  avvikelsen, eftersom det är preliminärt. Formalia som "Eventuellt tillkommande ärende" har ingen egen
+  paragraf när inget ärende tillkommer, och punkter utan rubrik kan inte namnges. De ger ingen avvikelse.
 
 Kompletteringen räknas om i sin helhet när ett protokoll eller en kallelse har lästs, så den följer
 protokollets tolkning. Kopplingarna (ADR-0003) använder diarienumren oavsett källa, eftersom de läser
@@ -23,6 +26,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import re
+
 import psycopg
 from psycopg.types.json import Jsonb
 
@@ -30,6 +35,9 @@ from .sources.foredragningslista import Foredragningslista
 
 # Poängen för samma paragrafnummer i kallelsen och protokollet, när rubrikerna är lika lika.
 _SAMMA_NUMMER = 0.01
+
+# Punkter i föredragningslistan som inte får en egen paragraf när de saknar innehåll.
+_FORMALIA = re.compile(r"^\W*(?:eventuel+t?a?\s+)?(?:tillkommande|extra)\s+ärenden?\W*$", re.I)
 
 
 def lagra_punkter(conn: psycopg.Connection, kallelse_id: int, f: Foredragningslista, last: datetime) -> None:
@@ -107,7 +115,7 @@ def komplettera(conn: psycopg.Connection) -> int:
     fore = {(r["sammantrade_id"], r["paragraf"]): (r["kallelsepunkt_id"], tuple(r["diarienummer"]))
             for r in conn.execute("SELECT * FROM kallelse_diarienummer")}
     nya: dict[tuple[int, int], tuple[int, tuple[str, ...]]] = {}
-    avvikelser: dict[int, list[str]] = {}
+    avvikelser: dict[int, list[dict]] = {}
     per_sammantrade = _kallelser_per_sammantrade(conn)
     punkter_per_kallelse: dict[int, list[dict]] = {}
     for r in conn.execute(
@@ -125,27 +133,27 @@ def komplettera(conn: psycopg.Connection) -> int:
             (sammantrade_id,),
         ).fetchall()
         behandlingar.sort(key=lambda b: b["ordning"])
-        avv: list[str] = []
+        avv: list[dict] = []
         for k in kallelser:
             if k["punkter_status"] in ("delvis_fel", "fel"):
-                avv.append(f"{k['titel']}: kunde bara delvis läsas ({'; '.join(k['punkter_fel'])})"
-                           if k["punkter_status"] == "delvis_fel"
-                           else f"{k['titel']}: kunde inte läsas ({'; '.join(k['punkter_fel'])})")
+                avv.append(avvikelse(f"{k['titel']}: kunde bara delvis läsas ({'; '.join(k['punkter_fel'])})"
+                                     if k["punkter_status"] == "delvis_fel"
+                                     else f"{k['titel']}: kunde inte läsas ({'; '.join(k['punkter_fel'])})", k, None))
             punkter = punkter_per_kallelse.get(k["id"], [])
             par = _para_ihop(punkter, behandlingar)
             for i, p in enumerate(punkter):
-                if not p["diarienummer"]:
-                    continue
                 if i not in par:
-                    avv.append(f"{k['titel']}: diarienumret {', '.join(p['diarienummer'])} "
-                               f"(§ {p['paragraf']} {p['rubrik']}) liknar ingen paragraf i protokollet")
+                    if (a := _behandlas_inte(k, p)) is not None:
+                        avv.append(a)
+                    continue
+                if not p["diarienummer"]:
                     continue
                 b = behandlingar[par[i]]
                 nyckel = (sammantrade_id, b["paragraf"])
                 # Protokollets diarienummer går före, och den senast publicerade kallelsen före de äldre.
                 if not b["diarienummer"] and nyckel not in nya:
                     nya[nyckel] = (p["id"], tuple(p["diarienummer"]))
-        avvikelser[sammantrade_id] = list(dict.fromkeys(avv))
+        avvikelser[sammantrade_id] = list({a["text"]: a for a in avv}.values())
 
     conn.execute("DELETE FROM kallelse_diarienummer")
     with conn.cursor() as cur:
@@ -161,6 +169,23 @@ def komplettera(conn: psycopg.Connection) -> int:
     for s, avv in avvikelser.items():
         conn.execute("UPDATE sammantrade SET kallelse_avvikelser = %s WHERE id = %s", (Jsonb(avv), s))
     return sum(1 for k in set(fore) | set(nya) if fore.get(k) != nya.get(k))
+
+
+def avvikelse(text: str, kallelse: dict, sida: int | None) -> dict:
+    """En avvikelse mot kallelsen, med en länk till kallelsen (på sidan, när den är känd)."""
+    url = f"{kallelse['url']}#page={sida}" if sida else kallelse["url"]
+    return {"text": text, "lank": {"titel": kallelse["titel"], "url": url, "sida": sida}}
+
+
+def _behandlas_inte(k: dict, p: dict) -> dict | None:
+    """Avvikelsen för en punkt i föredragningslistan som inte behandlas i protokollet (#121)."""
+    rubrik = p["rubrik"] or p["tabellrubrik"]
+    if not rubrik or _FORMALIA.match(rubrik) or (p["tabellrubrik"] and _FORMALIA.match(p["tabellrubrik"])):
+        return None
+    var = f"{k['titel']}, sidan {p['sida']}" if p["sida"] else k["titel"]
+    dnr = f" ({', '.join(p['diarienummer'])})" if p["diarienummer"] else ""
+    return avvikelse(f'{var}: punkten "{rubrik}"{dnr} behandlas inte i protokollet. Den kan ha strukits '
+                     "från dagordningen eller flyttats till ett annat sammanträde.", k, p["sida"])
 
 
 class Kallelsenummer:
