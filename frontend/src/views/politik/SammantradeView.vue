@@ -149,6 +149,7 @@ const delegation = computed(
             Rättad av redaktionen
           </span>
           <p v-if="b.beslut" class="beslut">{{ b.beslut }}</p>
+          <p v-else-if="b.paragraftext" class="beslut" data-testid="paragraftext">{{ b.paragraftext }}</p>
         </li>
       </ol>
     </section>

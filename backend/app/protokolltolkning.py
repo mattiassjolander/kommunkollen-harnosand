@@ -117,6 +117,9 @@ class Behandling:
     motionarer: list[tuple[str | None, str | None]] = field(default_factory=list)
     # Rubriken hittades inte i paragrafen och är hämtad ur protokollets ärendelista (#88).
     rubrik_ur_arendelistan: bool = False
+    # Paragrafens text efter rubriken när paragrafen saknar underrubriker och beslut, t.ex. "Inga frågor har
+    # inkommit till dagens frågestund." Bara när rubriken har avgränsats med ärendelistan (#124).
+    paragraftext: str | None = None
 
 
 @dataclass
@@ -671,7 +674,7 @@ _RUBRIKER = (
     "Överläggande", "Bilagor", "Bilaga", "Votering", "Voteringar", "Omröstning", "Protokollsanteckning",
     "Protokollsanteckningar", "Särskilt yttrande", "Särskilda yttranden", "Beslutet skickas till",
     "Ärendebeskrivning", "Ajournering", "Beslutsgång", "Förslag till beslut", "Ordförandens förslag",
-    "Expediering", "Paus",
+    "Expediering", "Paus", "Beslut",
 )
 
 
@@ -819,6 +822,23 @@ def _motkontroll(nr: int, rubrik: str, i_listan: str) -> str | None:
             "Inläsningen har troligen läst fel text som rubrik")
 
 
+def _avgransning(kropp: list[str], i_listan: str) -> int | None:
+    """Antalet rader i början av paragrafen som tillsammans är ärendelistans rubrik, eller None (#124).
+
+    Rubriken måste sluta på en radgräns och stå före paragrafens första underrubrik. Regeln gissar inte:
+    raderna ska vara lika med ärendelistans rubrik så som motkontrollen jämför dem (`_jamforbar`)."""
+    mal = _jamforbar(i_listan)
+    for k in range(1, min(len(kropp), 4) + 1):
+        if _ar_rubrik(kropp[k - 1]) or kropp[k - 1].startswith("_____"):
+            return None
+        rubrik = _jamforbar(" ".join(kropp[:k]))
+        if rubrik == mal:
+            return k
+        if not mal.startswith(rubrik):
+            return None
+    return None
+
+
 def _felskriven_rubrik(m: re.Match, sida: int, foregaende: int | None, intervall: list[int],
                        forteckning: dict[int, int]) -> bool:
     """En felskriven paragrafrubrik godtas bara om numret är nästa i följden, ligger inom
@@ -907,9 +927,19 @@ def _behandlingar(t: Tolkning, lop: list[str], layout: list[str] | None = None) 
         while j < len(kropp) and not _ar_rubrik(kropp[j]) and len(rubrik_rader) < 4:
             rubrik_rader.append(kropp[j])
             j += 1
+        # Ingen underrubrik följer: rubrikraderna går till paragrafens slut, eller de fyra raderna räckte inte.
+        utan_underrubrik = j == len(kropp)
         if j < len(kropp) and not _ar_rubrik(kropp[j]):
             # Ingen rubrik hittades: bara första raden är paragrafens rubrik.
-            rubrik_rader, j = rubrik_rader[:1], 1
+            rubrik_rader, j, utan_underrubrik = rubrik_rader[:1], 1, True
+        paragraftext = None
+        # Rubriken avgränsas med ärendelistan när den har fått med paragraftext eller inte hela rubriken (#124).
+        # Bara när ingen underrubrik följer: annars är rubrikraderna paragrafens egen rubrik, fast längre.
+        if (utan_underrubrik and nr in lista and _jamforbar(" ".join(rubrik_rader)) != _jamforbar(lista[nr])
+                and (k := _avgransning(kropp, lista[nr]))):
+            rubrik_rader, j = kropp[:k], k
+            if not any(_ar_rubrik(r) for r in kropp[k:]):
+                paragraftext = _stycke([r for r in kropp[k:] if not re.fullmatch(r"_+", r)]) or None
         rubrik = " ".join(rubrik_rader).strip()
         beslut = _beslutstext(kropp[j:])
         if not dnr:
@@ -938,11 +968,14 @@ def _behandlingar(t: Tolkning, lop: list[str], layout: list[str] | None = None) 
             motionarer=motionarer(" ".join(_lopande(s) for s in sektioner.get("bakgrund", [])))
             if re.search(r"\bmotion", rubrik, re.I) else [],
             rubrik_ur_arendelistan=ur_listan,
+            paragraftext=paragraftext,
         ))
 
 
 def _beslutstext(kropp: list[str]) -> str | None:
     for i, r in enumerate(kropp):
+        if r == "Beslut":
+            return _under_rubriken_beslut(kropp[i + 1:])
         if not (_beslutsrubrik(r) or _beslutar(r)):
             continue
         text: list[str] = []
@@ -960,6 +993,21 @@ def _beslutstext(kropp: list[str]) -> str | None:
             text.append(s)
         return _stycke(text) if [r for r in text if not _beslutar(r)] else None
     return None
+
+
+def _under_rubriken_beslut(rader: list[str]) -> str | None:
+    """Beslutet under rubriken "Beslut" (#124), fram till nästa rubrik. Där kan både ett förslag till ett
+    annat organ ("Kommunstyrelsen föreslår kommunfullmäktige besluta") och organets eget beslut
+    ("Kommunstyrelsen beslutar") stå. Vart och ett börjar på en ny rad."""
+    delar: list[list[str]] = []
+    for r in rader:
+        if _ar_rubrik(r) and not _beslutar(r) or r.startswith("_____"):
+            break
+        if not delar or _beslutar(r) or re.match(r"\S+ föreslår? .*\bbesluta", r):
+            delar.append([])
+        delar[-1].append(r)
+    text = "\n".join(_stycke(d) for d in delar)
+    return text if [r for d in delar for r in d if not _beslutar(r)] else None
 
 
 def _stycke(rader: list[str]) -> str:

@@ -118,9 +118,11 @@ def test_sammantradet_med_narvaro_tjanstgoring_och_jav(api):
     assert s["plats"] == "Rådhuset - KF-salen"
     assert (s["starttid"], s["sluttid"]) == ("13:15", "16:30")
     assert s["paragrafer"] == [121, 136]
-    # Paragrafen utan beslutsrubrik får hela texten i rubriken, och motkontrollen mot ärendelistan ser det (#88).
-    assert [a["text"] for a in s["avvikelser"]] == ['§ 124: rubriken är längre än i ärendelistan ("Allmänhetens frågestund i '
-                               'kommunfullmäktige"). Inläsningen har troligen tagit med text ur paragrafen']
+    # Paragrafen utan beslutsrubrik får ärendelistans rubrik, och texten står kvar i paragrafen (#88, #124).
+    assert s["avvikelser"] == []
+    [b124] = [b for b in s["behandlingar"] if b["paragraf"] == 124]
+    assert b124["rubrik"] == "Allmänhetens frågestund i kommunfullmäktige"
+    assert b124["paragraftext"] == "Inga frågor har inkommit till dagens kommunfullmäktige."
     assert s["sittningar"] == []  # en enda sittning (#85)
 
     ordf = person(s, "Monica Fahlén")

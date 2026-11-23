@@ -62,6 +62,19 @@ test('från sammanträdeslistan till ett sammanträde och en behandling, med kä
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Information från revisionen 2026')
 })
 
+test('en paragraf utan beslut visar sin text under rubriken ur ärendelistan', async ({ page }) => {
+  await page.goto('/politik?organ=KF')
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('link').click()
+  const rad = page.locator('[data-testid="behandling"][data-paragraf="10"]')
+  await expect(rad.locator('.rubrik')).toHaveText('Inkomna frågor 2026')
+  await expect(rad.getByTestId('paragraftext')).toHaveText('Inga frågor har inkommit till dagens sammanträde.')
+
+  await rad.getByRole('link').click()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inkomna frågor 2026')
+  await expect(page.getByTestId('paragraftext')).toHaveText('Inga frågor har inkommit till dagens sammanträde.')
+  await expect(page.getByTestId('beslut')).toHaveText('Protokollet anger inget beslut för paragrafen.')
+})
+
 test('organ- och årsfiltret speglas i URL:en', async ({ page }) => {
   await page.goto('/politik')
   await page.getByTestId('organ').selectOption('SAM')

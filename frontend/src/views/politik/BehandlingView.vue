@@ -104,6 +104,11 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
       <Protokollkalla :protokoll="b.sammantrade.protokoll" :paragraf="b.paragraf" />
     </header>
 
+    <section v-if="b.paragraftext" class="kort" aria-labelledby="paragraftext-rubrik">
+      <h2 id="paragraftext-rubrik">I paragrafen</h2>
+      <p class="beslut" data-testid="paragraftext">{{ b.paragraftext }}</p>
+    </section>
+
     <section class="kort" aria-labelledby="beslut-rubrik">
       <h2 id="beslut-rubrik">Beslut</h2>
       <p v-if="b.beslut" class="beslut" data-testid="beslut">{{ b.beslut }}</p>
