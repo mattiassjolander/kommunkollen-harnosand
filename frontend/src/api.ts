@@ -169,13 +169,40 @@ export interface Nyckeltal {
   serie: Serie | null
 }
 
-export interface Nyckeltalsgrupp {
-  id: string
-  titel: string
-  nyckeltal: Nyckeltal[]
+/** Ett kort per företeelse. Visas samma sak per invånare från en annan källa har kortet växeln
+ * Totalt (mnkr) / Per invånare. Kortets id är id för varianten Totalt. */
+export interface Nyckeltalskort extends Nyckeltal {
+  per_invanare: Nyckeltal | null
 }
 
-export const hamtaEkonomi = () => hamta<{ omrade: string; grupper: Nyckeltalsgrupp[] }>('/api/ekonomi')
+export interface Nyckeltalsgrupp {
+  id: string
+  /** En fråga en invånare kan ställa, t.ex. "Går kommunen med överskott?". */
+  titel: string
+  ingress: string
+  nyckeltal: Nyckeltalskort[]
+}
+
+/** Ett av de nyckeltal som sammanfattar ekonomin i översikten (GLOSSARY: Huvudtal). */
+export interface Huvudtal {
+  id: string
+  /** Kortet huvudtalet länkar till. */
+  kort: string
+  /** Kortare än källans titel. */
+  titel: string
+  forklaring: string
+}
+
+export const hamtaEkonomi = () =>
+  hamta<{ omrade: string; grupper: Nyckeltalsgrupp[]; huvudtal: Huvudtal[] }>('/api/ekonomi')
+
+/** Kortets och huvudtalets variant (`nyckeltal.id` eller `per_invanare.id`), oavsett vilken som visas. */
+export function varianter(kort: Nyckeltalskort): Nyckeltal[] {
+  return kort.per_invanare ? [kort, kort.per_invanare] : [kort]
+}
+
+/** Elementets id för ett kort, så att länkar som /ekonomi#kort-kolada-N03102 hoppar dit. */
+export const kortankare = (id: string) => `kort-${id.replace(/[^\w]+/g, '-')}`
 
 // Ekonomiska flöden – Sankey (kravspec 4)
 

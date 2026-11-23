@@ -1,23 +1,29 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Nyckeltal } from '../api'
+import { kortankare, varianter, type Nyckeltalskort } from '../api'
 import { csv, forandring, laddaNer, mandatperioder } from '../analys'
 import { procentforandring, siffra, tal, visningsskala } from '../format'
 import Kallrad from './Kallrad.vue'
 import Revisionsmarkering from './Revisionsmarkering.vue'
 import Stapeldiagram from './Stapeldiagram.vue'
 
+export type Enhet = 'totalt' | 'inv'
+
 const props = defineProps<{
-  nyckeltal: Nyckeltal
+  nyckeltal: Nyckeltalskort
+  /** Totalt (mnkr) eller per invånare, för kort som har båda. Gäller alla kort. */
+  enhet: Enhet
   franAr: number
   tillAr: number
   vy: 'diagram' | 'tabell'
   /** Två år att jämföra, eller null. */
   jamforelse: [number, number] | null
 }>()
-const emit = defineEmits<{ vy: ['diagram' | 'tabell'] }>()
+const emit = defineEmits<{ vy: ['diagram' | 'tabell']; enhet: [Enhet] }>()
 
-const serie = computed(() => props.nyckeltal.serie)
+// Varianten som visas. Kort utan variant per invånare visar alltid sitt enda mått.
+const visad = computed(() => (props.enhet === 'inv' && props.nyckeltal.per_invanare) || props.nyckeltal)
+const serie = computed(() => visad.value.serie)
 const skala = computed(() => visningsskala(serie.value?.matt.enhet ?? ''))
 const punkter = computed(() =>
   (serie.value?.punkter ?? [])
@@ -55,21 +61,46 @@ const skillnad = (v: number) => {
     : `${tecken}${tal(Math.abs(v), enhet)}`
 }
 
+// Exporten innehåller båda varianterna, oavsett vilken som visas.
 function exportera() {
   const id = props.nyckeltal.id.replace(/[^\w]+/g, '-')
-  laddaNer(`kommunkollen-${id}-${props.franAr}-${props.tillAr}.csv`, csv([props.nyckeltal], props.franAr, props.tillAr))
+  laddaNer(
+    `kommunkollen-${id}-${props.franAr}-${props.tillAr}.csv`,
+    csv(varianter(props.nyckeltal), props.franAr, props.tillAr),
+  )
 }
 
 const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datakalla.titel}` : ''))
 </script>
 
 <template>
-  <section class="kort" data-testid="nyckeltal" :data-matt="nyckeltal.id">
+  <section
+    :id="kortankare(nyckeltal.id)"
+    class="kort"
+    tabindex="-1"
+    data-testid="nyckeltal"
+    :data-matt="nyckeltal.id"
+    :data-visad="visad.id"
+  >
     <div class="huvud">
-      <h3>{{ serie?.matt.titel ?? nyckeltal.id }}</h3>
-      <div v-if="serie" class="vaxel" role="group" :aria-label="`Visa ${serie.matt.titel} som`">
-        <button type="button" :aria-pressed="vy === 'diagram'" @click="emit('vy', 'diagram')">Diagram</button>
-        <button type="button" :aria-pressed="vy === 'tabell'" @click="emit('vy', 'tabell')">Tabell</button>
+      <h3>{{ nyckeltal.serie?.matt.titel ?? serie?.matt.titel ?? nyckeltal.id }}</h3>
+      <div class="vaxlar">
+        <div
+          v-if="nyckeltal.per_invanare"
+          class="vaxel"
+          role="group"
+          :aria-label="`Visa ${nyckeltal.serie?.matt.titel ?? ''} totalt eller per invånare`"
+          data-testid="enhet"
+        >
+          <button type="button" :aria-pressed="visad.id === nyckeltal.id" @click="emit('enhet', 'totalt')">
+            Totalt (mnkr)
+          </button>
+          <button type="button" :aria-pressed="visad.id !== nyckeltal.id" @click="emit('enhet', 'inv')">Per invånare</button>
+        </div>
+        <div v-if="serie" class="vaxel" role="group" :aria-label="`Visa ${serie.matt.titel} som`">
+          <button type="button" :aria-pressed="vy === 'diagram'" @click="emit('vy', 'diagram')">Diagram</button>
+          <button type="button" :aria-pressed="vy === 'tabell'" @click="emit('vy', 'tabell')">Tabell</button>
+        </div>
       </div>
     </div>
 
@@ -119,7 +150,7 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
         </tbody>
       </table>
       <div class="fot">
-        <Kallrad :serie="serie" :perioder="punkter.map((p) => p.period)" :prisniva="nyckeltal.prisniva" />
+        <Kallrad :serie="serie" :perioder="punkter.map((p) => p.period)" :prisniva="visad.prisniva" />
         <button type="button" class="csv" data-testid="csv" @click="exportera">CSV</button>
       </div>
     </template>
@@ -139,6 +170,21 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+}
+.kort {
+  scroll-margin-top: 16px;
+}
+/* Kortet som en länk (t.ex. ett huvudtal) pekar på. */
+.kort:target,
+.kort.markerad {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.vaxlar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .beskrivning {
   color: var(--ink-secondary);

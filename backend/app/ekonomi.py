@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from . import serier
 from .sources.scb import Differens, ScbMatt
 
 KOLADA = [
@@ -53,31 +54,165 @@ RORELSEKAPITAL = Differens(
 )
 
 
+# Beräknat av Kommunkollen vid läsning: SCB:s långfristiga lån delat med folkmängden från Kolada.
+LANESKULD_PER_INVANARE = "kommunkollen:laneskuld-per-invanare"
+LAN = "scb:BalansKnN:081"
+INVANARE = "kolada:N01951"
+
+
+@dataclass(frozen=True)
+class Kort:
+    """Ett kort per företeelse. Redovisar SCB totalt och Kolada per invånare får kortet växeln
+    Totalt (mnkr) / Per invånare. Kortets id är `matt`."""
+
+    matt: str
+    per_invanare: str | None = None
+
+
 @dataclass(frozen=True)
 class Grupp:
     id: str
-    titel: str
-    matt: list[str]
+    titel: str  # en fråga en invånare kan ställa (ADR-0007)
+    ingress: str
+    kort: list[Kort]
+
+    @property
+    def matt(self) -> list[str]:
+        return [m for k in self.kort for m in (k.matt, k.per_invanare) if m]
 
 
 GRUPPER = [
-    Grupp("resultat", "Resultat", ["kolada:N03007", "kolada:N03102", "scb:ResultKnN:120"]),
-    Grupp("intakter", "Skatter, statsbidrag och utjämning", [
-        "scb:ResultKnN:040", "kolada:N03010", "scb:ResultKnN:050", "kolada:N03009",
-        "scb:SkatteIntKnN:080", "scb:SkatteIntKnN:160",
-    ]),
-    Grupp("kostnader", "Kostnader och investeringar", [
-        "scb:ResultKnN:030", "kolada:N03011", "kolada:N03100", "kolada:N03132", "kolada:N03103",
-    ]),
-    Grupp("skulder", "Skulder och pensioner", [
-        "scb:BalansKnN:081", "scb:BalansKnN:089", "kolada:N03046", "scb:BalansKnN:098", "kolada:N03047",
-        "scb:BalansKnN:072", "kolada:N03044", "kolada:N03048",
-    ]),
-    Grupp("stallning", "Likviditet och soliditet", [
-        "scb:BalansKnN:065", "kolada:N03105", "scb:BalansKnN:069", "scb:rorelsekapital", "kolada:N03002", "kolada:N03106",
-        "scb:BalansKnN:075",
-    ]),
+    Grupp(
+        "resultat",
+        "Går kommunen med överskott?",
+        "Årets resultat är skillnaden mellan kommunens intäkter och kostnader under året, inklusive finansiella poster.",
+        [Kort("scb:ResultKnN:120", "kolada:N03007"), Kort("kolada:N03102")],
+    ),
+    Grupp(
+        "intakter",
+        "Var kommer pengarna ifrån?",
+        "Det mesta av kommunens pengar kommer från kommunalskatten och från generella statsbidrag och utjämning. "
+        "Avgifter och riktade bidrag räknas av från verksamhetens kostnader och syns inte här.",
+        [
+            Kort("scb:ResultKnN:040", "kolada:N03010"),
+            Kort("scb:ResultKnN:050", "kolada:N03009"),
+            Kort("scb:SkatteIntKnN:080"),
+            Kort("scb:SkatteIntKnN:160"),
+        ],
+    ),
+    Grupp(
+        "kostnader",
+        "Vad kostar verksamheten och investeringarna?",
+        "Verksamhetens nettokostnader betalas med skatter, generella statsbidrag och utjämning. "
+        "Investeringar betalas med årets resultat, avskrivningar eller lån.",
+        [
+            Kort("scb:ResultKnN:030", "kolada:N03011"),
+            Kort("kolada:N03100"),
+            Kort("kolada:N03132"),
+            Kort("kolada:N03103"),
+        ],
+    ),
+    Grupp(
+        "skulder",
+        "Hur mycket är lånat och vad är utlovat i pensioner?",
+        "Kommunens lån och övriga skulder, och de pensioner som kommunen har lovat sina anställda. "
+        "En del av pensionerna redovisas som skuld i balansräkningen och en del utanför.",
+        [
+            Kort(LAN, LANESKULD_PER_INVANARE),
+            Kort("scb:BalansKnN:089", "kolada:N03046"),
+            Kort("scb:BalansKnN:098", "kolada:N03047"),
+            Kort("scb:BalansKnN:072", "kolada:N03044"),
+            Kort("kolada:N03048"),
+        ],
+    ),
+    Grupp(
+        "stallning",
+        "Klarar kommunen sina betalningar?",
+        "Likviditeten visar hur mycket som finns att betala med på kort sikt. "
+        "Soliditeten visar hur stor del av tillgångarna som är finansierad med eget kapital.",
+        [
+            Kort("scb:BalansKnN:065"),
+            Kort("kolada:N03105"),
+            Kort("scb:BalansKnN:069"),
+            Kort("scb:rorelsekapital"),
+            Kort("kolada:N03002"),
+            Kort("kolada:N03106"),
+            Kort("scb:BalansKnN:075"),
+        ],
+    ),
 ]
+
+
+@dataclass(frozen=True)
+class Huvudtal:
+    matt: str
+    kort: str  # kortet som huvudtalet länkar till
+    titel: str  # kortare än källans titel
+    forklaring: str  # en mening i klartext om vad måttet betyder, utan värdering
+
+
+HUVUDTAL = [
+    Huvudtal("kolada:N03102", "kolada:N03102", "Årets resultat, andel av skatter och statsbidrag",
+             "Andel av skatteintäkterna och de generella statsbidragen som blev kvar efter årets kostnader."),
+    Huvudtal("kolada:N03100", "kolada:N03100", "Nettokostnadsandel",
+             "Andel av skatteintäkterna och de generella statsbidragen som gick till verksamhetens nettokostnader."),
+    Huvudtal("kolada:N03103", "kolada:N03103", "Självfinansieringsgrad för investeringar",
+             "Andel av årets investeringar som betalades med egna medel, alltså resultat och avskrivningar, utan nya lån."),
+    Huvudtal("kolada:N03002", "kolada:N03002", "Soliditet inklusive pensionsåtaganden",
+             "Andel av tillgångarna som är finansierad med eget kapital, när alla pensionsåtaganden räknas som skuld."),
+    Huvudtal(LANESKULD_PER_INVANARE, LAN, "Låneskuld per invånare",
+             "Kommunens långfristiga lån i banker och kreditinstitut delat med antalet invånare."),
+]
+
+
+def laneskuld_per_invanare(lan: dict | None, invanare: dict | None) -> dict | None:
+    """Långfristiga lån (tkr, SCB) delat med folkmängden (Kolada), i kr/inv. Ett år där någon av
+    uppgifterna saknas blir saknat, aldrig noll."""
+    if lan is None:
+        return None
+    folk = {p["period"]: p for p in (invanare or {}).get("punkter", [])}
+    punkter = []
+    for p in lan["punkter"]:
+        f = folk.get(p["period"])
+        varde = None
+        if p["varde"] is not None and f and f["varde"]:
+            varde = round(p["varde"] * 1000 / f["varde"])
+        tider = [p] + ([f] if f else [])
+        punkter.append({
+            "period": p["period"],
+            "varde": varde,
+            "kallans_publicering": p["kallans_publicering"],
+            "hamtad": max(t["hamtad"] for t in tider),
+            "version": p["version"],
+            "senast_hamtad": max(t["senast_hamtad"] for t in tider),
+            "senast_andrad": max(t["senast_andrad"] for t in tider),
+            "reviderad": False,
+            "historik": [],
+        })
+    return {
+        "matt": {
+            "id": LANESKULD_PER_INVANARE,
+            "titel": "Låneskuld per invånare",
+            "beskrivning": "Långfristiga lån i banker och kreditinstitut (SCB, BalansKnN post 081) delat med antalet "
+            "invånare den 31 december (Kolada N01951). Beräknat av Kommunkollen.",
+            "enhet": "kr/inv",
+            "kallans_publicering": lan["matt"]["kallans_publicering"],
+            "datakalla": {
+                "id": "kommunkollen",
+                "titel": "Beräknat av Kommunkollen ur SCB och Kolada",
+                "url": lan["matt"]["datakalla"]["url"],
+            },
+        },
+        "omrade": lan["omrade"],
+        "punkter": punkter,
+    }
+
+
+def las_nyckeltal(conn, matt_id: str, omrade: str) -> dict | None:
+    """Ett nyckeltals serie. Låneskulden per invånare beräknas vid läsningen."""
+    if matt_id == LANESKULD_PER_INVANARE:
+        return laneskuld_per_invanare(serier.las_serie(conn, LAN, omrade), serier.las_serie(conn, INVANARE, omrade))
+    return serier.las_serie(conn, matt_id, omrade)
 
 
 def prisniva(enhet: str) -> str | None:

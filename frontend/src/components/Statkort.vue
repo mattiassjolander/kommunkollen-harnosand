@@ -3,12 +3,20 @@
 // Förändringen visas neutralt, utan grönt/rött: om en ökning är bra beror på nyckeltalet
 // och på vem som läser, och plattformen är partipolitiskt obunden.
 import { computed } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import type { Nyckeltal } from '../api'
 import { forandring } from '../analys'
 import { datum, procentforandring, siffra, tal, visningsskala } from '../format'
 import Revisionsmarkering from './Revisionsmarkering.vue'
 
-const props = defineProps<{ nyckeltal: Nyckeltal; lank: string }>()
+const props = defineProps<{
+  nyckeltal: Nyckeltal
+  lank: RouteLocationRaw
+  /** En mening i klartext om vad måttet betyder (huvudtalen i ekonomivyn). */
+  forklaring?: string
+  /** Visas i stället för källans titel. */
+  titel?: string
+}>()
 
 const serie = computed(() => props.nyckeltal.serie)
 const skala = computed(() => visningsskala(serie.value?.matt.enhet ?? ''))
@@ -56,8 +64,9 @@ const beteckning = computed(() => {
 <template>
   <article class="statkort" data-testid="statkort" :data-matt="nyckeltal.id">
     <h3>
-      <RouterLink :to="lank">{{ serie?.matt.titel ?? nyckeltal.id }}</RouterLink>
+      <RouterLink :to="lank">{{ titel ?? serie?.matt.titel ?? nyckeltal.id }}</RouterLink>
     </h3>
+    <p v-if="forklaring" class="forklaring" data-testid="forklaring">{{ forklaring }}</p>
     <template v-if="senaste">
       <p class="varde">
         <span class="tal" data-testid="statvarde">{{ tal(senaste.varde, skala.enhet) }}</span>
@@ -106,9 +115,14 @@ h3 a:hover {
   color: var(--accent);
   text-decoration: underline;
 }
+.forklaring {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin: -4px 0 12px;
+}
 .varde {
   font-size: 32px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-weight: 600;
   line-height: 1.15;
   margin: 0;
