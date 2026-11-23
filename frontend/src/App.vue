@@ -2,6 +2,7 @@
 import { computed, onMounted, provide, ref } from 'vue'
 import { hamtaInloggningsmetod, hamtaJag, loggaUt, type Inloggningsmetod, type Jag } from './api'
 import Statusindikator from './components/Statusindikator.vue'
+import Temavaljare from './components/Temavaljare.vue'
 import LoggaIn from './views/LoggaIn.vue'
 
 const vyer = [
@@ -84,6 +85,7 @@ onMounted(kontrollera)
       <div class="kolumn">
         <header class="sidhuvud">
           <Statusindikator />
+          <Temavaljare />
         </header>
         <main class="innehall">
           <RouterView />
@@ -196,6 +198,11 @@ onMounted(kontrollera)
   background: var(--sidhuvud);
   color: var(--sidhuvud-ink);
   padding: 12px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
 }
 .innehall {
   padding: 32px 48px;

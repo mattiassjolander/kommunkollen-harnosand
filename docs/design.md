@@ -128,6 +128,7 @@ Paletten klarar alltså inte kontrollerna, och det går inte att rätta utan att
 
 - Desktop-first. Innehållets maxbredd är 1440 px, och en vänsterställd navigering listar huvudvyerna (kravspec avsnitt 14).
 - Statusindikatorn för datainsamlingen ligger alltid synlig i sidhuvudet.
+- Till höger i sidhuvudet finns en knapp som byter mellan ljust och mörkt läge. Utan eget val följer sidan systemets inställning. Valet sparas i webbläsaren.
 - Filter (år, period, organ, verksamhetsområde) ligger samlade i en rad ovanför diagrammen de påverkar och speglas i URL:en.
 - Avståndsskala med bas 4 px: 4, 8, 12, 16, 24, 32, 48.
 - Hörnradie: 6 px på kort och knappar, 4 px på datamarkeringar.
