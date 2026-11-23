@@ -21,6 +21,14 @@ Ett utkast rättas av en redaktör och publiceras av en utgivare (utkast → gra
 Ingen godkänner ett förslag som hen själv läst in eller ändrat. Läsaren ser bara publicerade
 förslag, bredvid varandra och bredvid den antagna budgeten för året när den finns.
 
+En utgivare kan återkalla ett publicerat förslag direkt, med motivering, när det innehåller fel (#76).
+Förslaget försvinner då ur jämförelsen och en notis står i stället, tills en rättad version har
+publicerats. Voteringarna och yrkandena i protokollet påverkas inte.
+
+Ett publicerat eller återkallat förslag ändras genom en ny version (#76, del 2): ett utkast med samma uppgifter
+och en motivering, som rättas här och publiceras som vanligt. Läsaren ser den märkt "Ändrad efter publicering"
+och kan öppna den förra versionen. En ny inläsning av en ändrad fil skapar också en ny version.
+
 Ett förslag kan ha en summering med samma frågor för alla förslag (`MALL`), som märks Analys, och en
 hänvisning till behandlingen i kommunfullmäktige där det ställdes. Ur behandlingen kopplas partiets
 yrkande och voteringarna automatiskt (#48).
@@ -456,12 +464,15 @@ def las_in(conn: psycopg.Connection, forslag: list[Forslag], redaktor: str, nu: 
             "SELECT id, status, inlast FROM budgetforslag WHERE budgetar = %s AND nyckel = %s AND status <> 'ersatt' "
             "ORDER BY id DESC LIMIT 1", (f.budgetar, f.nyckel),
         ).fetchone()
+        # En ändrad fil ger en ny version av det publicerade eller återkallade förslaget.
+        ersatter = senaste["id"] if senaste and senaste["status"] in ("publicerad", "aterkallad") else None
         if senaste and senaste["inlast"] == f.inlast:
             antal["oforandrade"] += 1
             continue
         varden = {"b": f.budgetar, "n": f.nyckel, "p": f.partier, "t": f.titel, "typ": f.typ, "a": f.antagen,
                   "fil": f.filnamn, "sha": f.inlast["sha256"], "o": f.innehall, "i": Jsonb(f.inlast),
-                  "u": Jsonb(f.uppgifter), "anm": f.anmarkning, "r": [redaktor], "nu": nu}
+                  "u": Jsonb(f.uppgifter), "anm": f.anmarkning, "r": [redaktor], "nu": nu, "e": ersatter,
+                  "andring": pf.INLASNING if ersatter else None}
         if senaste and senaste["status"] in ("utkast", "granskad"):
             conn.execute(
                 """
@@ -476,9 +487,9 @@ def las_in(conn: psycopg.Connection, forslag: list[Forslag], redaktor: str, nu: 
             conn.execute(
                 """
                 INSERT INTO budgetforslag (budgetar, nyckel, partier, titel, typ, antagen, filnamn, sha256, original, inlast,
-                  uppgifter, anmarkning, status, redaktorer, skapad, andrad)
+                  uppgifter, anmarkning, status, redaktorer, skapad, andrad, ersatter_id, andring)
                 VALUES (%(b)s, %(n)s, %(p)s, %(t)s, %(typ)s, %(a)s, %(fil)s, %(sha)s, %(o)s, %(i)s, %(u)s, %(anm)s,
-                  'utkast', %(r)s, %(nu)s, %(nu)s)
+                  'utkast', %(r)s, %(nu)s, %(nu)s, %(e)s, %(andring)s)
                 """, varden,
             )
             antal["nya"] += 1
@@ -492,7 +503,7 @@ def for_over(conn: psycopg.Connection, nyckeltal: dict[int, dict], redaktor: str
     Planåren tas bort, ett resultat i mnkr räknas om till procent och en skattesats i procent till en
     förändring i öre, mot årets planförutsättningar. Redaktörens ändringar följer med. Ett öppet utkast
     ändras och blir utkast igen, ett publicerat förslag får ett nytt utkast (om inget redan är öppet),
-    och ett ersatt ändras där det står. Committar inte."""
+    och ett ersatt eller återkallat ändras där det står och behåller sin status. Committar inte."""
     antal = {"utkast": 0, "nya_utkast": 0, "ersatta": 0}
     rader = conn.execute(
         "SELECT id, budgetar, nyckel, filnamn, status, uppgifter, inlast, redaktorer FROM budgetforslag ORDER BY id"
@@ -519,7 +530,7 @@ def for_over(conn: psycopg.Connection, nyckeltal: dict[int, dict], redaktor: str
                 """, (Jsonb(inlast), Jsonb(ny), [redaktor], nu, nu, r["id"]),
             )
             antal["nya_utkast"] += 1
-        elif r["status"] == "ersatt":
+        elif r["status"] in ("ersatt", "aterkallad"):
             conn.execute("UPDATE budgetforslag SET uppgifter = %s, inlast = %s WHERE id = %s",
                          (Jsonb(ny), Jsonb(inlast), r["id"]))
             antal["ersatta"] += 1
@@ -593,7 +604,8 @@ def _summering(u: dict) -> list[dict] | None:
 # Redigering och publicering
 
 _KOLUMNER = ("id, budgetar, nyckel, partier, titel, typ, antagen, filnamn, sha256, uppgifter, anmarkning, status, "
-             "redaktorer, skapad, andrad, granskad_av, granskad, publicerad_av, publicerad, inlast")
+             "redaktorer, skapad, andrad, granskad_av, granskad, publicerad_av, publicerad, inlast, aterkallad_av, aterkallad, "
+             "aterkallelse, ersatter_id, andring")
 
 
 def _ut(conn: psycopg.Connection, r: dict, nyckeltal: dict[int, dict], redaktion: bool = False) -> dict:
@@ -605,10 +617,13 @@ def _ut(conn: psycopg.Connection, r: dict, nyckeltal: dict[int, dict], redaktion
     ut["berakning"] = None if tidigare_format(r["uppgifter"]) else berakning(r["uppgifter"], nt)
     ut["behandling"] = koppling(conn, r["uppgifter"].get("behandling"), r["partier"])
     ut["summering"] = _summering(r["uppgifter"])
+    ut["andring"] = pf.andring(conn, "budgetforslag", r)
     if redaktion:
         ut |= {"redaktorer": r["redaktorer"], "granskad_av": r["granskad_av"], "publicerad_av": r["publicerad_av"],
                "andrad": r["andrad"].isoformat(), "inlast": r["inlast"]["uppgifter"],
                "granskad": r["granskad"].isoformat() if r["granskad"] else None,
+               "aterkallad_av": r["aterkallad_av"], "aterkallelse": r["aterkallelse"],
+               "aterkallad": r["aterkallad"].isoformat() if r["aterkallad"] else None,
                "mall": [{"id": f, "fraga": fraga} for f, fraga in MALL]}
     return ut
 
@@ -690,6 +705,60 @@ def publicera(conn: psycopg.Connection, forslag_id: int, utgivare: str, nu: date
                  (r["budgetar"], r["nyckel"]))
     conn.execute("UPDATE budgetforslag SET status = 'publicerad', publicerad_av = %s, publicerad = %s WHERE id = %s",
                  (utgivare, nu, forslag_id))
+    if r["ersatter_id"] is not None:
+        # Versionen den ersätter, om den inte hann publiceras.
+        conn.execute("UPDATE budgetforslag SET status = 'ersatt' WHERE id = %s AND status IN ('utkast', 'granskad')",
+                     (r["ersatter_id"],))
+    conn.commit()
+    return las(conn, forslag_id)
+
+
+def ny_version(conn: psycopg.Connection, forslag_id: int, data: dict, redaktor: str, nu: datetime) -> dict:
+    """En ny version av ett publicerat eller återkallat förslag, som utkast med samma uppgifter och original."""
+    r = _hamta(conn, forslag_id)
+    if r["status"] not in ("publicerad", "aterkallad"):
+        raise Konflikt(f"Förslaget är {r['status']}. Bara en publicerad eller återkallad version får en ny version")
+    mot = pf.motivering(data)
+    if conn.execute("SELECT 1 FROM budgetforslag WHERE budgetar = %s AND nyckel = %s AND status IN ('utkast', 'granskad')",
+                    (r["budgetar"], r["nyckel"])).fetchone():
+        raise Konflikt("Det finns redan ett utkast för förslaget. Rätta det i stället")
+    if conn.execute("SELECT 1 FROM budgetforslag WHERE budgetar = %s AND nyckel = %s AND id > %s "
+                    "AND status IN ('publicerad', 'aterkallad')", (r["budgetar"], r["nyckel"], forslag_id)).fetchone():
+        raise Konflikt("Det finns en senare version av förslaget. Skapa den nya versionen från den")
+    ny = conn.execute(
+        """
+        INSERT INTO budgetforslag (budgetar, nyckel, partier, titel, typ, antagen, filnamn, sha256, original, inlast,
+          uppgifter, anmarkning, status, redaktorer, skapad, andrad, ersatter_id, andring)
+        SELECT budgetar, nyckel, partier, titel, typ, antagen, filnamn, sha256, original, inlast, uppgifter, anmarkning,
+          'utkast', %s, %s, %s, id, %s FROM budgetforslag WHERE id = %s
+        RETURNING id
+        """, ([redaktor], nu, nu, mot, forslag_id),
+    ).fetchone()["id"]
+    conn.commit()
+    return las(conn, ny)
+
+
+def tidigare(conn: psycopg.Connection, forslag_id: int) -> dict:
+    """En förra version för läsaren, räknad mot de publicerade planförutsättningarna. LookupError om den inte är en
+    publicerad version som har ersatts."""
+    if not pf.tidigare_visas(conn, "budgetforslag", forslag_id):
+        raise LookupError(f"Budgetförslaget {forslag_id} finns inte")
+    r = _hamta(conn, forslag_id)
+    return _ut(conn, r, _nyckeltal(conn, publicerade=True)) | {"status": r["status"]}
+
+
+def aterkalla(conn: psycopg.Connection, forslag_id: int, data: dict, utgivare: str, nu: datetime) -> dict:
+    """En utgivare återkallar ett publicerat förslag direkt, med motivering. Ingen annan godkänner det."""
+    r = _hamta(conn, forslag_id)
+    if r["status"] != "publicerad":
+        raise Konflikt(f"Bara ett publicerat förslag kan återkallas, det här är {r['status']}")
+    motivering = (data.get("motivering") or "").strip()
+    if not motivering:
+        raise Ogiltig("Ange varför förslaget återkallas, till exempel vem som påpekade felet och när")
+    conn.execute(
+        "UPDATE budgetforslag SET status = 'aterkallad', aterkallad_av = %s, aterkallad = %s, aterkallelse = %s "
+        "WHERE id = %s", (utgivare, nu, motivering, forslag_id),
+    )
     conn.commit()
     return las(conn, forslag_id)
 
@@ -697,7 +766,7 @@ def publicera(conn: psycopg.Connection, forslag_id: int, utgivare: str, nu: date
 def original(conn: psycopg.Connection, forslag_id: int, redaktion: bool) -> tuple[bytes, str, str]:
     """(innehåll, mediatyp, filnamn). Ett opublicerat förslag visas bara för redaktionen."""
     r = conn.execute("SELECT original, filnamn, status, budgetar FROM budgetforslag WHERE id = %s", (forslag_id,)).fetchone()
-    if r is None or (r["status"] != "publicerad" and not redaktion):
+    if r is None or (r["status"] != "publicerad" and not redaktion and not pf.tidigare_visas(conn, "budgetforslag", forslag_id)):
         raise LookupError(f"Budgetförslaget {forslag_id} finns inte")
     return bytes(r["original"]), FILTYPER[Path(r["filnamn"]).suffix.lower()], f"{r['budgetar']}-{r['filnamn']}"
 
@@ -712,10 +781,25 @@ def _differens(varde: float | None, mot: float | None) -> dict | None:
 
 
 def budgetar(conn: psycopg.Connection) -> list[dict]:
-    """Budgetåren med publicerade förslag."""
+    """Budgetåren med publicerade förslag, och år där förslag är återkallade, så att läsaren ser notisen."""
     return conn.execute(
-        "SELECT budgetar, count(*) AS forslag, bool_or(antagen AND typ = 'budget') AS antagen FROM budgetforslag "
-        "WHERE status = 'publicerad' GROUP BY budgetar ORDER BY budgetar DESC"
+        "SELECT budgetar, count(*) FILTER (WHERE status = 'publicerad') AS forslag, "
+        "coalesce(bool_or(antagen AND typ = 'budget') FILTER (WHERE status = 'publicerad'), false) AS antagen "
+        "FROM budgetforslag WHERE status IN ('publicerad', 'aterkallad') GROUP BY budgetar ORDER BY budgetar DESC"
+    ).fetchall()
+
+
+def aterkallade(conn: psycopg.Connection, ar: int) -> list[dict]:
+    """De återkallade förslagen för budgetåret som inte har fått en rättad publicerad version, i jämförelsens ordning."""
+    return conn.execute(
+        """
+        SELECT * FROM (
+          SELECT DISTINCT ON (a.nyckel) a.nyckel, a.partier, a.titel, a.typ, a.antagen FROM budgetforslag a
+          WHERE a.budgetar = %(ar)s AND a.status = 'aterkallad' AND NOT EXISTS (
+            SELECT 1 FROM budgetforslag p WHERE p.budgetar = a.budgetar AND p.nyckel = a.nyckel AND p.status = 'publicerad')
+          ORDER BY a.nyckel, a.aterkallad DESC
+        ) x ORDER BY antagen DESC, typ, nyckel
+        """, {"ar": ar},
     ).fetchall()
 
 
@@ -748,9 +832,12 @@ def jamforelse(conn: psycopg.Connection, ar: int) -> dict:
         }
     # Planförutsättningarnas skatteintäkter och generella bidrag och utjämning mot SKR:s prognoser (#62).
     skr = skatteunderlag.jamforelse(conn, ar, round(nt[ar]["skatteintakter"] + nt[ar]["bidrag"], 3) if nt else None)
+    # Det som är återkallat för rättning visas som en notis, utan uppgifter ur den återkallade versionen (#76).
+    aterkallat = {"planforutsattningar": plan is None and pf.aterkallad(conn, ar),
+                  "forslag": [{k: x[k] for k in ("nyckel", "partier", "titel", "typ")} for x in aterkallade(conn, ar)]}
     return {"budgetar": ar, "organ": organ, "antagen": antagen["id"] if antagen else None,
             "planforutsattningar": plan, "mall": [{"id": f, "fraga": fraga} for f, fraga in MALL],
-            "forslag": forslag, "skr": skr}
+            "forslag": forslag, "skr": skr, "aterkallat": aterkallat}
 
 
 # Kommandot

@@ -19,11 +19,11 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import arenden, ledamoter, partier, sammantradesplan
+from . import arenden, avvikelser, ledamoter, partier, sammantradesplan
 from .kallelsepunkter import Kallelsenummer, efter_rattelser
 from .partitillhorighet import Gallande
 from .rattelser import Publicerade
-from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_vid, tolka
+from .protokolltolkning import Behandling, Narvaro, Tolkning, beslutande_i, beslutande_vid, tolka
 from .sources.base import Dokument
 from .sources.harnosand import ORGAN
 
@@ -144,7 +144,16 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
     sammantradesplan.koppla_om(conn, sammantrade_id)
     conn.execute("DELETE FROM narvaro WHERE sammantrade_id = %s", (sammantrade_id,))
     conn.execute("DELETE FROM behandling WHERE sammantrade_id = %s", (sammantrade_id,))
+    conn.execute("DELETE FROM sittning WHERE sammantrade_id = %s", (sammantrade_id,))
     with conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO sittning (sammantrade_id, ordning, plats, starttid, sluttid, paragrafer, delegation)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            [(sammantrade_id, i, x.plats, x.starttid, x.sluttid, x.paragrafer, x.delegation)
+             for i, x in enumerate(t.sittningar)],
+        )
         cur.executemany(
             """
             INSERT INTO narvaro (sammantrade_id, ordning, namn, parti, roll, kategori, tjanstgor_for,
@@ -162,12 +171,12 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
 def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: int, b: Behandling) -> None:
     behandling_id = conn.execute(
         """
-        INSERT INTO behandling (sammantrade_id, ordning, paragraf, rubrik, diarienummer, beslut, propositionsordning,
-                                motionarer)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO behandling (sammantrade_id, ordning, paragraf, rubrik, rubrik_ur_arendelistan, diarienummer, beslut,
+                                propositionsordning, motionarer)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """,
-        (sammantrade_id, ordning, b.paragraf, b.rubrik, b.diarienummer, b.beslut, b.propositionsordning,
-         Jsonb([{"namn": n, "parti": p} for n, p in b.motionarer])),
+        (sammantrade_id, ordning, b.paragraf, b.rubrik, b.rubrik_ur_arendelistan, b.diarienummer, b.beslut,
+         b.propositionsordning, Jsonb([{"namn": n, "parti": p} for n, p in b.motionarer])),
     ).fetchone()["id"]
     with conn.cursor() as cur:
         cur.executemany(
@@ -232,7 +241,8 @@ def _sammantrade(rad: dict) -> dict:
         "sluttid": rad["sluttid"],
         "plats": rad["plats"],
         "tolkning": rad["tolkning"],
-        "avvikelser": rad["avvikelser"] + rad["kallelse_avvikelser"],
+        # Protokollets avvikelser är strängar i databasen, kallelsens objekt med en länk (#121).
+        "avvikelser": [avvikelser.objekt(a) for a in rad["avvikelser"] + rad["kallelse_avvikelser"]],
         "ocr": rad["ocr"],
         "antal_behandlingar": rad["antal_behandlingar"],
         "paragrafer": [rad["forsta_paragraf"], rad["sista_paragraf"]] if rad["forsta_paragraf"] is not None else None,
@@ -328,6 +338,8 @@ def _las_narvaro(conn: psycopg.Connection, sammantrade_id: int) -> list[Narvaro]
 
 def _behandling(r: dict) -> dict:
     ut = {"paragraf": r["paragraf"], "rubrik": r["rubrik"], "diarienummer": r["diarienummer"], "beslut": r["beslut"]}
+    if r.get("rubrik_ur_arendelistan"):
+        ut["rubrik_ur_arendelistan"] = True
     for k in ("antal_voteringar", "antal_reservationer"):
         if k in r:
             ut[k] = r[k]
@@ -338,6 +350,12 @@ def protokoll_for(conn: psycopg.Connection, sammantrade_ids: list[int]) -> dict[
     """Protokollet (originalet och plattformens kopia) per sammanträde, None för ett sammanträde utan protokoll."""
     return {r["id"]: _sammantrade(r)["protokoll"]
             for r in conn.execute(f"{_SAMMANTRADE} WHERE s.id = ANY(%s)", (list(sammantrade_ids),))}
+
+
+def _las_sittningar(conn: psycopg.Connection, sammantrade_id: int) -> list[dict]:
+    return conn.execute(
+        "SELECT plats, starttid, sluttid, paragrafer, delegation FROM sittning WHERE sammantrade_id = %s ORDER BY ordning",
+        (sammantrade_id,)).fetchall()
 
 
 def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | None:
@@ -359,6 +377,13 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
     gal = Gallande(conn, [x for n in narvaro for x in (n.namn, n.tjanstgor_for)])
     return _sammantrade(rad) | {
         "narvaro": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal, [_person(n, personer) for n in narvaro]),
+        # Bara när protokollet har flera sittningar (#85): var och en med sina beslutande.
+        "sittningar": [
+            {"nummer": i + 1} | x | {"beslutande": _med_parti(
+                conn, sammantrade_id, rad["datum"], pub, gal,
+                [_person(n, personer) for n in beslutande_i(narvaro, x["paragrafer"])])}
+            for i, x in enumerate(_las_sittningar(conn, sammantrade_id))
+        ],
         "behandlingar": [efter_rattelser(pub.behandling(sammantrade_id, kn.satt(sammantrade_id, _behandling(b))))
                          for b in behandlingar],
     }
@@ -396,6 +421,9 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
         "jav": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal,
                           [_person(n, personer) for n in narvaro if paragraf in n.jav]),
         "arende": arenden.arende_for(conn, sammantrade_id, paragraf),
+        # Sittningen paragrafen hör till, när protokollet har flera (#85).
+        "sittning": next(({"nummer": i + 1} | x for i, x in enumerate(_las_sittningar(conn, sammantrade_id))
+                          if paragraf in x["paragrafer"]), None),
         "foregaende": grannar["foregaende"],
         "nasta": grannar["nasta"],
     }

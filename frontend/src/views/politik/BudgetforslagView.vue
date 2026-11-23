@@ -8,6 +8,8 @@
 // står det också.
 // Varje förslag länkar till behandlingen i fullmäktige där det ställdes, med partiets yrkande och
 // voteringarna, och summeringarna med samma frågor för alla förslag visas märkta Analys (#48).
+// Ett förslag eller planförutsättningar som ändrats efter publicering märks så, med datum och motivering, och
+// läsaren kan öppna den förra versionen (#76).
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -65,6 +67,9 @@ onMounted(async () => {
 watch(valtAr, ladda)
 
 const forslag = computed(() => j.value?.forslag ?? [])
+const andrade = computed(() => forslag.value.filter((f) => f.andring))
+// Partierna bakom ett återkallat förslag, för notisen: "L", "L och M", "S, C och KD".
+const partitext = (p: string[]) => (p.length > 1 ? `${p.slice(0, -1).join(', ')} och ${p[p.length - 1]}` : (p[0] ?? ''))
 const plan = computed(() => j.value?.planforutsattningar ?? null)
 const antagen = computed(() => forslag.value.find((f) => f.id === j.value?.antagen) ?? null)
 // Länk till sidan i originalet. Ett Word-dokument har inga fasta sidor, så där blir siffran ingen länk.
@@ -178,6 +183,10 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
           förslagets eget resultat saknar förslaget finansiering för skillnaden, eller redovisar den inte.
           <template v-if="antagen">Skillnaden mot den antagna budgeten står sist i varje ruta.</template>
         </p>
+        <p v-else-if="j.aterkallat.planforutsattningar" class="notis" data-testid="aterkallat-planforutsattningar">
+          Planförutsättningarna för {{ j.budgetar }} är tillbakadragna för rättning. Förslagens ramar visas därför utan
+          förändring och utan beräknat resultat.
+        </p>
         <p v-else class="forklaring" data-testid="utan-planforutsattningar">
           Planförutsättningarna för {{ j.budgetar }} finns inte här, så förslagens ramar visas utan förändring och utan
           beräknat resultat.
@@ -187,6 +196,10 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
           <button type="button" class="vaxla" data-testid="visa-alla-atgarder" :aria-pressed="allaOppna" @click="vaxlaAlla">
             {{ allaOppna ? 'Dölj alla åtgärder' : 'Visa alla åtgärder' }}
           </button>
+        </p>
+
+        <p v-for="a in j.aterkallat.forslag" :key="a.nyckel" class="notis" data-testid="aterkallat-forslag" :data-nyckel="a.nyckel">
+          {{ a.typ === 'tillagg' ? 'Tilläggsförslaget' : 'Förslaget' }} från {{ partitext(a.partier) }} är tillbakadraget för rättning.
         </p>
 
         <div class="rulla">
@@ -204,6 +217,7 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
                   <span class="titel">{{ f.titel }}</span>
                   <span v-if="f.antagen" class="antagen" data-testid="antagen">Antagen budget</span>
                   <span v-if="f.typ === 'tillagg'" class="antagen">Tilläggsbudget</span>
+                  <span v-if="f.andring" class="andrad" data-testid="andrad-efter-publicering">Ändrad efter publicering</span>
                   <a :href="f.original" class="original" rel="noopener" target="_blank">Originalet</a>
                 </th>
               </tr>
@@ -333,6 +347,13 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
             </tbody>
           </table>
         </div>
+        <ul v-if="andrade.length" class="andringar" data-testid="andringar">
+          <li v-for="f in andrade" :key="f.id" :data-nyckel="f.nyckel">
+            <strong>{{ f.titel }} ({{ f.partier.join(', ') }})</strong> ändrades efter publicering
+            {{ datum(f.andring!.publicerad) }}: {{ f.andring!.motivering }}
+            <RouterLink :to="`/politik/budget/tidigare/forslag/${f.andring!.tidigare}`" data-testid="forra-versionen">Förra versionen</RouterLink>
+          </li>
+        </ul>
         <ul v-if="j.forslag.some((f) => f.anmarkning)" class="anmarkningar">
           <li v-for="f in j.forslag.filter((f) => f.anmarkning)" :key="f.id">
             <strong>{{ f.titel }}:</strong> {{ f.anmarkning }}
@@ -386,6 +407,10 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
 
       <section v-if="plan" class="kort" aria-labelledby="plan-rubrik" data-testid="planforutsattningar">
         <h2 id="plan-rubrik">Planförutsättningar {{ j.budgetar }}</h2>
+        <p v-if="plan.andring" class="notis" data-testid="plan-andrad">
+          <span class="andrad">Ändrade efter publicering</span> {{ datum(plan.andring.publicerad) }}: {{ plan.andring.motivering }}
+          <RouterLink :to="`/politik/budget/tidigare/planforutsattningar/${plan.andring.tidigare}`" data-testid="forra-versionen">Förra versionen</RouterLink>
+        </p>
         <p class="forklaring">
           Kommunens gemensamma utgångspunkt för budgetåret, före politiska prioriteringar. Den gäller alla förslag.
           Ett partis egna ändringar av investeringar, balans eller kassaflöde står som anmärkning till förslaget.
@@ -495,6 +520,27 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
 .kort h2 {
   font-size: 15px;
   margin: 0 0 8px;
+}
+.andrad {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 6px;
+}
+.andringar {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  padding-left: 18px;
+}
+.notis {
+  font-size: 13px;
+  max-width: 70ch;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
 }
 .forklaring {
   font-size: 13px;

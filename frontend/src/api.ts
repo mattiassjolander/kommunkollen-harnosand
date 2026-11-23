@@ -306,6 +306,13 @@ export interface Protokollkalla {
   datakalla: { id: string; titel: string }
 }
 
+/** En avvikelse vid tolkningen (#121). Kallelsens avvikelser länkar till kallelsen. */
+export interface Avvikelse {
+  text: string
+  /** Till sidan i kallelsen (#page=N), när sidan är känd. */
+  lank: { titel: string; url: string; sida: number | null } | null
+}
+
 export interface Sammantradesrad {
   id: number
   organ: Organ
@@ -314,7 +321,7 @@ export interface Sammantradesrad {
   sluttid: string | null
   plats: string | null
   tolkning: 'tolkad' | 'ej_tolkad'
-  avvikelser: string[]
+  avvikelser: Avvikelse[]
   /** Protokollet är en PDF med bara bilder och har lästs med OCR (#52). */
   ocr: boolean
   antal_behandlingar: number
@@ -334,7 +341,8 @@ export interface Person {
   roll: string | null
   kategori: 'beslutande' | 'ej_tjanstgorande' | 'franvarande' | 'ovrig'
   tjanstgor_for: { namn: string; parti: string | null } | null
-  /** Paragrafer personen var beslutande vid, om inte alla. */
+  /** Paragrafer personen var beslutande vid, om inte alla. För den som inte var beslutande: paragraferna vid de
+   * sittningar personen var närvarande, när protokollet har flera sittningar (#85). */
   paragrafer: number[] | null
   jav: number[]
   /** Satt när närvarolistan inte anger parti och partiet härletts ur samma eller ett annat protokoll. */
@@ -375,6 +383,8 @@ export interface Diarienummerkallelse {
 export interface Behandlingsrad {
   paragraf: number
   rubrik: string
+  /** Satt när rubriken inte hittades i paragrafen och är hämtad ur protokollets ärendelista. */
+  rubrik_ur_arendelistan?: boolean
   diarienummer: string[]
   /** Satt när diarienumret står i kallelsen men inte i protokollet. */
   diarienummer_kallelse?: Diarienummerkallelse | null
@@ -539,7 +549,7 @@ export interface Avvikelser {
   sammantraden: {
     sammantrade: Kortsammantrade & { tolkning: string }
     url: string
-    avvikelser: { text: string; kategori: Avvikelsekategori }[]
+    avvikelser: (Avvikelse & { kategori: Avvikelsekategori })[]
     i_protokollet: boolean
     /** Publicerade rättelser av fel i protokollet. */
     felaktigheter: number
@@ -589,9 +599,25 @@ export interface Votering {
   per_parti: { parti: string | null; ja: number; nej: number; avstar: number; franvarande: number }[]
 }
 
+/** En sittning i ett protokoll med flera sittningar samma dag, med eget försättsblad (#85). */
+export interface Sittningsref {
+  nummer: number
+  plats: string | null
+  starttid: string | null
+  sluttid: string | null
+  paragrafer: number[]
+  /** Den som fattade sittningens beslut på delegation, t.ex. 'kommunstyrelsens presidium'. */
+  delegation: string | null
+}
+export interface Sittning extends Sittningsref {
+  beslutande: Person[]
+}
+
 export interface Sammantrade extends Sammantradesrad {
   narvaro: Person[]
   behandlingar: Behandlingsrad[]
+  /** Tom när protokollet har en enda sittning. */
+  sittningar: Sittning[]
 }
 
 export interface Behandling extends Behandlingsrad {
@@ -600,6 +626,8 @@ export interface Behandling extends Behandlingsrad {
   jav: Person[]
   /** Ärendet behandlingen hör till (ADR-0003). */
   arende: { id: number; antal_behandlingar: number } | null
+  /** Sittningen paragrafen hör till, när protokollet har flera sittningar (#85). */
+  sittning: Sittningsref | null
   foregaende: number | null
   nasta: number | null
   yrkanden: { text: string; personer: Namngiven[] }[]
@@ -1055,7 +1083,21 @@ export interface Differens {
   mnkr: number
   procent: number | null
 }
-export type Budgetstatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt'
+export type Budgetstatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt' | 'aterkallad'
+/** "Ändrad efter publicering" (#76): versionen ersätter en som var publicerad, som läsaren kan öppna. */
+export interface Andring {
+  motivering: string
+  /** Den förra versionens id, för `/api/budget/tidigare/...`. */
+  tidigare: number
+  /** När den här versionen publicerades. Null för ett utkast. */
+  publicerad: string | null
+}
+/** Vem som återkallade en publicerad uppgift, när och varför (#76). Bara för redaktionen. */
+export interface Aterkallelse {
+  aterkallad_av: string | null
+  aterkallad: string | null
+  aterkallelse: string | null
+}
 export interface Budgetforslag {
   id: number
   budgetar: number
@@ -1076,6 +1118,7 @@ export interface Budgetforslag {
   behandling: Behandlingskoppling | null
   /** Summeringen i mallens ordning, märkt Analys. Null om förslaget inte har någon. */
   summering: Summeringsrad[] | null
+  andring: Andring | null
   differens?: {
     /** Öre. */
     skattesats: number | null
@@ -1083,7 +1126,7 @@ export interface Budgetforslag {
     ramar: (Differens & { organ: string })[]
   } | null
 }
-export interface Budgetutkast extends Budgetforslag {
+export interface Budgetutkast extends Budgetforslag, Aterkallelse {
   redaktorer: string[]
   granskad_av: string | null
   granskad: string | null
@@ -1123,8 +1166,9 @@ export interface Planforutsattningar {
   tabeller: Record<Plantabell, Planpost[]>
   kontroller: Kontroll[]
   publicerad: string | null
+  andring: Andring | null
 }
-export interface Planutkast extends Planforutsattningar {
+export interface Planutkast extends Planforutsattningar, Aterkallelse {
   redaktorer: string[]
   granskad_av: string | null
   granskad: string | null
@@ -1140,6 +1184,11 @@ export interface Budgetjamforelse {
   forslag: Budgetforslag[]
   /** Planförutsättningarnas skatteintäkter och generella bidrag och utjämning mot SKR:s prognoser (#62). */
   skr: SkrJamforelse
+  /** Det som är återkallat för rättning och inte har fått en rättad publicerad version (#76). */
+  aterkallat: {
+    planforutsattningar: boolean
+    forslag: Pick<Budgetforslag, 'nyckel' | 'partier' | 'titel' | 'typ'>[]
+  }
 }
 
 export interface SkrJamforelse {
@@ -1176,6 +1225,15 @@ export const granskaBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/granskning`, 'POST') as unknown as Promise<Budgetutkast>
 export const publiceraBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/publicering`, 'POST') as unknown as Promise<Budgetutkast>
+/** En ny version av ett publicerat eller återkallat förslag, som utkast med samma uppgifter (#76). */
+export const nyVersionAvBudgetforslag = (id: number, motivering: string) =>
+  skrivRattelse(`/api/budgetforslag/${id}/versioner`, 'POST', { motivering }) as unknown as Promise<Budgetutkast>
+/** En förra version av ett förslag som har ändrats efter publicering. */
+export const hamtaTidigareForslag = (id: number) =>
+  hamtaEllerSaknas<Budgetforslag & { status: Budgetstatus }>(`/api/budget/tidigare/forslag/${id}`)
+/** En utgivare återkallar ett publicerat förslag direkt, med motivering (#76). */
+export const aterkallaBudgetforslag = (id: number, motivering: string) =>
+  skrivRattelse(`/api/budgetforslag/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Budgetutkast>
 export async function hamtaPlanutkast(status?: Budgetstatus): Promise<Planutkast[]> {
   const svar = await fetch(`/api/planforutsattningar${status ? `?status=${status}` : ''}`)
   if (svar.status === 401) throw new EjInloggad()
@@ -1187,6 +1245,20 @@ export const granskaPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/granskning`, 'POST') as unknown as Promise<Planutkast>
 export const publiceraPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/publicering`, 'POST') as unknown as Promise<Planutkast>
+/** Uppgifterna i planförutsättningarna, som de skickas när ett utkast rättas i gränssnittet (#76). */
+export interface Planuppgifterin {
+  skattesats: { procent: number; kalla: string }
+  tabeller: Record<Plantabell, { post: string; mnkr: number; kalla: string }[]>
+}
+export const andraPlanforutsattningar = (id: number, uppgifter: Planuppgifterin) =>
+  skrivRattelse(`/api/planforutsattningar/${id}`, 'PATCH', { uppgifter }) as unknown as Promise<Planutkast>
+export const nyVersionAvPlanforutsattningar = (id: number, motivering: string) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/versioner`, 'POST', { motivering }) as unknown as Promise<Planutkast>
+export const hamtaTidigarePlan = (id: number) =>
+  hamtaEllerSaknas<Planforutsattningar>(`/api/budget/tidigare/planforutsattningar/${id}`)
+/** En utgivare återkallar publicerade planförutsättningar direkt, med motivering (#76). */
+export const aterkallaPlanforutsattningar = (id: number, motivering: string) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Planutkast>
 
 // Sammanträdesplaner (#68): organens planer så som webbsidan visar dem, och skillnaderna mot besluten i
 // protokollen. Bara för redaktionen.

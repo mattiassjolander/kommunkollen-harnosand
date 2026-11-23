@@ -5,10 +5,20 @@
 // Varje ram kan ha åtgärder och satsningar med belopp och sida (#57), som granskas med förslaget.
 // Redaktören anger behandlingen där förslaget ställdes och skriver summeringen med samma frågor för alla
 // förslag (#48). Summeringen märks Analys.
+// En utgivare kan återkalla publicerade planförutsättningar och förslag direkt, med motivering, när de innehåller
+// fel (#76). Läsaren ser då en notis i stället, tills en rättad version har publicerats.
+// En publicerad eller återkallad version ändras genom en ny version: ett utkast med samma uppgifter och en
+// motivering, som rättas här (även planförutsättningarna) och publiceras som vanligt (#76, del 2).
 import { computed, inject, onMounted, reactive, ref, type Ref } from 'vue'
 import {
   EjInloggad,
   andraBudgetforslag,
+  aterkallaBudgetforslag,
+  aterkallaPlanforutsattningar,
+  andraPlanforutsattningar,
+  nyVersionAvBudgetforslag,
+  nyVersionAvPlanforutsattningar,
+  type Planuppgifterin,
   granskaBudgetforslag,
   granskaPlanforutsattningar,
   hamtaBudgetutkast,
@@ -38,6 +48,23 @@ const laddar = ref(true)
 const fel = ref<string | null>(null)
 const oppen = ref<number | null>(null)
 const meddelande = reactive<Record<string, string>>({})
+// Publicerade och återkallade, för att återkalla och för att se varför något återkallades.
+const publPlaner = ref<Planutkast[]>([])
+const publForslag = ref<Budgetutkast[]>([])
+const aterPlaner = ref<Planutkast[]>([])
+const aterForslag = ref<Budgetutkast[]>([])
+const aterkallas = ref<string | null>(null)
+const aterkallelse = ref('')
+const versioneras = ref<string | null>(null)
+const versionsmotivering = ref('')
+// Planförutsättningarna som rättas i gränssnittet.
+const oppenPlan = ref<number | null>(null)
+interface Planfalt {
+  post: string
+  mnkr: string
+  kalla: string
+}
+const planform = ref<{ procent: string; kalla: string; tabeller: Record<Plantabell, Planfalt[]> } | null>(null)
 
 interface Formular {
   titel: string
@@ -63,16 +90,24 @@ interface Atgardsfalt {
 }
 const form = ref<Formular | null>(null)
 
-async function ladda() {
-  laddar.value = true
+async function ladda(visaLaddar = true) {
+  if (visaLaddar) laddar.value = true
   fel.value = null
   try {
-    const [utkast, granskade, pu, pg] = await Promise.all([
+    const [utkast, granskade, pu, pg, bp, pp, ba, pa] = await Promise.all([
       hamtaBudgetutkast('utkast'),
       hamtaBudgetutkast('granskad'),
       hamtaPlanutkast('utkast'),
       hamtaPlanutkast('granskad'),
+      hamtaBudgetutkast('publicerad'),
+      hamtaPlanutkast('publicerad'),
+      hamtaBudgetutkast('aterkallad'),
+      hamtaPlanutkast('aterkallad'),
     ])
+    publForslag.value = bp
+    publPlaner.value = pp
+    aterForslag.value = ba
+    aterPlaner.value = pa
     lista.value = [...utkast, ...granskade].sort((a, b) => b.budgetar - a.budgetar || a.nyckel.localeCompare(b.nyckel))
     planer.value = [...pu, ...pg].sort((a, b) => b.budgetar - a.budgetar)
   } catch (e) {
@@ -82,7 +117,7 @@ async function ladda() {
     laddar.value = false
   }
 }
-onMounted(ladda)
+onMounted(() => ladda())
 
 const s = (v: number | undefined | null) => (v === undefined || v === null ? '' : String(v))
 function oppna(f: Budgetutkast) {
@@ -179,10 +214,101 @@ const spara = (f: Budgetutkast) =>
     'Sparat som utkast.',
   )
 const granska = (f: Budgetutkast) => steg(`f${f.id}`, lista, f.id, () => granskaBudgetforslag(f.id), 'Granskat.')
-const publicera = (f: Budgetutkast) => steg(`f${f.id}`, lista, f.id, () => publiceraBudgetforslag(f.id), 'Publicerat.')
+// Efter en publicering hämtas listorna igen, eftersom den förra publicerade versionen nu är ersatt.
+const publicera = async (f: Budgetutkast) => {
+  await steg(`f${f.id}`, lista, f.id, () => publiceraBudgetforslag(f.id), 'Publicerat.')
+  await ladda(false)
+}
 const granskaPlan = (p: Planutkast) => steg(`p${p.id}`, planer, p.id, () => granskaPlanforutsattningar(p.id), 'Granskat.')
-const publiceraPlan = (p: Planutkast) =>
-  steg(`p${p.id}`, planer, p.id, () => publiceraPlanforutsattningar(p.id), 'Publicerat.')
+const publiceraPlan = async (p: Planutkast) => {
+  await steg(`p${p.id}`, planer, p.id, () => publiceraPlanforutsattningar(p.id), 'Publicerat.')
+  await ladda(false)
+}
+async function aterkalla(slag: 'p' | 'f', id: number) {
+  const nyckel = `${slag}${id}`
+  meddelande[nyckel] = ''
+  try {
+    if (slag === 'p') {
+      const ny = await aterkallaPlanforutsattningar(id, aterkallelse.value)
+      publPlaner.value = publPlaner.value.filter((x) => x.id !== id)
+      aterPlaner.value = [ny, ...aterPlaner.value]
+    } else {
+      const ny = await aterkallaBudgetforslag(id, aterkallelse.value)
+      publForslag.value = publForslag.value.filter((x) => x.id !== id)
+      aterForslag.value = [ny, ...aterForslag.value]
+    }
+    aterkallas.value = null
+    aterkallelse.value = ''
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    meddelande[nyckel] = e instanceof Error ? e.message : String(e)
+  }
+}
+async function nyVersion(slag: 'p' | 'f', id: number) {
+  const nyckel = `${slag}${id}`
+  meddelande[nyckel] = ''
+  try {
+    const ny = slag === 'p'
+      ? await nyVersionAvPlanforutsattningar(id, versionsmotivering.value)
+      : await nyVersionAvBudgetforslag(id, versionsmotivering.value)
+    versioneras.value = null
+    versionsmotivering.value = ''
+    await ladda()
+    // Utkastet öppnas för rättning.
+    if (arRedaktor.value) {
+      if (slag === 'p') oppnaPlan(planer.value.find((x) => x.id === ny.id)!)
+      else oppna(lista.value.find((x) => x.id === ny.id)!)
+    }
+  } catch (e) {
+    if (e instanceof EjInloggad) return utloggad()
+    meddelande[nyckel] = e instanceof Error ? e.message : String(e)
+  }
+}
+function borjaVersion(nyckel: string) {
+  versioneras.value = nyckel
+  versionsmotivering.value = ''
+}
+function oppnaPlan(p: Planutkast) {
+  oppenPlan.value = p.id
+  planform.value = {
+    procent: s(p.skattesats.procent),
+    kalla: p.skattesats.kalla,
+    tabeller: Object.fromEntries(
+      TABELLER.map((t) => [t.nyckel, (p.tabeller[t.nyckel] ?? []).map((x) => ({ post: x.post, mnkr: s(x.mnkr), kalla: x.kalla }))]),
+    ) as Record<Plantabell, Planfalt[]>,
+  }
+}
+function planuppgifter(): Planuppgifterin {
+  const f = planform.value!
+  return {
+    skattesats: { procent: tal(f.procent) as number, kalla: f.kalla },
+    tabeller: Object.fromEntries(
+      TABELLER.map((t) => [t.nyckel, f.tabeller[t.nyckel].map((x) => ({ post: x.post, mnkr: tal(x.mnkr) as number, kalla: x.kalla }))]),
+    ) as Planuppgifterin['tabeller'],
+  }
+}
+async function sparaPlan(p: Planutkast) {
+  await steg(`p${p.id}`, planer, p.id, () => andraPlanforutsattningar(p.id, planuppgifter()), 'Sparat som utkast.')
+  if (meddelande[`p${p.id}`] === 'Sparat som utkast.') oppenPlan.value = null
+}
+function borjaAterkalla(nyckel: string) {
+  aterkallas.value = nyckel
+  aterkallelse.value = ''
+}
+const forslagsnamn = (f: Budgetutkast) => `${f.titel} (${f.partier.join(', ')})`
+// Planförutsättningarna och förslagen i en lista. `data` är förslagets nyckel, tom för planförutsättningarna.
+const rad = (slag: 'p' | 'f', x: Planutkast | Budgetutkast) => ({
+  nyckel: `${slag}${x.id}`,
+  slag,
+  id: x.id,
+  namn: slag === 'p' ? `Planförutsättningar ${x.budgetar}` : `${x.budgetar} ${forslagsnamn(x as Budgetutkast)}`,
+  budgetar: x.budgetar,
+  data: slag === 'f' ? (x as Budgetutkast).nyckel : '',
+  a: x,
+})
+const publicerade = computed(() => [...publPlaner.value.map((p) => rad('p', p)), ...publForslag.value.map((f) => rad('f', f))])
+const aterkallade = computed(() => [...aterPlaner.value.map((p) => rad('p', p)), ...aterForslag.value.map((f) => rad('f', f))])
+
 const andrat = (f: Budgetutkast) => JSON.stringify(f.uppgifter) !== JSON.stringify(f.inlast)
 const egen = (f: { redaktorer: string[] }) => !!jag.value && f.redaktorer.includes(jag.value.epost)
 
@@ -211,15 +337,16 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
     <h1>Politik och beslut</h1>
     <p class="ingress">
       Planförutsättningar och budgetförslag som lästs in och väntar på publicering. Kontrollera varje siffra mot sidan i
-      originalet. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem.
+      originalet. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem. En utgivare kan
+      återkalla det som är publicerat när det innehåller fel.
     </p>
   </header>
   <PolitikFlikar />
 
   <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
   <p v-else-if="laddar">Hämtar utkast…</p>
-  <p v-else-if="!lista.length && !planer.length" class="saknas" data-testid="inga-utkast">Inga budgetförslag väntar på publicering.</p>
   <template v-else>
+    <p v-if="!lista.length && !planer.length" class="saknas" data-testid="inga-utkast">Inga budgetförslag väntar på publicering.</p>
     <section v-if="planer.length" aria-labelledby="planer-rubrik">
       <h2 id="planer-rubrik" class="sektion">Planförutsättningar</h2>
       <ul class="lista">
@@ -230,14 +357,15 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
             <span class="meta-inline">{{ p.filnamn }}, flik {{ p.budgetar }}</span>
           </div>
           <p class="meta">
-            Läst in av {{ p.redaktorer.join(', ') }}, senast {{ datumTid(p.andrad) }}.
+            Läst in eller ändrat av {{ p.redaktorer.join(', ') }}, senast {{ datumTid(p.andrad) }}.
             <template v-if="p.granskad_av">Granskat av {{ p.granskad_av }}.</template>
-            Rätta i Excelfilen och läs in den igen.
+            Rätta här, eller i Excelfilen och läs in den igen.
           </p>
+          <p v-if="p.andring" class="meta" data-testid="utkast-andring">Ny version av den publicerade: {{ p.andring.motivering }}</p>
           <p class="meta">
             <strong>Skattesats:</strong> {{ nr(p.skattesats.procent) }} % ({{ p.skattesats.kalla }})
           </p>
-          <div class="plantabeller">
+          <div v-if="oppenPlan !== p.id" class="plantabeller">
             <table v-for="t in TABELLER" :key="t.nyckel" class="ramtabell" :data-tabell="t.nyckel">
               <caption>{{ t.rubrik }}, mnkr</caption>
               <tbody>
@@ -263,7 +391,33 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
             </table>
           </div>
           <p class="meta">Kontroll är det angivna beloppet minus summan av posterna. ±0 betyder att tabellen går ihop.</p>
+          <form v-if="oppenPlan === p.id && planform" class="formular" data-testid="planformular" @submit.prevent="sparaPlan(p)">
+            <div class="falt">
+              <label>Skattesats, % <input v-model="planform.procent" inputmode="decimal" class="kort-falt" /></label>
+              <label>Källa <input v-model="planform.kalla" /></label>
+            </div>
+            <table v-for="t in TABELLER" :key="t.nyckel" class="redigera" :data-tabell="t.nyckel">
+              <caption>{{ t.rubrik }}, mnkr</caption>
+              <thead><tr><th>Post</th><th>Mnkr</th><th>Källa</th><th /></tr></thead>
+              <tbody>
+                <tr v-for="(x, i) in planform.tabeller[t.nyckel]" :key="i" :data-post="x.post">
+                  <td><input v-model="x.post" aria-label="Post" /></td>
+                  <td><input v-model="x.mnkr" inputmode="decimal" class="kort-falt" aria-label="Mnkr" /></td>
+                  <td><input v-model="x.kalla" aria-label="Källa" placeholder="L s. 8" /></td>
+                  <td><button type="button" @click="planform.tabeller[t.nyckel].splice(i, 1)">Ta bort</button></td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr><td colspan="4"><button type="button" @click="planform.tabeller[t.nyckel].push({ post: '', mnkr: '', kalla: '' })">Lägg till post</button></td></tr>
+              </tfoot>
+            </table>
+            <div class="knappar">
+              <button type="submit" class="primar" data-testid="spara-plan">Spara</button>
+              <button type="button" @click="oppenPlan = null">Avbryt</button>
+            </div>
+          </form>
           <div class="knappar">
+            <button v-if="arRedaktor && oppenPlan !== p.id" type="button" data-testid="ratta-plan" @click="oppnaPlan(p)">Rätta</button>
             <button v-if="arUtgivare && p.status === 'utkast'" type="button" :disabled="egen(p)" :title="egen(p) ? 'Du har läst in planförutsättningarna' : ''" data-testid="granska" @click="granskaPlan(p)">Granska</button>
             <button v-if="arUtgivare && p.status === 'granskad'" type="button" :disabled="egen(p)" data-testid="publicera" @click="publiceraPlan(p)">Publicera</button>
             <span v-if="meddelande[`p${p.id}`]" class="meddelande" role="status">{{ meddelande[`p${p.id}`] }}</span>
@@ -290,6 +444,7 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
             <template v-if="andrat(f)"> Ändrat sedan inläsningen.</template>
           </p>
           <p v-if="f.anmarkning" class="meta">{{ f.anmarkning }}</p>
+          <p v-if="f.andring" class="meta" data-testid="utkast-andring">Ny version av den publicerade: {{ f.andring.motivering }}</p>
 
           <div v-if="oppen !== f.id" class="uppgifter" data-testid="uppgifter">
             <p>
@@ -452,6 +607,93 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
             <div class="knappar">
               <button type="submit" class="primar" data-testid="spara">Spara</button>
               <button type="button" @click="oppen = null">Avbryt</button>
+            </div>
+          </form>
+        </li>
+      </ul>
+    </section>
+
+    <section v-if="publPlaner.length || publForslag.length" aria-labelledby="publicerade-rubrik">
+      <h2 id="publicerade-rubrik" class="sektion">Publicerade</h2>
+      <p class="meta">
+        Det läsaren ser nu. Innehåller en uppgift fel kan en utgivare återkalla den, med en motivering. Läsaren ser då en
+        notis om att den är tillbakadragen för rättning, tills en rättad version har publicerats. En ny version visas för
+        läsaren märkt Ändrad efter publicering, när den har publicerats.
+      </p>
+      <ul class="lista">
+        <li
+          v-for="x in publicerade"
+          :key="x.nyckel"
+          class="kort"
+          data-testid="publicerad"
+          :data-slag="x.slag === 'p' ? 'planforutsattningar' : 'forslag'"
+          :data-budgetar="x.budgetar"
+          :data-nyckel="x.data || undefined"
+        >
+          <div class="huvud">
+            <strong>{{ x.namn }}</strong>
+            <span class="etikett" data-status="publicerad">Publicerad</span>
+            <span class="meta-inline">{{ datumTid(x.a.publicerad) }}</span>
+          </div>
+          <div class="knappar">
+            <button v-if="aterkallas !== x.nyckel && versioneras !== x.nyckel" type="button" data-testid="ny-version" @click="borjaVersion(x.nyckel)">Ny version</button>
+            <button v-if="arUtgivare && aterkallas !== x.nyckel && versioneras !== x.nyckel" type="button" data-testid="aterkalla" @click="borjaAterkalla(x.nyckel)">Återkalla</button>
+            <span v-if="meddelande[x.nyckel]" class="meddelande" role="status">{{ meddelande[x.nyckel] }}</span>
+          </div>
+          <form v-if="versioneras === x.nyckel" class="formular" data-testid="ny-version-formular" @submit.prevent="nyVersion(x.slag, x.id)">
+            <label class="bred">
+              Varför ändras uppgiften? Läsaren ser motiveringen vid markeringen Ändrad efter publicering.
+              <textarea v-model="versionsmotivering" rows="2" required data-testid="ny-version-motivering" />
+            </label>
+            <div class="knappar">
+              <button type="submit" class="primar" :disabled="!versionsmotivering.trim()" data-testid="spara-ny-version">Skapa utkast</button>
+              <button type="button" @click="versioneras = null">Avbryt</button>
+            </div>
+          </form>
+          <form v-if="aterkallas === x.nyckel" class="formular" data-testid="aterkalla-formular" @submit.prevent="aterkalla(x.slag, x.id)">
+            <label class="bred">
+              Varför återkallas uppgiften? Ange gärna vem som påpekade felet och när.
+              <textarea v-model="aterkallelse" rows="2" required data-testid="aterkalla-motivering" />
+            </label>
+            <div class="knappar">
+              <button type="submit" class="primar" :disabled="!aterkallelse.trim()" data-testid="spara-aterkallelse">Återkalla</button>
+              <button type="button" @click="aterkallas = null">Avbryt</button>
+            </div>
+          </form>
+        </li>
+      </ul>
+    </section>
+
+    <section v-if="aterPlaner.length || aterForslag.length" aria-labelledby="aterkallade-rubrik">
+      <h2 id="aterkallade-rubrik" class="sektion">Återkallade</h2>
+      <p class="meta">Tillbakadragna för rättning. De visas igen först när en rättad version har publicerats. Skapa en ny version och rätta den, eller läs in en rättad fil.</p>
+      <ul class="lista">
+        <li
+          v-for="x in aterkallade"
+          :key="x.nyckel"
+          class="kort"
+          data-testid="aterkallad"
+          :data-budgetar="x.budgetar"
+          :data-nyckel="x.data || undefined"
+        >
+          <div class="huvud">
+            <strong>{{ x.namn }}</strong>
+            <span class="etikett" data-status="aterkallad">Återkallad</span>
+            <span class="meta-inline">av {{ x.a.aterkallad_av }}, {{ datumTid(x.a.aterkallad) }}</span>
+          </div>
+          <p class="meta" data-testid="aterkallelse">{{ x.a.aterkallelse }}</p>
+          <div class="knappar">
+            <button v-if="versioneras !== x.nyckel" type="button" data-testid="ny-version" @click="borjaVersion(x.nyckel)">Ny version</button>
+            <span v-if="meddelande[x.nyckel]" class="meddelande" role="status">{{ meddelande[x.nyckel] }}</span>
+          </div>
+          <form v-if="versioneras === x.nyckel" class="formular" data-testid="ny-version-formular" @submit.prevent="nyVersion(x.slag, x.id)">
+            <label class="bred">
+              Vad rättas? Läsaren ser motiveringen vid markeringen Ändrad efter publicering.
+              <textarea v-model="versionsmotivering" rows="2" required data-testid="ny-version-motivering" />
+            </label>
+            <div class="knappar">
+              <button type="submit" class="primar" :disabled="!versionsmotivering.trim()" data-testid="spara-ny-version">Skapa utkast</button>
+              <button type="button" @click="versioneras = null">Avbryt</button>
             </div>
           </form>
         </li>

@@ -2,7 +2,7 @@
 import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { EjInloggad, hamtaSammantrade, Saknas, type Jag, type Person, type Sammantrade } from '../../api'
-import { paragraftext, parti, sammantradesdatum } from '../../format'
+import { tidsintervall, paragraftext, parti, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
 import Kallelsemarkering from '../../components/Kallelsemarkering.vue'
 import Periodmarkering from '../../components/Periodmarkering.vue'
@@ -12,6 +12,7 @@ import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
+import Avvikelsetext from '../../components/Avvikelsetext.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -51,12 +52,15 @@ const narvaro = computed(() =>
 function anteckning(p: Person): string {
   const delar: string[] = []
   if (p.tjanstgor_for) delar.push(`Tjänstgör för ${p.tjanstgor_for.namn} (${parti(p.tjanstgor_for.parti)})`)
-  if (p.paragrafer) delar.push(`Beslutande vid ${paragraftext(p.paragrafer)}`)
+  if (p.paragrafer)
+    delar.push(`${p.kategori === 'beslutande' ? 'Beslutande' : 'Närvarande'} vid ${paragraftext(p.paragrafer)}`)
   if (p.jav.length) delar.push(`Jäv ${paragraftext(p.jav)}`)
   return delar.join(' · ')
 }
-const tid = computed(() =>
-  s.value?.starttid ? `kl. ${s.value.starttid}${s.value.sluttid ? `–${s.value.sluttid}` : ''}` : null,
+const tid = computed(() => (s.value ? tidsintervall(s.value.starttid, s.value.sluttid) : null))
+// Paragrafer som en sittning beslutade på delegation (#85).
+const delegation = computed(
+  () => new Map(s.value?.sittningar.flatMap((x) => (x.delegation ? x.paragrafer.map((p) => [p, x.delegation!]) : [])) ?? []),
 )
 </script>
 
@@ -92,8 +96,32 @@ const tid = computed(() =>
       <h2 id="avv-rubrik">Avvikelser vid tolkningen</h2>
       <p class="ingress">Det här stämde inte med det förväntade när protokollet lästes. Kontrollera mot protokollet.</p>
       <ul>
-        <li v-for="a in s.avvikelser" :key="a">{{ a }}</li>
+        <li v-for="(a, i) in s.avvikelser" :key="i"><Avvikelsetext :avvikelse="a" /></li>
       </ul>
+    </section>
+
+    <section v-if="s.sittningar.length" class="kort" aria-labelledby="sitt-rubrik" data-testid="sittningar">
+      <h2 id="sitt-rubrik">Sittningar</h2>
+      <p class="ingress">
+        Protokollet omfattar {{ s.sittningar.length }} sittningar samma dag, var och en med egen plats, tid och
+        beslutande.
+      </p>
+      <div v-for="x in s.sittningar" :key="x.nummer" class="sittning" data-testid="sittning">
+        <h3>Sittning {{ x.nummer }} · {{ paragraftext(x.paragrafer) }}</h3>
+        <p class="sittningsinfo">
+          <template v-if="tidsintervall(x.starttid, x.sluttid)">{{ tidsintervall(x.starttid, x.sluttid) }}</template>
+          <template v-if="x.plats"><template v-if="x.starttid"> · </template>{{ x.plats }}</template>
+        </p>
+        <p v-if="x.delegation" class="delegation" data-testid="delegation">Beslut av {{ x.delegation }} på delegation</p>
+        <p class="sittningsinfo" data-testid="sittningens-beslutande">
+          Beslutande ({{ x.beslutande.length }}):
+          <template v-for="(p, i) in x.beslutande" :key="p.namn"
+            ><template v-if="i">, </template
+            ><RouterLink v-if="p.ledamot_id" :to="`/politik/ledamoter/${p.ledamot_id}`">{{ p.namn }}</RouterLink
+            ><template v-else>{{ p.namn }}</template> ({{ parti(p.parti) }})</template
+          >
+        </p>
+      </div>
     </section>
 
     <section class="kort" aria-labelledby="beh-rubrik">
@@ -105,12 +133,18 @@ const tid = computed(() =>
             <span class="nr">§ {{ b.paragraf }}</span>
             <span class="rubrik">{{ b.rubrik || 'Rubrik saknas' }}</span>
           </RouterLink>
+          <span v-if="b.rubrik_ur_arendelistan" class="etikett" data-testid="rubrik-ur-arendelistan">
+            Rubriken hämtad ur ärendelistan
+          </span>
           <span v-if="b.diarienummer.length" class="dnr">{{ b.diarienummer.join(', ') }}</span>
           <Kallelsemarkering v-if="b.diarienummer_kallelse" :kalla="b.diarienummer_kallelse" />
           <span v-if="b.antal_voteringar" class="etikett" data-testid="har-votering">
             {{ b.antal_voteringar > 1 ? `${b.antal_voteringar} voteringar` : 'Votering' }}
           </span>
           <span v-if="b.antal_reservationer" class="etikett" data-testid="har-reservation">Reservation</span>
+          <span v-if="delegation.has(b.paragraf)" class="etikett" data-testid="pa-delegation">
+            Beslut av {{ delegation.get(b.paragraf) }} på delegation
+          </span>
           <span v-if="b.rattelser && Object.keys(b.rattelser).length" class="etikett" data-testid="har-rattelse">
             Rättad av redaktionen
           </span>
@@ -261,6 +295,29 @@ const tid = computed(() =>
   color: var(--ink-secondary);
   white-space: pre-line;
   max-width: 80ch;
+}
+.sittning + .sittning {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.sittning h3 {
+  font-size: 14px;
+  margin: 16px 0 4px;
+}
+.sittningsinfo,
+.delegation {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-secondary);
+  max-width: 80ch;
+}
+.sittningsinfo a {
+  color: var(--accent);
+}
+.delegation {
+  color: var(--ink);
+  font-weight: 600;
 }
 .grupp + .grupp {
   margin-top: 20px;

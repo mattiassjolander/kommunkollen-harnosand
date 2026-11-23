@@ -9,6 +9,16 @@ längst ner läses inte. Övriga kolumner och flikar som inte heter ett år hopp
 Planförutsättningarna går utkast → granskad → publicerad (ADR-0002). Ingen godkänner det hen själv
 läst in. Förslagens förändringar och beräknade resultat visas publikt först när årets
 planförutsättningar är publicerade.
+
+En utgivare kan återkalla publicerade planförutsättningar direkt, med motivering, när de innehåller fel
+(#76). Läsaren ser då året utan planförutsättningar och en notis, tills en rättad version har publicerats.
+Den förra publicerade versionen kommer inte tillbaka.
+
+Publicerade planförutsättningar ändras genom en ny version (#76, del 2): en redaktör eller utgivare skapar ett
+utkast från en publicerad eller återkallad version, med en motivering, och rättar det här eller i filen. Den nya
+versionen går granskad → publicerad som vanligt, och ingen som ändrat den godkänner den. Den publicerade versionen
+syns tills den nya publiceras. Läsaren ser den nya märkt "Ändrad efter publicering" och kan öppna den förra.
+En ny inläsning av en ändrad fil skapar också en ny version.
 """
 
 from __future__ import annotations
@@ -23,6 +33,8 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 FILNAMN = "planforutsattningar.xlsx"
+# Motiveringen för en ny version som kommer från en ny inläsning av filen.
+INLASNING = "Ny inläsning av filen."
 # Kolumn A i filen → nyckeln i uppgifterna.
 TABELLER = {"Resultatbudget": "resultatbudget", "Nämnder": "namnder", "Investeringar": "investeringar",
             "Balansbudget": "balansbudget", "Kassaflöde": "kassaflode"}
@@ -137,10 +149,13 @@ def las_in(conn: psycopg.Connection, lista_: list[Planforutsattning], redaktor: 
             "SELECT id, status, uppgifter FROM planforutsattningar WHERE budgetar = %s AND status <> 'ersatt' "
             "ORDER BY id DESC LIMIT 1", (p.budgetar,),
         ).fetchone()
+        # En ändrad fil ger en ny version av den publicerade eller återkallade.
+        ersatter = senaste["id"] if senaste and senaste["status"] in ("publicerad", "aterkallad") else None
         if senaste and senaste["uppgifter"] == p.uppgifter:
             antal["oforandrade"] += 1
             continue
-        varden = {"b": p.budgetar, "fil": p.filnamn, "u": Jsonb(p.uppgifter), "r": [redaktor], "nu": nu}
+        varden = {"b": p.budgetar, "fil": p.filnamn, "u": Jsonb(p.uppgifter), "r": [redaktor], "nu": nu, "e": ersatter,
+                  "a": INLASNING if ersatter else None}
         if senaste and senaste["status"] in ("utkast", "granskad"):
             conn.execute(
                 "UPDATE planforutsattningar SET filnamn = %(fil)s, uppgifter = %(u)s, status = 'utkast', redaktorer = %(r)s, "
@@ -149,8 +164,8 @@ def las_in(conn: psycopg.Connection, lista_: list[Planforutsattning], redaktor: 
             antal["uppdaterade"] += 1
         else:
             conn.execute(
-                "INSERT INTO planforutsattningar (budgetar, filnamn, uppgifter, status, redaktorer, skapad, andrad) "
-                "VALUES (%(b)s, %(fil)s, %(u)s, 'utkast', %(r)s, %(nu)s, %(nu)s)", varden,
+                "INSERT INTO planforutsattningar (budgetar, filnamn, uppgifter, status, redaktorer, skapad, andrad, "
+                "ersatter_id, andring) VALUES (%(b)s, %(fil)s, %(u)s, 'utkast', %(r)s, %(nu)s, %(nu)s, %(e)s, %(a)s)", varden,
             )
             antal["nya"] += 1
     return antal
@@ -231,7 +246,7 @@ def kallor(text: str, forslag: dict[str, int]) -> list[dict]:
 # Granskning och publicering
 
 _KOLUMNER = ("id, budgetar, filnamn, uppgifter, status, redaktorer, andrad, granskad_av, granskad, publicerad_av, "
-             "publicerad")
+             "publicerad, aterkallad_av, aterkallad, aterkallelse, ersatter_id, andring")
 
 
 def _forslag(conn: psycopg.Connection, budgetar: int, publicerade: bool) -> dict[str, int]:
@@ -251,11 +266,33 @@ def _ut(conn: psycopg.Connection, r: dict, redaktion: bool) -> dict:
     ut = {"id": r["id"], "budgetar": r["budgetar"], "status": r["status"], "filnamn": r["filnamn"],
           "skattesats": {**u["skattesats"], "kallor": kallor(u["skattesats"]["kalla"], lankar)},
           "tabeller": tabeller, "kontroller": kontroller(u),
-          "publicerad": r["publicerad"].isoformat() if r["publicerad"] else None}
+          "publicerad": r["publicerad"].isoformat() if r["publicerad"] else None,
+          "andring": andring(conn, "planforutsattningar", r)}
     if redaktion:
         ut |= {"redaktorer": r["redaktorer"], "granskad_av": r["granskad_av"], "publicerad_av": r["publicerad_av"],
-               "andrad": r["andrad"].isoformat(), "granskad": r["granskad"].isoformat() if r["granskad"] else None}
+               "andrad": r["andrad"].isoformat(), "granskad": r["granskad"].isoformat() if r["granskad"] else None,
+               "aterkallad_av": r["aterkallad_av"], "aterkallelse": r["aterkallelse"],
+               "aterkallad": r["aterkallad"].isoformat() if r["aterkallad"] else None}
     return ut
+
+
+def andring(conn: psycopg.Connection, tabell: str, r: dict) -> dict | None:
+    """"Ändrad efter publicering": motiveringen och den förra versionen, när versionen ersätter en som var publicerad."""
+    if r["ersatter_id"] is None:
+        return None
+    fore = conn.execute(f"SELECT publicerad FROM {tabell} WHERE id = %s", (r["ersatter_id"],)).fetchone()
+    if fore is None or fore["publicerad"] is None:
+        return None
+    return {"motivering": r["andring"], "tidigare": r["ersatter_id"],
+            "publicerad": r["publicerad"].isoformat() if r["publicerad"] else None}
+
+
+def tidigare_visas(conn: psycopg.Connection, tabell: str, id_: int) -> bool:
+    """Om läsaren kan öppna versionen: den var publicerad och har ersatts av en version som har publicerats."""
+    return conn.execute(
+        f"SELECT 1 FROM {tabell} t WHERE t.id = %(id)s AND t.publicerad IS NOT NULL AND t.status IN ('ersatt', 'aterkallad') "
+        f"AND EXISTS (SELECT 1 FROM {tabell} n WHERE n.ersatter_id = t.id AND n.publicerad IS NOT NULL)", {"id": id_},
+    ).fetchone() is not None
 
 
 def _hamta(conn: psycopg.Connection, pf_id: int) -> dict:
@@ -275,6 +312,14 @@ def lista(conn: psycopg.Connection, status: str | None = None) -> list[dict]:
 
 def las(conn: psycopg.Connection, pf_id: int) -> dict:
     return _ut(conn, _hamta(conn, pf_id), redaktion=True)
+
+
+def tidigare(conn: psycopg.Connection, pf_id: int) -> dict:
+    """En förra version för läsaren. LookupError om den inte är en publicerad version som har ersatts."""
+    if not tidigare_visas(conn, "planforutsattningar", pf_id):
+        raise LookupError(f"Planförutsättningarna {pf_id} finns inte")
+    r = _hamta(conn, pf_id)
+    return _ut(conn, r, redaktion=False) | {"status": r["status"]}
 
 
 def publicerad(conn: psycopg.Connection, budgetar: int) -> dict | None:
@@ -306,5 +351,104 @@ def publicera(conn: psycopg.Connection, pf_id: int, utgivare: str, nu: datetime)
                  (r["budgetar"],))
     conn.execute("UPDATE planforutsattningar SET status = 'publicerad', publicerad_av = %s, publicerad = %s WHERE id = %s",
                  (utgivare, nu, pf_id))
+    if r["ersatter_id"] is not None:
+        # Versionen den ersätter, om den inte hann publiceras.
+        conn.execute("UPDATE planforutsattningar SET status = 'ersatt' WHERE id = %s AND status IN ('utkast', 'granskad')",
+                     (r["ersatter_id"],))
+    conn.commit()
+    return las(conn, pf_id)
+
+
+def aterkalla(conn: psycopg.Connection, pf_id: int, data: dict, utgivare: str, nu: datetime) -> dict:
+    """En utgivare återkallar publicerade planförutsättningar direkt, med motivering. Ingen annan godkänner det."""
+    r = _hamta(conn, pf_id)
+    if r["status"] != "publicerad":
+        raise Konflikt(f"Bara publicerade planförutsättningar kan återkallas, de här är {r['status']}")
+    motivering = (data.get("motivering") or "").strip()
+    if not motivering:
+        raise Ogiltig("Ange varför planförutsättningarna återkallas, till exempel vem som påpekade felet och när")
+    conn.execute(
+        "UPDATE planforutsattningar SET status = 'aterkallad', aterkallad_av = %s, aterkallad = %s, aterkallelse = %s "
+        "WHERE id = %s", (utgivare, nu, motivering, pf_id),
+    )
+    conn.commit()
+    return las(conn, pf_id)
+
+
+def aterkallad(conn: psycopg.Connection, budgetar: int) -> bool:
+    """Om budgetårets planförutsättningar är återkallade och ingen rättad version är publicerad."""
+    return conn.execute(
+        "SELECT 1 FROM planforutsattningar a WHERE a.budgetar = %(b)s AND a.status = 'aterkallad' "
+        "AND NOT EXISTS (SELECT 1 FROM planforutsattningar p WHERE p.budgetar = %(b)s AND p.status = 'publicerad')",
+        {"b": budgetar},
+    ).fetchone() is not None
+
+
+def motivering(data: dict) -> str:
+    text = (data.get("motivering") or "").strip()
+    if not text:
+        raise Ogiltig("Ange varför uppgifterna ändras, till exempel vad som var fel och vem som påpekade det")
+    return text
+
+
+def ny_version(conn: psycopg.Connection, pf_id: int, data: dict, redaktor: str, nu: datetime) -> dict:
+    """En ny version av publicerade eller återkallade planförutsättningar, som utkast med samma uppgifter."""
+    r = _hamta(conn, pf_id)
+    if r["status"] not in ("publicerad", "aterkallad"):
+        raise Konflikt(f"Planförutsättningarna är {r['status']}. Bara en publicerad eller återkallad version får en ny version")
+    mot = motivering(data)
+    if conn.execute("SELECT 1 FROM planforutsattningar WHERE budgetar = %s AND status IN ('utkast', 'granskad')",
+                    (r["budgetar"],)).fetchone():
+        raise Konflikt(f"Det finns redan ett utkast för {r['budgetar']}. Rätta det i stället")
+    if conn.execute("SELECT 1 FROM planforutsattningar WHERE budgetar = %s AND id > %s AND status IN ('publicerad', 'aterkallad')",
+                    (r["budgetar"], pf_id)).fetchone():
+        raise Konflikt("Det finns en senare version av planförutsättningarna. Skapa den nya versionen från den")
+    ny = conn.execute(
+        "INSERT INTO planforutsattningar (budgetar, filnamn, uppgifter, status, redaktorer, skapad, andrad, ersatter_id, "
+        "andring) VALUES (%s, %s, %s, 'utkast', %s, %s, %s, %s, %s) RETURNING id",
+        (r["budgetar"], r["filnamn"], Jsonb(r["uppgifter"]), [redaktor], nu, nu, pf_id, mot),
+    ).fetchone()["id"]
+    conn.commit()
+    return las(conn, ny)
+
+
+def _validera(budgetar: int, u: Any) -> dict:
+    """Uppgifter från gränssnittet, prövade med samma regler som filen. Ogiltig vid fel."""
+    if not isinstance(u, dict) or not isinstance(u.get("skattesats"), dict) or not isinstance(u.get("tabeller"), dict):
+        raise Ogiltig("uppgifter ska vara {skattesats: {procent, kalla}, tabeller}")
+    namn = {v: k for k, v in TABELLER.items()}
+    if set(u["tabeller"]) - set(namn):
+        raise Ogiltig(f"Okända tabeller: {', '.join(sorted(set(u['tabeller']) - set(namn)))}")
+    s_ = u["skattesats"]
+    rader: list[tuple] = [("Resultatbudget", SKATTESATS, s_.get("procent"), s_.get("kalla", ""))]
+    for nyckel, poster in u["tabeller"].items():
+        if not isinstance(poster, list):
+            raise Ogiltig(f"{nyckel} ska vara en lista med poster")
+        for x in poster:
+            if not isinstance(x, dict) or not str(x.get("post") or "").strip():
+                raise Ogiltig(f"{namn[nyckel]}: varje rad behöver en post")
+            if x.get("mnkr") is None:
+                raise Ogiltig(f"{namn[nyckel]}, {x['post']}: beloppet saknas")
+            rader.append((namn[nyckel], str(x["post"]).strip(), x["mnkr"], str(x.get("kalla") or "").strip()))
+    try:
+        return las_flik(str(budgetar), rader)
+    except Ogiltig as e:
+        # Radnumren gäller inte här; felet anger tabell och post.
+        raise Ogiltig(re.sub(r"^flik \d{4}(, rad \d+)?: ", "", str(e))) from e
+
+
+def andra(conn: psycopg.Connection, pf_id: int, data: dict, redaktor: str, nu: datetime) -> dict:
+    """Rättar ett utkast i gränssnittet: {uppgifter}. Ett granskat utkast blir utkast igen."""
+    r = _hamta(conn, pf_id)
+    if r["status"] not in ("utkast", "granskad"):
+        raise Konflikt(f"Planförutsättningarna är {r['status']} och kan inte ändras. Skapa en ny version")
+    if set(data) - {"uppgifter"}:
+        raise Ogiltig(f"Okända fält: {', '.join(sorted(set(data) - {'uppgifter'}))}")
+    u = _validera(r["budgetar"], data.get("uppgifter"))
+    redaktorer = r["redaktorer"] if redaktor in r["redaktorer"] else [*r["redaktorer"], redaktor]
+    conn.execute(
+        "UPDATE planforutsattningar SET uppgifter = %s, redaktorer = %s, andrad = %s, status = 'utkast', granskad_av = NULL, "
+        "granskad = NULL WHERE id = %s", (Jsonb(u), redaktorer, nu, pf_id),
+    )
     conn.commit()
     return las(conn, pf_id)

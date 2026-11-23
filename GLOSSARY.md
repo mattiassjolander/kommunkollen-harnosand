@@ -15,6 +15,10 @@ Den tjänstepersonsorganisation som bereder ärenden åt ett organ. Förvaltning
 Ett möte i ett organ. Före mötet är det planerat enligt sammanträdesplanen, efteråt dokumenteras det i ett protokoll. Ett planerat sammanträde och protokollet för det är samma sammanträde. Ett sammanträde som inte finns i planen, t.ex. ett extra sammanträde, har bara ett protokoll.
 _Avoid_: Möte
 
+**Sittning**:
+En del av ett sammanträde med eget försättsblad i protokollet: egen plats och tid, egna beslutande och egna paragrafer. De flesta protokoll har en enda sittning. Kommunstyrelsens protokoll 2022-01-18 har två: hela styrelsen för §§ 1–14 och presidiet, som beslutade på delegation av styrelsen, för § 15. De beslutande vid en paragraf är de beslutande vid paragrafens sittning.
+_Avoid_: Delsammanträde, session
+
 **Sammanträdesplan**:
 Ett organs fastställda datum och tider för kommande sammanträden. Organet beslutar om planen i ett protokoll, och kommunen publicerar den som en tabell på organets webbsida. Ändringar i tabellen blir reviderade uppgifter. Innan kommunen har publicerat tabellen för ett år gäller organets beslut i protokollet. Planen kommer då från beslutet och märks med det.
 _Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
@@ -23,7 +27,12 @@ _Avoid_: Mötesplan, sammanträdestider (används i protokollens rubriker)
 Handlingen som kallar till ett sammanträde och listar ärendena. För kommunfullmäktige heter den *kungörelse*. Kallelsen publiceras ofta 1–3 dagar före sammanträdet, ibland tillsammans med handlingarna.
 
 **Föredragningslista**:
-Tabellen i kallelsen med ärendena i ordning: paragraf, rubrik och sida, ofta med diarienummer. När protokollet saknar ett diarienummer hämtas det härifrån och markeras "ur kallelsen" (#109). Kallelsens paragrafnummer kan skilja sig från protokollets.
+Tabellen i kallelsen med ärendena i ordning: paragraf, rubrik och sida, ofta med diarienummer. När protokollet saknar ett diarienummer hämtas det härifrån och markeras "ur kallelsen" (#109). Kallelsens paragrafnummer är preliminära och kan skilja sig från protokollets. En punkt som inte behandlas i protokollet, till exempel för att den har strukits från dagordningen eller flyttats till ett annat sammanträde, visas som en avvikelse med länk till kallelsen på punktens sida (#121).
+_Avoid_: Ärendelista (som är protokollets)
+
+**Ärendelista**:
+Protokollets förteckning över paragraferna och deras rubriker. Paragrafernas rubriker kontrolleras mot den (#88).
+_Avoid_: Föredragningslista (som är kallelsens)
 
 **Webbsändning**:
 Ett sammanträde i kommunfullmäktige som sänds och spelas in i kommunens webb-tv. Inspelningen får en egen länk efter sammanträdet.
@@ -251,6 +260,14 @@ En uppgift som plattformen har läst med textigenkänning ur ett protokoll som b
 **Rättelse**:
 En redaktörs ändring av en automatiskt tolkad uppgift, med en motivering. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad rättelse visas med markering, och läsaren kan se vad tolkningen sa. Tolkningen ändras inte. Rättelsen anger om felet finns i protokollet eller i inläsningen. En granskad eller publicerad rättelse ändras genom en ny version, som ersätter den gamla när den publiceras. En utgivare kan återkalla en publicerad rättelse, och då gäller tolkningen igen.
 _Avoid_: Korrigering, redigering
+
+**Återkalla**:
+Att en utgivare tar bort en publicerad uppgift från visning, med en motivering, därför att den innehåller fel. Läsaren ser en notis om att uppgiften är tillbakadragen för rättning. Den återkallade uppgiften visas igen först när en rättad version har publicerats i det vanliga flödet. Det gäller planförutsättningar, budgetförslag, rättelser och fastställd partitillhörighet. Statusen är *återkallad*.
+_Avoid_: Avpublicera, dra tillbaka (som begrepp)
+
+**Ändrad efter publicering**:
+Markeringen på en publicerad version som ersatt en tidigare publicerad version, med datum och motivering. Läsaren kan öppna den förra versionen. En publicerad uppgift ändras alltid genom en ny version, ett utkast med samma uppgifter som går igenom granskning och publicering. En ny inläsning av en ändrad fil ger också en ny version.
+_Avoid_: Uppdaterad, reviderad (reviderad uppgift gäller källans egna ändringar)
 
 **Fastställd partitillhörighet**:
 En persons parti, eller partilös, som redaktionen har fastställt för en period, från och med ett datum och till och med ett datum eller tills vidare, med en motivering. Den går igenom samma flöde som en rättelse. En publicerad period gäller vid sammanträden under perioden före protokollets uppgift, men efter en rättelse av en enskild förekomst. Två publicerade perioder för samma person överlappar inte.
