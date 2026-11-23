@@ -1588,3 +1588,99 @@ export const bekraftaKrockar = (data: {
   motivering: string
   krockar: { sammantrade_id: number; namn: string }[]
 }) => skrivRattelse('/api/partitillhorighet/krockar/bekraftelser', 'POST', data) as unknown as Promise<Rattelse[]>
+
+// Budget jämfört med utfall per budgetår (#83, kravspec 3.2): antagen budget ur årsplanen, reviderad budget och
+// utfall ur årsredovisningen och helårsprognos ur delårsrapporten, per nämnd och för resultatet.
+/** Ett belopp i mnkr med sidan i dokumentet det står i. */
+export interface Sidbelopp {
+  mnkr: number
+  sida: number | null
+}
+export interface Budgetavvikelse {
+  mnkr: number
+  procent: number | null
+}
+export interface Avvikelsekontroll {
+  angiven: number
+  sida: number
+  raknad: number
+  differens: number
+  stammer: boolean
+}
+export interface Uppfoljningsnamnd {
+  organ: string
+  antagen: Sidbelopp | null
+  reviderad: Sidbelopp | null
+  /** Reviderad minus antagen budget. */
+  andring: Budgetavvikelse | null
+  /** Helårsprognosen mot budgeten, som delårsrapporten anger den. Procent av budgeten. */
+  prognosavvikelse: (Sidbelopp & { procent: number | null }) | null
+  /** Nettokostnad. */
+  utfall: Sidbelopp | null
+  /** Budget minus nettokostnad. */
+  avvikelse_reviderad: Budgetavvikelse | null
+  avvikelse_antagen: Budgetavvikelse | null
+  kontroll: Avvikelsekontroll | null
+}
+export interface Uppfoljningsresultat {
+  antagen: (Sidbelopp & { procent: number; beraknat: boolean }) | null
+  reviderad: Sidbelopp | null
+  prognos_budget: Sidbelopp | null
+  prognos: Sidbelopp | null
+  utfall: Sidbelopp | null
+  /** Resultat minus budget. */
+  avvikelse_reviderad: Budgetavvikelse | null
+  avvikelse_antagen: Budgetavvikelse | null
+  prognosavvikelse: Budgetavvikelse | null
+  kontroll: Avvikelsekontroll | null
+}
+export interface Uppfoljningsdokument {
+  titel: string
+  url: string
+}
+export interface Uppfoljning {
+  id: number
+  budgetar: number
+  status: Budgetstatus
+  filnamn: string
+  dokument: { arsredovisning?: Uppfoljningsdokument; delarsrapport?: Uppfoljningsdokument }
+  antagen: {
+    id: number
+    titel: string
+    original: string
+    behandling: { organ: string; datum: string; paragraf: number; hittad: boolean; sammantrade_id: number | null } | null
+  } | null
+  berakning: {
+    namnder: Uppfoljningsnamnd[]
+    utan_uppfoljning: { organ: string; antagen: Sidbelopp }[]
+    resultat: Uppfoljningsresultat
+  }
+  publicerad: string | null
+  andring: { motivering: string; tidigare: number; publicerad: string | null } | null
+  aterkallad?: boolean
+}
+export interface Uppfoljningsutkast extends Uppfoljning {
+  redaktorer: string[]
+  granskad_av: string | null
+  publicerad_av: string | null
+  andrad: string
+  aterkallelse: string | null
+}
+
+export const hamtaUppfoljningsar = () => hamta<{ budgetar: number; publicerad: boolean }[]>('/api/budget-och-utfall')
+/** Den publicerade uppföljningen, eller {budgetar, aterkallad: true} när den är återkallad. */
+export const hamtaUppfoljning = (ar: number) =>
+  hamtaEllerSaknas<Uppfoljning | { budgetar: number; aterkallad: true }>(`/api/budget-och-utfall/${ar}`)
+export async function hamtaUppfoljningsutkast(status?: Budgetstatus): Promise<Uppfoljningsutkast[]> {
+  const svar = await fetch(`/api/uppfoljning${status ? `?status=${status}` : ''}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör eller utgivare.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+export const granskaUppfoljning = (id: number) =>
+  skrivRattelse(`/api/uppfoljning/${id}/granskning`, 'POST') as unknown as Promise<Uppfoljningsutkast>
+export const publiceraUppfoljning = (id: number) =>
+  skrivRattelse(`/api/uppfoljning/${id}/publicering`, 'POST') as unknown as Promise<Uppfoljningsutkast>
+export const aterkallaUppfoljning = (id: number, motivering: string) =>
+  skrivRattelse(`/api/uppfoljning/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Uppfoljningsutkast>

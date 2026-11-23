@@ -10,6 +10,7 @@
 // En publicerad eller återkallad version ändras genom en ny version: ett utkast med samma uppgifter och en
 // motivering, som rättas här (även planförutsättningarna) och publiceras som vanligt (#76, del 2).
 import { computed, inject, onMounted, reactive, ref, type Ref } from 'vue'
+import Uppfoljningsutkast from '../../components/Uppfoljningsutkast.vue'
 import {
   EjInloggad,
   andraBudgetforslag,
@@ -425,6 +426,8 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
         </li>
       </ul>
     </section>
+
+    <Uppfoljningsutkast />
 
     <section v-if="lista.length" aria-labelledby="forslag-rubrik">
       <h2 id="forslag-rubrik" class="sektion">Budgetförslag</h2>

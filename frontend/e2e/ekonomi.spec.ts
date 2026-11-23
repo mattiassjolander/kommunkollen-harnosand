@@ -311,6 +311,7 @@ test('brodiagrammet bygger upp årets resultat med källor och kontroll, och har
   await expect(steg.nth(4)).toHaveAttribute('data-steg', 'resultat')
   await expect(steg.nth(4).getByTestId('brovarde')).toHaveText('−91,0 mnkr')
   await expect(bro.getByTestId('brokontroll')).toContainText('summerar till årets resultat enligt SCB')
+  await expect(bro.getByTestId('bro-budget')).toHaveAttribute('href', '/ekonomi/budget-och-utfall')
   await expect(bro.getByTestId('broavvikelse')).toHaveCount(0)
   await expect(bro.getByTestId('brotext')).toContainText('ger årets resultat −91,0 mnkr')
   await expect(bro.getByTestId('kallrad')).toContainText('SCB')

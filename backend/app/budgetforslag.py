@@ -12,7 +12,8 @@ och resultatet i procent av skatteintäkter och generella bidrag. Förändringen
 i mnkr och det beräknade resultatet räknas fram.
 
 `python -m app.budgetforslag MAPP --redaktor EPOST` läser planförutsättningarna och förslagen i mappen
-och skapar utkast. Med `-` som mapp läses en tar-ström från stdin, så att mappen kan skickas till servern:
+och skapar utkast, liksom budget jämfört med utfall (`uppfoljning.json` i årsmappen, se `uppfoljning.py`).
+Med `-` som mapp läses en tar-ström från stdin, så att mappen kan skickas till servern:
 
     tar -C data -c budgetforslag | ssh server 'docker compose exec -T backend
         /app/.venv/bin/python -m app.budgetforslag - --redaktor EPOST'
@@ -54,7 +55,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from . import planforutsattningar as pf
-from . import protokoll, skatteunderlag
+from . import protokoll, skatteunderlag, uppfoljning
 from .planforutsattningar import EjTillatet, Konflikt, Ogiltig
 
 __all__ = ["EjTillatet", "Konflikt", "Ogiltig"]
@@ -871,8 +872,10 @@ def main(argv: list[str] | None = None) -> None:
                 # Förslagen räknas mot de planförutsättningar som läses in nu, annars de senaste i databasen.
                 nyckeltal = _nyckeltal(conn, publicerade=False) | {x.budgetar: pf.nyckeltal(x.uppgifter) for x in planer}
                 forslag = las_mapp(rot, nyckeltal)
+                uppf = uppfoljning.las_mapp(rot)
                 antal_pf = pf.las_in(conn, planer, redaktor, nu)
                 overforda = for_over(conn, nyckeltal, redaktor, nu)
+                antal_u = uppfoljning.las_in(conn, uppf, redaktor, nu)
             except Ogiltig as e:
                 conn.rollback()
                 sys.exit(f"Inläsningen avbröts: {e}")
@@ -883,6 +886,9 @@ def main(argv: list[str] | None = None) -> None:
     if any(overforda.values()):
         print(f"Förda till budgetåret: {overforda['utkast']} utkast, {overforda['nya_utkast']} nya utkast för "
               f"publicerade förslag, {overforda['ersatta']} ersatta.")
+    if uppf:
+        print(f"{len(uppf)} uppföljningar: {antal_u['nya']} nya utkast, {antal_u['uppdaterade']} uppdaterade, "
+              f"{antal_u['oforandrade']} oförändrade.")
     print(f"{len(forslag)} budgetförslag: {antal['nya']} nya utkast, {antal['uppdaterade']} uppdaterade, "
           f"{antal['oforandrade']} oförändrade.")
 

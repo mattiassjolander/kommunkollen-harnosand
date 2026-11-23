@@ -6,13 +6,15 @@
   <nav class="flikar" aria-label="Ekonomi">
     <RouterLink to="/ekonomi" exact-active-class="aktiv">Nyckeltal</RouterLink>
     <RouterLink to="/ekonomi/skatteunderlag" exact-active-class="aktiv">Skatteunderlagsprognos</RouterLink>
+    <RouterLink to="/ekonomi/budget-och-utfall" exact-active-class="aktiv">Budget och utfall</RouterLink>
   </nav>
 </template>
 
 <style scoped>
 .flikar {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  column-gap: 20px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 24px;
   font-size: 14px;
