@@ -113,7 +113,7 @@ def test_sammantradet_markeras_som_last_med_ocr(database_url, google):
     [ocr_s] = [x for x in api.get("/api/sammantraden?organ=KF").json() if x["datum"] == "2026-04-30"]
     svar = api.get(f"/api/sammantraden/{ocr_s['id']}").json()
     assert (svar["ocr"], svar["tolkning"]) == (True, "tolkad")
-    assert "PDF:en saknar text och har lästs med OCR" in svar["avvikelser"]
+    assert "PDF:en saknar text och har lästs med OCR" in [a["text"] for a in svar["avvikelser"]]
     avvikelser = api.get("/api/avvikelser").json()
     rad = next(x for x in avvikelser["sammantraden"] if x["sammantrade"]["id"] == ocr_s["id"])
     assert any(a["kategori"] == "ofullstandigt" for a in rad["avvikelser"])

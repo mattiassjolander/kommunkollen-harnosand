@@ -108,6 +108,43 @@ test('avvikelser vid tolkningen visas på sammanträdet', async ({ page }) => {
   await expect(page.getByTestId('avvikelser')).toContainText('saknas: 53, 54')
 })
 
+test('en punkt i kallelsen som inte behandlas visas med länk till kallelsen (#121)', async ({ page }) => {
+  // Inspelningarna har ingen sådan punkt, så svaren får avvikelsen. Texten är kallelsepunkter.py:s.
+  const avvikelse = {
+    text:
+      'Handlingar kommunfullmäktige 2026-03-23, sidan 14: punkten "Kommunstyrelsens uppdragsbeslut 2026" ' +
+      '(KS/2026-102) behandlas inte i protokollet. Den kan ha strukits från dagordningen eller flyttats till ett ' +
+      'annat sammanträde.',
+    lank: { titel: 'Handlingar kommunfullmäktige 2026-03-23', url: 'https://www.harnosand.se/handlingar.pdf#page=14', sida: 14 },
+  }
+  await page.route(/\/api\/sammantraden\/\d+$/, async (route) => {
+    const svar = await route.fetch()
+    const data = await svar.json()
+    data.avvikelser.push(avvikelse)
+    await route.fulfill({ response: svar, json: data })
+  })
+  await page.goto('/politik?organ=KF')
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
+  const avvikelser = page.getByTestId('avvikelser')
+  await expect(avvikelser).toContainText('behandlas inte i protokollet')
+  await expect(avvikelser).not.toContainText('§ 129')
+  const lank = avvikelser.getByTestId('avvikelselank')
+  await expect(lank).toHaveText('Öppna kallelsen, sidan 14')
+  await expect(lank).toHaveAttribute('href', avvikelse.lank.url)
+
+  // Under Avvikelser har den kategorin "Stämmer inte med kallelsen" och samma länk.
+  await page.route(/\/api\/avvikelser(\?|$)/, async (route) => {
+    const svar = await route.fetch()
+    const data = await svar.json()
+    data.sammantraden[0].avvikelser.push({ ...avvikelse, kategori: 'kallelsen' })
+    await route.fulfill({ response: svar, json: data })
+  })
+  await page.goto('/politik/avvikelser')
+  const rad = page.getByTestId('avvikelse-sammantrade').locator('[data-kategori="kallelsen"]').first()
+  await expect(rad).toContainText('Stämmer inte med kallelsen')
+  await expect(rad.getByTestId('avvikelselank')).toHaveAttribute('href', avvikelse.lank.url)
+})
+
 test('ett protokoll med två sittningar visar dem var för sig, med presidiets beslut på delegation', async ({ page }) => {
   // Kommunstyrelsen 2022-01-18: hela styrelsen §§ 1–14, presidiet § 15 (#85).
   await page.goto('/politik?organ=KS&ar=2022')

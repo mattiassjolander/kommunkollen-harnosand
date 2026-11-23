@@ -12,6 +12,7 @@ import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
+import Avvikelsetext from '../../components/Avvikelsetext.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -95,7 +96,7 @@ const delegation = computed(
       <h2 id="avv-rubrik">Avvikelser vid tolkningen</h2>
       <p class="ingress">Det här stämde inte med det förväntade när protokollet lästes. Kontrollera mot protokollet.</p>
       <ul>
-        <li v-for="a in s.avvikelser" :key="a">{{ a }}</li>
+        <li v-for="(a, i) in s.avvikelser" :key="i"><Avvikelsetext :avvikelse="a" /></li>
       </ul>
     </section>
 

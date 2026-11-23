@@ -19,7 +19,7 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import arenden, ledamoter, partier, sammantradesplan
+from . import arenden, avvikelser, ledamoter, partier, sammantradesplan
 from .kallelsepunkter import Kallelsenummer, efter_rattelser
 from .partitillhorighet import Gallande
 from .rattelser import Publicerade
@@ -241,7 +241,8 @@ def _sammantrade(rad: dict) -> dict:
         "sluttid": rad["sluttid"],
         "plats": rad["plats"],
         "tolkning": rad["tolkning"],
-        "avvikelser": rad["avvikelser"] + rad["kallelse_avvikelser"],
+        # Protokollets avvikelser är strängar i databasen, kallelsens objekt med en länk (#121).
+        "avvikelser": [avvikelser.objekt(a) for a in rad["avvikelser"] + rad["kallelse_avvikelser"]],
         "ocr": rad["ocr"],
         "antal_behandlingar": rad["antal_behandlingar"],
         "paragrafer": [rad["forsta_paragraf"], rad["sista_paragraf"]] if rad["forsta_paragraf"] is not None else None,

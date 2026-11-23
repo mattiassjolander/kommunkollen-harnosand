@@ -9,10 +9,14 @@ förrän någon har tittat på originalet.
 Publicerade rättelser (ADR-0002) räknas med, eftersom en rättelse visar att protokollet eller
 tolkningen innehöll något som en redaktör har rättat.
 
-Avvikelser mellan kallelsen och protokollet (#109) räknas också med: en kallelse som bara delvis kunde
-läsas, och ett diarienummer i kallelsen vars rubrik inte liknar någon paragraf i protokollet. Varje rättelse listas med vad den rättar, före
-och efter, motiveringen och var felet finns (#74): i protokollet, i inläsningen eller inte angivet.
-Rättelser av fel i protokollet är felaktigheter i protokollet.
+Avvikelser mellan kallelsen och protokollet (#109, #121) räknas också med: en kallelse som bara delvis
+kunde läsas, och en punkt i föredragningslistan som inte behandlas i protokollet. De är inte fel i
+protokollet, eftersom en punkt kan strykas eller flyttas på mötet. Varje rättelse listas med vad den
+rättar, före och efter, motiveringen och var felet finns (#74): i protokollet, i inläsningen eller inte
+angivet. Rättelser av fel i protokollet är felaktigheter i protokollet.
+
+En avvikelse är ett objekt `{text, lank}` (#121). Kallelsens avvikelser har en länk till kallelsen.
+Protokollets egna avvikelser sparas som strängar och får `lank: None` (`objekt`).
 """
 
 from __future__ import annotations
@@ -42,12 +46,19 @@ _REGLER = [
     ("felskrivet", re.compile(r"felskriven i protokollet", re.I)),
     ("ofullstandigt", re.compile(r"PDF:en (?:har \d+ av|saknar text)|paragrafprotokoll", re.I)),
     ("paragrafer", re.compile(r"paragrafintervall|samma paragraf förekommer", re.I)),
-    ("kallelsen", re.compile(r"liknar ingen paragraf i protokollet", re.I)),
+    # Före #121 sades det att diarienumret "liknar ingen paragraf i protokollet".
+    ("kallelsen", re.compile(r"behandlas inte i protokollet|liknar ingen paragraf i protokollet", re.I)),
 ]
 
 
-def kategori(avvikelse: str) -> str:
-    return next((k for k, r in _REGLER if r.search(avvikelse)), "tolkning")
+def objekt(avvikelse: str | dict) -> dict:
+    """En avvikelse som `{text, lank}`, också när den är sparad som en sträng."""
+    return avvikelse if isinstance(avvikelse, dict) else {"text": avvikelse, "lank": None}
+
+
+def kategori(avvikelse: str | dict) -> str:
+    text = objekt(avvikelse)["text"]
+    return next((k for k, r in _REGLER if r.search(text)), "tolkning")
 
 
 def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = None) -> dict:
@@ -85,11 +96,12 @@ def lista(conn: psycopg.Connection, fran: int, till: int, organ: str | None = No
         })
     ut = []
     for r in rader:
-        avv = [{"text": a, "kategori": kategori(a)} for a in r["avvikelser"]]
+        avv = [objekt(a) | {"kategori": kategori(a)} for a in r["avvikelser"]]
         if r["dokument_typ"] == "paragrafprotokoll":
-            avv.append({"text": "Bara paragrafprotokoll finns, inte hela protokollet", "kategori": "ofullstandigt"})
+            avv.append({"text": "Bara paragrafprotokoll finns, inte hela protokollet", "lank": None,
+                        "kategori": "ofullstandigt"})
         if r["tolkning"] == "ej_tolkad" and not avv:
-            avv.append({"text": "Protokollet kunde inte tolkas", "kategori": "tolkning"})
+            avv.append({"text": "Protokollet kunde inte tolkas", "lank": None, "kategori": "tolkning"})
         ratt = rattelser.get(r["id"], [])
         if not avv and not ratt:
             continue

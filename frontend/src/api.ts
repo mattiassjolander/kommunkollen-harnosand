@@ -306,6 +306,13 @@ export interface Protokollkalla {
   datakalla: { id: string; titel: string }
 }
 
+/** En avvikelse vid tolkningen (#121). Kallelsens avvikelser länkar till kallelsen. */
+export interface Avvikelse {
+  text: string
+  /** Till sidan i kallelsen (#page=N), när sidan är känd. */
+  lank: { titel: string; url: string; sida: number | null } | null
+}
+
 export interface Sammantradesrad {
   id: number
   organ: Organ
@@ -314,7 +321,7 @@ export interface Sammantradesrad {
   sluttid: string | null
   plats: string | null
   tolkning: 'tolkad' | 'ej_tolkad'
-  avvikelser: string[]
+  avvikelser: Avvikelse[]
   /** Protokollet är en PDF med bara bilder och har lästs med OCR (#52). */
   ocr: boolean
   antal_behandlingar: number
@@ -542,7 +549,7 @@ export interface Avvikelser {
   sammantraden: {
     sammantrade: Kortsammantrade & { tolkning: string }
     url: string
-    avvikelser: { text: string; kategori: Avvikelsekategori }[]
+    avvikelser: (Avvikelse & { kategori: Avvikelsekategori })[]
     i_protokollet: boolean
     /** Publicerade rättelser av fel i protokollet. */
     felaktigheter: number
