@@ -381,4 +381,34 @@ test('läsaren jämför budget och utfall per nämnd (#83)', async ({ page }) =>
   await expect(page.getByTestId('utan-uppfoljning')).toContainText('Kommungemensam verksamhet')
   await expect(page.getByTestId('avvikelse-resultat')).toHaveText('−12,2 mnkr')
   await expect(page.getByTestId('uppfoljning-kallor')).toContainText('antagen av KF')
+
+  // Diagrammen ovanför tabellerna. Resultatet: antagen, reviderad, prognos och utfall, och den antagna budgeten
+  // som streckad linje.
+  const resultat = page.getByTestId('resultatdiagram')
+  await expect(resultat.getByTestId('resultatstapel')).toHaveCount(4)
+  await expect(resultat.getByTestId('resultatvarde')).toHaveText(['51,0 mnkr', '50,3 mnkr', '31,0 mnkr', '38,1 mnkr'])
+  await expect(resultat.getByTestId('referenslinje')).toBeVisible()
+  await resultat.locator('[data-stapel="utfall"]').hover()
+  await expect(resultat.getByRole('tooltip')).toContainText('Årsredovisning 2027, s. 46')
+
+  // Nämnderna sorteras efter avvikelsen. Arbetslivsnämnden har reviderad budget 0 och utelämnas med en mening.
+  const avvikelse = page.getByTestId('avvikelsediagram')
+  const staplar = avvikelse.getByTestId('avvikelsestapel')
+  await expect(staplar).toHaveCount(6)
+  await expect(staplar.first()).toHaveAttribute('data-organ', 'Kommunövergripande verksamhet')
+  await expect(staplar.last()).toHaveAttribute('data-organ', 'Socialnämnden')
+  await expect(avvikelse.locator('[data-organ="Arbetslivsnämnden"]')).toHaveCount(0)
+  await expect(page.getByTestId('nollbudget')).toContainText('Arbetslivsnämnden visas inte i diagrammet')
+  await expect(page.getByTestId('namndtabell').locator('tr[data-organ="Arbetslivsnämnden"]')).toBeVisible()
+  // Prognosstreck för de fem nämnder som har en prognos.
+  await expect(avvikelse.getByTestId('prognosstreck')).toHaveCount(5)
+  const socStapel = avvikelse.locator('[data-organ="Socialnämnden"]')
+  await expect(socStapel.getByTestId('avvikelsevarde')).toHaveText('−10,2 mnkr')
+  await socStapel.hover()
+  const tips = avvikelse.getByRole('tooltip')
+  await expect(tips).toContainText('−10,2 mnkr (−1 %) mot reviderad budget')
+  await expect(tips).toContainText('−22,3 mnkr mot antagen budget')
+  await expect(tips).toContainText('−12,5 mnkr enligt prognosen i delårsrapporten')
+  await expect(tips).toContainText('Årsredovisning 2027, s. 81')
+  await expect(tips).toContainText('Delårsrapport augusti 2027, s. 25')
 })

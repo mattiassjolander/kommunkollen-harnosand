@@ -16,6 +16,8 @@ import {
 import { datum, tal } from '../format'
 import { laddaNer, skillnad } from '../analys'
 import EkonomiFlikar from '../components/EkonomiFlikar.vue'
+import Resultatstaplar, { type Resultatstapel } from '../components/Resultatstaplar.vue'
+import Avvikelsediagram, { type Avvikelserad } from '../components/Avvikelsediagram.vue'
 
 const utloggad = inject<() => void>('utloggad', () => {})
 const route = useRoute()
@@ -80,6 +82,45 @@ const antagenLank = (b: Sidbelopp | null) =>
   data.value?.antagen ? sidlank(data.value.antagen.original, b) : undefined
 const behandling = computed(() => data.value?.antagen?.behandling ?? null)
 
+// Diagrammen ovanför tabellerna. Ett värde som saknas ger ingen stapel.
+const kalltext = (titel: string | undefined, b: Sidbelopp | null) =>
+  [titel ?? 'Källan saknas', b?.sida ? `s. ${b.sida}` : null].filter(Boolean).join(', ')
+const resultatstaplar = computed<Resultatstapel[]>(() => {
+  const r = res.value
+  if (!r) return []
+  const s: Resultatstapel[] = []
+  if (r.antagen) s.push({ id: 'antagen', titel: 'Antagen budget', varde: r.antagen.mnkr, kalla: kalltext(data.value?.antagen?.titel, r.antagen) })
+  if (r.reviderad) s.push({ id: 'reviderad', titel: 'Reviderad budget', varde: r.reviderad.mnkr, kalla: kalltext(ars.value?.titel, r.reviderad) })
+  if (r.prognos) s.push({ id: 'prognos', titel: 'Helårsprognos i delårsrapporten', varde: r.prognos.mnkr, kalla: kalltext(delar.value?.titel, r.prognos) })
+  if (r.utfall) s.push({ id: 'utfall', titel: 'Utfall', varde: r.utfall.mnkr, kalla: kalltext(ars.value?.titel, r.utfall), markerad: true })
+  return s
+})
+const resultatreferens = computed(() => (res.value?.antagen ? { titel: 'Antagen budget', varde: res.value.antagen.mnkr } : null))
+
+// Avvikelsen i procent av en budget på 0 går inte att räkna, och stapeln skulle bara visa nettokostnaden.
+const nollbudget = computed(() => namnder.value.filter((n) => n.reviderad?.mnkr === 0 && n.avvikelse_reviderad))
+const avvikelserader = computed<Avvikelserad[]>(() =>
+  namnder.value
+    .filter((n) => n.avvikelse_reviderad && n.reviderad && n.reviderad.mnkr !== 0)
+    .sort((a, b) => b.avvikelse_reviderad!.mnkr - a.avvikelse_reviderad!.mnkr)
+    .map((n) => ({
+      id: n.organ,
+      titel: n.organ,
+      varde: n.avvikelse_reviderad!.mnkr,
+      procent: n.avvikelse_reviderad!.procent,
+      prognos: n.prognosavvikelse?.mnkr ?? null,
+      detaljer: [
+        n.avvikelse_antagen ? `${med(n.avvikelse_antagen)} mot antagen budget` : 'Ingen antagen budget i årsplanen',
+        n.prognosavvikelse ? `${med(n.prognosavvikelse)} enligt prognosen i delårsrapporten` : 'Ingen prognos i delårsrapporten',
+      ],
+      kalla: [
+        kalltext(ars.value?.titel, n.utfall),
+        ...(n.prognosavvikelse ? [kalltext(delar.value?.titel, n.prognosavvikelse)] : []),
+      ],
+    })),
+)
+const namnlista = (n: string[]) => (n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} och ${n[n.length - 1]}`)
+
 function exportera() {
   const d = data.value
   if (!d) return
@@ -141,6 +182,14 @@ function exportera() {
         Avvikelsen är resultatet minus det budgeterade resultatet. Den reviderade budgeten är budgeten vid årets slut,
         efter fullmäktiges ändringar under året.
       </p>
+      <Resultatstaplar
+        v-if="resultatstaplar.length"
+        :staplar="resultatstaplar"
+        :referens="resultatreferens"
+        enhet="mnkr"
+        :etikett="`Årets resultat ${data.budgetar}`"
+        data-testid="resultatdiagram"
+      />
       <div class="rulla">
         <table class="tabell">
           <thead>
@@ -224,6 +273,19 @@ function exportera() {
         budgeten och, på raden under, mot den antagna. Prognosen är delårsrapportens helårsprognos räknad på samma
         sätt. Procenten är av budgeten.
       </p>
+      <template v-if="avvikelserader.length">
+        <Avvikelsediagram
+          :rader="avvikelserader"
+          enhet="mnkr"
+          :etikett="`Avvikelse mot reviderad budget per nämnd ${data.budgetar}`"
+          prognosetikett="prognos i delårsrapporten"
+          data-testid="avvikelsediagram"
+        />
+        <p v-if="nollbudget.length" class="forklaring" data-testid="nollbudget">
+          {{ namnlista(nollbudget.map((n) => n.organ)) }} visas inte i diagrammet, eftersom den reviderade budgeten
+          är 0 mnkr. Siffrorna står i tabellen.
+        </p>
+      </template>
       <div class="rulla">
         <table class="tabell" data-testid="namndtabell">
           <thead>
