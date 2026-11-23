@@ -72,6 +72,10 @@ Ett värde som källan inte har (SCB `..`, eller ett tomt värde i Kolada) lagra
 
 Övriga nyckeltal har ett eget kort. Kortets id är måttet för varianten Totalt, och kortet nås med `#kort-<id>`, t.ex. `/ekonomi#kort-kolada-N03102`.
 
+**Brodiagram för årets resultat** (#81, `backend/app/resultatbro.py`). I gruppen *Går kommunen med överskott?* byggs resultatet upp för ett valt år ur SCB:s resultaträkning (ResultKnN), i mnkr: skatteintäkter (040) + generella statsbidrag och utjämning (050) + verksamhetens nettokostnader (030, negativ) + finansnetto + extraordinära poster (085, visas bara när de inte är noll) = årets resultat (120). SCB har ingen rad för finansnettot, så det summeras av Kommunkollen ur finansiella intäkter (060) och finansiella kostnader (072), och det står vid steget. Saknas en del räknas skillnaden mot årets resultat fram som restposten *Övrigt inklusive finansnetto*, märkt *Beräknat av Kommunkollen*. **Kontroll:** delarna jämförs med årets resultat enligt SCB, med en tolerans på 1 tkr för avrundning, och en avvikelse visas under diagrammet. Med de nuvarande uppgifterna går alla år ihop utan avvikelse. Standardår är senaste året med fullständigt underlag, och valt år sparas som `bro=`. Diagrammet har tabellvy, textalternativ, tooltip med källa och CSV-export. Färgerna följer den divergerande skalan: tillskott blått, avdrag rött och summan grå.
+
+**Hänger ihop med** (#81). Varje kort har en till tre länkar till de närmast relaterade korten, med en saklig mening om räknesambandet. Sambanden finns i `ekonomi.SAMBAND`, bredvid `GRUPPER`, och ett test kontrollerar att varje kort har samband och att alla id finns. Skatteintäkternas kort länkar till skatteunderlagsprognosen. En länk tar läsaren till kortet och markerar det.
+
 ## Analysverktyg i ekonomivyn
 
 Alla val speglas i URL:en, så att en länk visar exakt samma sak:
@@ -82,6 +86,7 @@ Alla val speglas i URL:en, så att en länk visar exakt samma sak:
 | `jamfor=2018-2024` | Jämför två år | Ingen jämförelse |
 | `vy=tabell` | Visa alla nyckeltal som tabell | Diagram |
 | `enhet=inv` | Visa korten med båda varianterna per invånare | Totalt (mnkr) |
+| `bro=2024` | Brodiagrammets år | Senaste året med fullständigt underlag |
 
 **Större förändring.** En jämförelse markeras som *större förändring* när värdet har ändrats med minst **10 %** jämfört med det tidigare året (relativt beloppet, även när det är negativt). Nyckeltal som själva är procentsatser, t.ex. soliditet, jämförs i procentenheter och markeras vid minst **5 procentenheter**. Tröskeln är densamma för alla nyckeltal och ändras i `frontend/src/analys.ts` (`STOR_FORANDRING`). Jämförelsen görs i löpande priser, utan justering för inflation.
 

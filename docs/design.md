@@ -61,7 +61,7 @@ Diagramfärgerna följer dataviz-metodens validerade referenspalett. Ordningen �
 
 **Sekventiell** (storlek): en blå skala från `#cde2fb` till `#0d366b`.
 
-**Divergerande** (ökning/minskning, avvikelse mot budget): blå ↔ röd med grå mittpunkt (`#f0efec` / `#383835`). Röd betyder "lägre än jämförelsen", inte "dåligt".
+**Divergerande** (ökning/minskning, avvikelse mot budget): blå ↔ röd med grå mittpunkt (`#f0efec` / `#383835`). Röd betyder "lägre än jämförelsen", inte "dåligt". Tokens: `--diverg-hogre` (`#2a78d6` / `#3987e5`) och `--diverg-lagre` (`#e34948` / `#e66767`). Brodiagrammet för årets resultat använder dem för tillskott och avdrag, och summan är grå (`--ink-muted`).
 
 **Status** (datakällornas uppdateringsstatus), alltid tillsammans med ikon och text:
 

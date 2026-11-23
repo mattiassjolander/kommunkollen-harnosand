@@ -205,3 +205,24 @@ def test_huvudtalen_har_forklaring_och_lankar_till_sitt_kort(api):
         assert h["kort"] in kort, h["id"]
         assert h["id"] in (kort[h["kort"]]["id"], (kort[h["kort"]]["per_invanare"] or {}).get("id"))
         assert alla[h["id"]]["serie"]["punkter"], h["id"]
+
+
+# Hänger ihop med (#81)
+
+
+def test_varje_kort_har_samband_till_kort_som_finns():
+    kort = {k.matt for g in ekonomi.GRUPPER for k in g.kort}
+    assert set(ekonomi.SAMBAND) == kort, "varje kort ska ha minst ett samband"
+    for fran, lista in ekonomi.SAMBAND.items():
+        assert 1 <= len(lista) <= 3, fran
+        for sb in lista:
+            assert sb.till in kort or sb.till == ekonomi.SKATTEUNDERLAGSPROGNOS, f"{fran} → {sb.till}"
+            assert sb.till != fran
+            assert sb.text.endswith("."), f"{fran} → {sb.till}"
+    assert any(sb.till == ekonomi.SKATTEUNDERLAGSPROGNOS for sb in ekonomi.SAMBAND["scb:ResultKnN:040"])
+
+
+def test_api_visar_sambanden_pa_korten(api):
+    svar = api.get("/api/ekonomi").json()
+    kort = {n["id"]: n for g in svar["grupper"] for n in g["nyckeltal"]}
+    assert [s["till"] for s in kort["kolada:N03103"]["samband"]] == ["kolada:N03132", "scb:BalansKnN:081"]
