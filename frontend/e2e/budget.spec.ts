@@ -272,3 +272,73 @@ test('utgivaren återkallar planförutsättningarna och ett förslag (#76)', asy
   // Ramarna står kvar som förslagen anger dem.
   await expect(tabell.locator('tr[data-organ="Kommunstyrelsen"] td').nth(1)).toContainText('150,0 mnkr')
 })
+
+// Söm 2 (#76, del 2): redaktören skapar nya versioner av de återkallade uppgifterna och rättar dem i gränssnittet,
+// utgivaren granskar och publicerar, och läsaren ser markeringen Ändrad efter publicering och den förra versionen.
+// Bygger på testet ovan. Rättningarna ändrar inga belopp, så att jämförelsen i det första testet står sig.
+test('återkallade uppgifter rättas i en ny version och publiceras igen (#76)', async ({ page }) => {
+  const andring = 'Anmärkningen om finansieringen saknades. Påpekat av en läsare 2026-11-21.'
+  const planandring = 'Källan för Kommunstyrelsen var fel angiven.'
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/politik/budgetutkast')
+  await expect(page.getByTestId('aterkallad').first()).toBeVisible()
+
+  // Förslaget: en ny version från den återkallade, med motivering. Utkastet öppnas för rättning.
+  const sdAter = page.locator('[data-testid="aterkallad"][data-nyckel="SD"]').first()
+  await sdAter.getByTestId('ny-version').click()
+  await expect(sdAter.getByTestId('spara-ny-version')).toBeDisabled()
+  await sdAter.getByTestId('ny-version-motivering').fill(andring)
+  await sdAter.getByTestId('spara-ny-version').click()
+  const sd = page.locator('[data-testid="budgetutkast"][data-nyckel="SD"]')
+  await expect(sd.getByTestId('utkast-andring')).toContainText(andring)
+  await sd.getByRole('textbox', { name: 'Anmärkning' }).fill('Rättad efter påpekande.')
+  await sd.getByTestId('spara').click()
+  await expect(sd.getByRole('status')).toHaveText('Sparat som utkast.')
+
+  // Planförutsättningarna rättas här, inte bara i Excelfilen.
+  const planAter = page.locator('[data-testid="aterkallad"][data-budgetar="2027"]:not([data-nyckel])').first()
+  await planAter.getByTestId('ny-version').click()
+  await planAter.getByTestId('ny-version-motivering').fill(planandring)
+  await planAter.getByTestId('spara-ny-version').click()
+  const plan = page.locator('[data-testid="planutkast"][data-budgetar="2027"]')
+  const form = plan.getByTestId('planformular')
+  await form.locator('[data-tabell="namnder"] tr[data-post="Kommunstyrelsen"]').getByRole('textbox', { name: 'Källa' }).fill('L s. 8, M s. 1')
+  await form.getByTestId('spara-plan').click()
+  await expect(plan.getByRole('status')).toHaveText('Sparat som utkast.')
+  await expect(plan.locator('[data-tabell="namnder"] tr', { hasText: 'Kommunstyrelsen' })).toContainText('L s. 8, M s. 1')
+
+  // Utgivaren granskar och publicerar.
+  await page.request.post('/api/auth/test/utgivare')
+  await page.goto('/politik/budgetutkast')
+  await expect(page.getByTestId('budgetutkast').first()).toBeVisible()
+  for (const steg of ['granska', 'publicera'] as const) {
+    while ((await page.getByTestId(steg).count()) > 0) {
+      const antal = await page.getByTestId(steg).count()
+      await page.getByTestId(steg).first().click()
+      await expect(page.getByTestId(steg)).toHaveCount(antal - 1)
+    }
+  }
+  await expect(page.getByTestId('inga-utkast')).toBeVisible()
+
+  // Läsaren ser förslaget och planförutsättningarna igen, märkta Ändrad efter publicering.
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik/budget')
+  const tabell = page.getByTestId('budgetjamforelse')
+  await expect(tabell.locator('thead th[data-nyckel]')).toHaveCount(4)
+  await expect(page.getByTestId('aterkallat-forslag')).toHaveCount(0)
+  await expect(page.getByTestId('aterkallat-planforutsattningar')).toHaveCount(0)
+  await expect(tabell.locator('thead th[data-nyckel="SD"]').getByTestId('andrad-efter-publicering')).toHaveText('Ändrad efter publicering')
+  await expect(page.getByTestId('plan-andrad')).toContainText(planandring)
+  const sdAndring = page.locator('[data-testid="andringar"] li[data-nyckel="SD"]')
+  await expect(sdAndring).toContainText(andring)
+
+  // Den förra versionen går att öppna.
+  await sdAndring.getByTestId('forra-versionen').click()
+  await expect(page).toHaveURL(/\/politik\/budget\/tidigare\/forslag\/\d+$/)
+  await expect(page.getByTestId('tidigare-notis')).toContainText('Den drogs tillbaka för rättning och har ersatts av en rättad version.')
+  await expect(page.getByTestId('tidigare-ramar')).toContainText('Kommunstyrelsen')
+  await page.getByRole('link', { name: 'Till den gällande versionen' }).click()
+  await expect(page).toHaveURL(/\/politik\/budget\?ar=2027$/)
+  await page.getByTestId('plan-andrad').getByTestId('forra-versionen').click()
+  await expect(page.getByTestId('tidigare-version').locator('[data-tabell="namnder"] tr', { hasText: 'Kommunstyrelsen' })).toContainText('L s. 8')
+})
