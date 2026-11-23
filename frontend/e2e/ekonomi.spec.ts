@@ -290,3 +290,55 @@ test('översikten och växeln fungerar i mobilbredd', async ({ page }) => {
     expect(ruta!.width).toBeGreaterThan(300)
   }
 })
+
+// Brodiagram för resultatet och kopplingar mellan nyckeltal (#81)
+
+test('brodiagrammet bygger upp årets resultat med källor och kontroll, och har tabellvy', async ({ page }) => {
+  await page.goto('/ekonomi')
+  const bro = page.getByTestId('resultatbro')
+  await expect(bro.getByTestId('bro-ar')).toHaveValue('2025')
+  await bro.getByTestId('bro-ar').selectOption('2024')
+  await expect(page).toHaveURL(/bro=2024/)
+
+  const steg = bro.getByTestId('brosteg')
+  await expect(steg).toHaveCount(5)
+  await expect(steg.nth(0)).toHaveAttribute('data-steg', 'skatteintakter')
+  await expect(steg.nth(0).getByTestId('brovarde')).toHaveText('+1 355,3 mnkr')
+  await expect(steg.nth(2).getByTestId('brovarde')).toHaveText('−2 017,7 mnkr')
+  const finans = bro.locator('[data-steg="finansnetto"]')
+  await expect(finans.getByTestId('brovarde')).toHaveText('−73,3 mnkr')
+  await expect(finans.getByTestId('bromarkering')).toContainText('Summerat av Kommunkollen')
+  await expect(steg.nth(4)).toHaveAttribute('data-steg', 'resultat')
+  await expect(steg.nth(4).getByTestId('brovarde')).toHaveText('−91,0 mnkr')
+  await expect(bro.getByTestId('brokontroll')).toContainText('summerar till årets resultat enligt SCB')
+  await expect(bro.getByTestId('broavvikelse')).toHaveCount(0)
+  await expect(bro.getByTestId('brotext')).toContainText('ger årets resultat −91,0 mnkr')
+  await expect(bro.getByTestId('kallrad')).toContainText('SCB')
+
+  // Tooltip med källa.
+  await steg.nth(1).hover()
+  await expect(bro.getByRole('tooltip')).toContainText('ResultKnN, post 050')
+
+  await bro.getByRole('button', { name: 'Tabell' }).click()
+  const tabell = bro.getByRole('table')
+  await expect(tabell.getByRole('row')).toHaveCount(1 + 5)
+  await expect(tabell.getByRole('row', { name: /Finansnetto/ })).toContainText('−73,3')
+})
+
+test('en länk under Hänger ihop med tar läsaren till kortet och markerar det', async ({ page }) => {
+  await page.goto('/ekonomi')
+  const sjalvfinansiering = page.locator('[data-matt="kolada:N03103"]')
+  const samband = sjalvfinansiering.getByTestId('samband')
+  await expect(samband.getByRole('heading', { name: 'Hänger ihop med' })).toBeVisible()
+  const lan = samband.locator('li[data-till="scb:BalansKnN:081"]')
+  await expect(lan).toContainText('Investeringar som inte självfinansieras kan betalas med lån.')
+  await lan.getByRole('link').click()
+  await expect(page).toHaveURL(/#kort-scb-BalansKnN-081$/)
+  const kort = page.locator('[data-matt="scb:BalansKnN:081"]')
+  await expect(kort).toHaveClass(/markerad/)
+  await expect(kort).toBeInViewport()
+
+  // Skatteintäkterna länkar till skatteunderlagsprognosen.
+  await page.locator('[data-matt="scb:ResultKnN:040"]').getByTestId('samband').getByRole('link', { name: 'Skatteunderlagsprognos' }).click()
+  await expect(page).toHaveURL(/\/ekonomi\/skatteunderlag$/)
+})

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import { kortankare, varianter, type Nyckeltalskort } from '../api'
 import { csv, forandring, laddaNer, mandatperioder } from '../analys'
 import { procentforandring, siffra, tal, visningsskala } from '../format'
@@ -18,6 +19,8 @@ const props = defineProps<{
   vy: 'diagram' | 'tabell'
   /** Två år att jämföra, eller null. */
   jamforelse: [number, number] | null
+  /** "Hänger ihop med": länkar till andra kort med en mening om sambandet. */
+  samband?: { till: string; titel: string; text: string; lank: RouteLocationRaw }[]
 }>()
 const emit = defineEmits<{ vy: ['diagram' | 'tabell']; enhet: [Enhet] }>()
 
@@ -149,6 +152,15 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
           </tr>
         </tbody>
       </table>
+      <div v-if="samband?.length" class="samband" data-testid="samband">
+        <h4>Hänger ihop med</h4>
+        <ul>
+          <li v-for="s in samband" :key="s.till" :data-till="s.till">
+            <RouterLink :to="s.lank">{{ s.titel }}</RouterLink>
+            <span class="sambandstext">{{ s.text }}</span>
+          </li>
+        </ul>
+      </div>
       <div class="fot">
         <Kallrad :serie="serie" :perioder="punkter.map((p) => p.period)" :prisniva="visad.prisniva" />
         <button type="button" class="csv" data-testid="csv" @click="exportera">CSV</button>
@@ -240,6 +252,30 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
   border: 1px solid var(--accent);
   border-radius: 999px;
   padding: 0 8px;
+}
+.samband {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.samband h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0 0 4px;
+}
+.samband ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sambandstext {
+  color: var(--ink-secondary);
+  margin-left: 6px;
 }
 .fot {
   display: flex;

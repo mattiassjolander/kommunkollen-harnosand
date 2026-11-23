@@ -1,10 +1,22 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { EjInloggad, hamtaEkonomi, kortankare, varianter, type Huvudtal, type Nyckeltalsgrupp } from '../api'
+import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
+import {
+  EjInloggad,
+  SKATTEUNDERLAGSPROGNOS,
+  hamtaEkonomi,
+  hamtaResultatbro,
+  kortankare,
+  varianter,
+  type Huvudtal,
+  type Nyckeltalsgrupp,
+  type Nyckeltalskort as Kort,
+  type Resultatbro,
+} from '../api'
 import { STOR_FORANDRING, csv, laddaNer } from '../analys'
 import Nyckeltalskort, { type Enhet } from '../components/Nyckeltalskort.vue'
 import Statkort from '../components/Statkort.vue'
+import Resultatbrokort from '../components/Resultatbrokort.vue'
 import EkonomiFlikar from '../components/EkonomiFlikar.vue'
 
 const STANDARD_FRAN = 2022 // standardvisning enligt kravspec avsnitt 18
@@ -13,13 +25,15 @@ const route = useRoute()
 const router = useRouter()
 const grupper = ref<Nyckeltalsgrupp[]>([])
 const huvudtal = ref<Huvudtal[]>([])
+const bro = ref<Resultatbro | null>(null)
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 const utloggad = inject<() => void>('utloggad', () => {})
 
 onMounted(async () => {
   try {
-    const svar = await hamtaEkonomi()
+    const [svar, b] = await Promise.all([hamtaEkonomi(), hamtaResultatbro()])
+    bro.value = b
     grupper.value = svar.grupper
     huvudtal.value = svar.huvudtal
   } catch (e) {
@@ -94,6 +108,28 @@ const oversikt = computed(() =>
     return [{ ...h, nyckeltal, lank }]
   }),
 )
+
+// Brodiagrammets år: ?bro=2024. Standard är senaste året med fullständigt underlag.
+const broAr = computed({
+  get: () => {
+    const valt = route.query.bro as string | undefined
+    return valt && bro.value?.ar[valt] ? valt : (bro.value?.standardar ?? '')
+  },
+  set: (v: string) => satt({ bro: v === bro.value?.standardar ? null : v }),
+})
+
+// "Hänger ihop med": kortets samband med titel och länk till kortet, som markeras.
+const allaKort = computed(() => new Map(grupper.value.flatMap((g) => g.nyckeltal).map((k) => [k.id, k])))
+function samband(kort: Kort): { till: string; titel: string; text: string; lank: RouteLocationRaw }[] {
+  return kort.samband.flatMap((s): { till: string; titel: string; text: string; lank: RouteLocationRaw }[] => {
+    if (s.till === SKATTEUNDERLAGSPROGNOS)
+      return [{ ...s, titel: 'Skatteunderlagsprognos', lank: '/ekonomi/skatteunderlag' }]
+    const mal = allaKort.value.get(s.till)
+    if (!mal) return []
+    const titel = mal.serie?.matt.titel ?? mal.id
+    return [{ ...s, titel, lank: { query: route.query, hash: `#${kortankare(mal.id)}` } }]
+  })
+}
 
 // Jämförelse mellan två år: ?jamfor=2018-2024
 const jamforelse = computed<[number, number] | null>(() => {
@@ -196,6 +232,14 @@ function exportera() {
     <section v-for="g in grupper" :id="g.id" :key="g.id" class="grupp">
       <h2>{{ g.titel }}</h2>
       <p class="gruppingress">{{ g.ingress }}</p>
+      <Resultatbrokort
+        v-if="g.id === 'resultat' && bro && broAr"
+        :bro="bro"
+        :ar="broAr"
+        :vy="vy"
+        @ar="broAr = $event"
+        @vy="vy = $event"
+      />
       <div class="rutnat">
         <Nyckeltalskort
           v-for="n in g.nyckeltal"
@@ -207,6 +251,7 @@ function exportera() {
           :vy="vy"
           :enhet="enhet"
           :jamforelse="jamforelse"
+          :samband="samband(n)"
           @vy="vy = $event"
           @enhet="enhet = $event"
         />

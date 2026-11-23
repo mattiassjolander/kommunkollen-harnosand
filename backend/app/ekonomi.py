@@ -165,6 +165,116 @@ HUVUDTAL = [
 ]
 
 
+# Kopplingar mellan korten (#81): "Hänger ihop med". Nyckeln är kortets id, och varje samband pekar på ett
+# annat kort (eller skatteunderlagsprognosen) med en saklig mening om räknesambandet, utan värdering.
+SKATTEUNDERLAGSPROGNOS = "skatteunderlagsprognos"
+
+
+@dataclass(frozen=True)
+class Samband:
+    till: str  # kortets id, eller SKATTEUNDERLAGSPROGNOS
+    text: str
+
+
+SAMBAND: dict[str, list[Samband]] = {
+    "scb:ResultKnN:120": [
+        Samband("kolada:N03102", "Årets resultat delat med skatteintäkterna och de generella statsbidragen och utjämningen."),
+        Samband("scb:ResultKnN:030", "Verksamhetens nettokostnader dras av från skatter och statsbidrag i resultatet."),
+        Samband("scb:BalansKnN:075", "Årets resultat ökar eller minskar det egna kapitalet."),
+    ],
+    "kolada:N03102": [
+        Samband("scb:ResultKnN:120", "Samma resultat i kronor."),
+        Samband("kolada:N03100", "Räknas på samma intäkter: skatter och generella statsbidrag och utjämning."),
+    ],
+    "scb:ResultKnN:040": [
+        Samband(SKATTEUNDERLAGSPROGNOS, "SKR:s prognos för skatteintäkterna de kommande åren."),
+        Samband("kolada:N03100", "Nettokostnadsandelen räknas mot skatteintäkterna och de generella statsbidragen."),
+        Samband("scb:ResultKnN:050", "Tillsammans med skatteintäkterna det som ska räcka till verksamhetens nettokostnader."),
+    ],
+    "scb:ResultKnN:050": [
+        Samband("scb:SkatteIntKnN:080", "Bidragen från utjämningssystemen och de generella statsbidragen, brutto."),
+        Samband("scb:SkatteIntKnN:160", "Avgifterna till utjämningssystemen dras av från bidragen i nettot."),
+        Samband("kolada:N03100", "Nettokostnadsandelen räknas mot skatteintäkterna och de generella statsbidragen."),
+    ],
+    "scb:SkatteIntKnN:080": [
+        Samband("scb:SkatteIntKnN:160", "Bidragen minus avgifterna ingår i nettot för generella statsbidrag och utjämning."),
+        Samband("scb:ResultKnN:050", "Nettot som redovisas i resultaträkningen."),
+    ],
+    "scb:SkatteIntKnN:160": [
+        Samband("scb:SkatteIntKnN:080", "Avgifterna dras av från bidragen."),
+        Samband("scb:ResultKnN:050", "Nettot som redovisas i resultaträkningen."),
+    ],
+    "scb:ResultKnN:030": [
+        Samband("kolada:N03100", "Nettokostnaderna delat med skatteintäkterna och de generella statsbidragen."),
+        Samband("scb:ResultKnN:120", "Nettokostnaderna dras av i årets resultat."),
+    ],
+    "kolada:N03100": [
+        Samband("scb:ResultKnN:030", "Täljaren: verksamhetens nettokostnader."),
+        Samband("scb:ResultKnN:040", "Nämnaren: skatteintäkterna, tillsammans med generella statsbidrag och utjämning."),
+        Samband("kolada:N03102", "Räknas på samma intäkter som resultatandelen."),
+    ],
+    "kolada:N03132": [
+        Samband("kolada:N03103", "Hur stor del av investeringarna som betalades med egna medel."),
+        Samband("scb:BalansKnN:081", "Det som inte betalas med egna medel kan betalas med lån."),
+    ],
+    "kolada:N03103": [
+        Samband("kolada:N03132", "Investeringarna som självfinansieringsgraden räknas på."),
+        Samband("scb:BalansKnN:081", "Investeringar som inte självfinansieras kan betalas med lån."),
+    ],
+    "scb:BalansKnN:081": [
+        Samband("kolada:N03103", "Investeringar som inte självfinansieras kan betalas med lån."),
+        Samband("scb:BalansKnN:089", "Lånen ingår i de långfristiga skulderna."),
+    ],
+    "scb:BalansKnN:089": [
+        Samband("scb:BalansKnN:081", "Lånen i banker och kreditinstitut, som ingår i de långfristiga skulderna."),
+        Samband("kolada:N03106", "Skulderna är en del av det som inte är eget kapital i soliditeten."),
+    ],
+    "scb:BalansKnN:098": [
+        Samband("scb:rorelsekapital", "Rörelsekapitalet är omsättningstillgångarna minus de kortfristiga skulderna."),
+        Samband("kolada:N03105", "Kassalikviditeten jämför de likvida tillgångarna med de kortfristiga skulderna."),
+    ],
+    "scb:BalansKnN:072": [
+        Samband("kolada:N03106", "Avsättningarna är skuld i balansräkningen och ingår i båda soliditetsmåtten."),
+        Samband("kolada:N03048", "Pensioner intjänade före 1998 redovisas utanför balansräkningen."),
+    ],
+    "kolada:N03048": [
+        Samband("kolada:N03002", "Soliditeten inklusive pensionsåtaganden räknar även förpliktelserna utanför balansräkningen som skuld."),
+        Samband("scb:BalansKnN:072", "Pensionerna som redovisas i balansräkningen."),
+    ],
+    "scb:BalansKnN:065": [
+        Samband("kolada:N03105", "De likvida medlen ingår i kassalikviditeten."),
+        Samband("scb:BalansKnN:069", "Likvida medel är en del av omsättningstillgångarna."),
+    ],
+    "kolada:N03105": [
+        Samband("scb:BalansKnN:065", "De likvida medlen ingår i kassalikviditeten."),
+        Samband("scb:BalansKnN:098", "Kassalikviditeten räknas mot de kortfristiga skulderna."),
+    ],
+    "scb:BalansKnN:069": [
+        Samband("scb:rorelsekapital", "Rörelsekapitalet är omsättningstillgångarna minus de kortfristiga skulderna."),
+        Samband("scb:BalansKnN:065", "Likvida medel är en del av omsättningstillgångarna."),
+    ],
+    "scb:rorelsekapital": [
+        Samband("scb:BalansKnN:069", "Omsättningstillgångarna, det som räknas med."),
+        Samband("scb:BalansKnN:098", "De kortfristiga skulderna, som dras av."),
+        Samband("kolada:N03105", "Kassalikviditeten jämför också tillgångar och kortfristiga skulder, men utan förråd och exploateringsfastigheter."),
+    ],
+    "kolada:N03002": [
+        Samband("scb:BalansKnN:075", "Soliditeten är det egna kapitalet delat med de totala tillgångarna."),
+        Samband("kolada:N03106", "Skillnaden mellan måtten är pensionsförpliktelserna utanför balansräkningen."),
+        Samband("kolada:N03048", "Förpliktelserna som räknas som skuld i det här måttet."),
+    ],
+    "kolada:N03106": [
+        Samband("scb:BalansKnN:075", "Soliditeten är det egna kapitalet delat med de totala tillgångarna."),
+        Samband("kolada:N03002", "Samma mått när även pensionsförpliktelserna utanför balansräkningen räknas som skuld."),
+    ],
+    "scb:BalansKnN:075": [
+        Samband("kolada:N03002", "Det egna kapitalet delat med tillgångarna, med alla pensionsåtaganden som skuld."),
+        Samband("kolada:N03106", "Det egna kapitalet delat med tillgångarna."),
+        Samband("scb:ResultKnN:120", "Årets resultat ökar eller minskar det egna kapitalet."),
+    ],
+}
+
+
 def laneskuld_per_invanare(lan: dict | None, invanare: dict | None) -> dict | None:
     """Långfristiga lån (tkr, SCB) delat med folkmängden (Kolada), i kr/inv. Ett år där någon av
     uppgifterna saknas blir saknat, aldrig noll."""

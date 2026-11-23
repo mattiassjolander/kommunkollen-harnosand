@@ -173,7 +173,40 @@ export interface Nyckeltal {
  * Totalt (mnkr) / Per invånare. Kortets id är id för varianten Totalt. */
 export interface Nyckeltalskort extends Nyckeltal {
   per_invanare: Nyckeltal | null
+  /** "Hänger ihop med": andra kort (id) eller skatteunderlagsprognosen, med en mening om sambandet. */
+  samband: { till: string; text: string }[]
 }
+
+/** Länkmålet för skatteunderlagsprognosen i ett samband. */
+export const SKATTEUNDERLAGSPROGNOS = 'skatteunderlagsprognos'
+
+// Brodiagrammet för årets resultat (#81)
+
+export interface Brosteg {
+  id: string
+  titel: string
+  /** tkr */
+  varde: number
+  matt: string[]
+  markering: string | null
+}
+
+export interface Resultatbro {
+  enhet: 'tkr'
+  ar: Record<
+    string,
+    {
+      steg: Brosteg[]
+      resultat: number
+      kontroll: { summa_av_delar: number; avvikelse: number; restpost: boolean }
+    }
+  >
+  standardar: string | null
+  matt: Record<string, { titel: string; datakalla: Datakalla; kallans_publicering: string | null }>
+  resultat_matt: string
+}
+
+export const hamtaResultatbro = () => hamta<Resultatbro>('/api/ekonomi/resultatbro')
 
 export interface Nyckeltalsgrupp {
   id: string

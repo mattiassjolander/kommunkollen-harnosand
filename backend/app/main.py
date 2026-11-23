@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, sammantradesplan, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammantradesplan, serier, skatteunderlag, statistik, status
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -152,7 +152,11 @@ def create_app(
                     "titel": g.titel,
                     "ingress": g.ingress,
                     "nyckeltal": [
-                        nyckeltal(conn, k.matt) | {"per_invanare": nyckeltal(conn, k.per_invanare) if k.per_invanare else None}
+                        nyckeltal(conn, k.matt)
+                        | {
+                            "per_invanare": nyckeltal(conn, k.per_invanare) if k.per_invanare else None,
+                            "samband": [{"till": sb.till, "text": sb.text} for sb in ekonomi.SAMBAND.get(k.matt, [])],
+                        }
                         for k in g.kort
                     ],
                 }
@@ -160,6 +164,12 @@ def create_app(
             ]
         huvudtal = [{"id": h.matt, "kort": h.kort, "titel": h.titel, "forklaring": h.forklaring} for h in ekonomi.HUVUDTAL]
         return {"omrade": omrade, "grupper": grupper, "huvudtal": huvudtal}
+
+    @app.get("/api/ekonomi/resultatbro", dependencies=[Depends(krav_roll("lasare"))])
+    def ekonomisk_resultatbro(omrade: str = KOMMUN) -> dict:
+        """Brodiagrammet för årets resultat per år, med kontrollen mot SCB:s årets resultat (#81)."""
+        with db.connect(database_url) as conn:
+            return resultatbro.las(conn, omrade)
 
     @app.get("/api/skatteunderlagsprognoser", dependencies=[Depends(krav_roll("lasare"))])
     def skatteunderlagsprognoser() -> dict:
