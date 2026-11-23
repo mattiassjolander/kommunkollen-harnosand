@@ -1077,6 +1077,14 @@ export interface Differens {
   procent: number | null
 }
 export type Budgetstatus = 'utkast' | 'granskad' | 'publicerad' | 'ersatt' | 'aterkallad'
+/** "Ändrad efter publicering" (#76): versionen ersätter en som var publicerad, som läsaren kan öppna. */
+export interface Andring {
+  motivering: string
+  /** Den förra versionens id, för `/api/budget/tidigare/...`. */
+  tidigare: number
+  /** När den här versionen publicerades. Null för ett utkast. */
+  publicerad: string | null
+}
 /** Vem som återkallade en publicerad uppgift, när och varför (#76). Bara för redaktionen. */
 export interface Aterkallelse {
   aterkallad_av: string | null
@@ -1103,6 +1111,7 @@ export interface Budgetforslag {
   behandling: Behandlingskoppling | null
   /** Summeringen i mallens ordning, märkt Analys. Null om förslaget inte har någon. */
   summering: Summeringsrad[] | null
+  andring: Andring | null
   differens?: {
     /** Öre. */
     skattesats: number | null
@@ -1150,6 +1159,7 @@ export interface Planforutsattningar {
   tabeller: Record<Plantabell, Planpost[]>
   kontroller: Kontroll[]
   publicerad: string | null
+  andring: Andring | null
 }
 export interface Planutkast extends Planforutsattningar, Aterkallelse {
   redaktorer: string[]
@@ -1208,6 +1218,12 @@ export const granskaBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/granskning`, 'POST') as unknown as Promise<Budgetutkast>
 export const publiceraBudgetforslag = (id: number) =>
   skrivRattelse(`/api/budgetforslag/${id}/publicering`, 'POST') as unknown as Promise<Budgetutkast>
+/** En ny version av ett publicerat eller återkallat förslag, som utkast med samma uppgifter (#76). */
+export const nyVersionAvBudgetforslag = (id: number, motivering: string) =>
+  skrivRattelse(`/api/budgetforslag/${id}/versioner`, 'POST', { motivering }) as unknown as Promise<Budgetutkast>
+/** En förra version av ett förslag som har ändrats efter publicering. */
+export const hamtaTidigareForslag = (id: number) =>
+  hamtaEllerSaknas<Budgetforslag & { status: Budgetstatus }>(`/api/budget/tidigare/forslag/${id}`)
 /** En utgivare återkallar ett publicerat förslag direkt, med motivering (#76). */
 export const aterkallaBudgetforslag = (id: number, motivering: string) =>
   skrivRattelse(`/api/budgetforslag/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Budgetutkast>
@@ -1222,6 +1238,17 @@ export const granskaPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/granskning`, 'POST') as unknown as Promise<Planutkast>
 export const publiceraPlanforutsattningar = (id: number) =>
   skrivRattelse(`/api/planforutsattningar/${id}/publicering`, 'POST') as unknown as Promise<Planutkast>
+/** Uppgifterna i planförutsättningarna, som de skickas när ett utkast rättas i gränssnittet (#76). */
+export interface Planuppgifterin {
+  skattesats: { procent: number; kalla: string }
+  tabeller: Record<Plantabell, { post: string; mnkr: number; kalla: string }[]>
+}
+export const andraPlanforutsattningar = (id: number, uppgifter: Planuppgifterin) =>
+  skrivRattelse(`/api/planforutsattningar/${id}`, 'PATCH', { uppgifter }) as unknown as Promise<Planutkast>
+export const nyVersionAvPlanforutsattningar = (id: number, motivering: string) =>
+  skrivRattelse(`/api/planforutsattningar/${id}/versioner`, 'POST', { motivering }) as unknown as Promise<Planutkast>
+export const hamtaTidigarePlan = (id: number) =>
+  hamtaEllerSaknas<Planforutsattningar>(`/api/budget/tidigare/planforutsattningar/${id}`)
 /** En utgivare återkallar publicerade planförutsättningar direkt, med motivering (#76). */
 export const aterkallaPlanforutsattningar = (id: number, motivering: string) =>
   skrivRattelse(`/api/planforutsattningar/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Planutkast>
