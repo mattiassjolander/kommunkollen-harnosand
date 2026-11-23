@@ -1637,6 +1637,8 @@ export interface Uppfoljningsresultat {
 export interface Uppfoljningsdokument {
   titel: string
   url: string
+  /** Var ett dokument som lagras i plattformen kommer ifrån, t.ex. begärt ur kommunens diarium. */
+  kalla?: string
 }
 export interface Uppfoljning {
   id: number

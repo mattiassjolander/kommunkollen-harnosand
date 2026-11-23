@@ -150,3 +150,62 @@ def test_ogiltig_fil_avbryter_inlasningen(database_url, monkeypatch, capsys, tmp
     (mapp / "2027" / uppfoljning.FILNAMN).write_text('{"namnder": []}', encoding="utf-8")
     with pytest.raises(SystemExit, match="2027/uppfoljning.json: Ange årsredovisningen"):
         las_in(database_url, monkeypatch, capsys, mapp)
+
+
+def _pdf(sokvag) -> None:
+    from pypdf import PdfWriter
+
+    w = PdfWriter()
+    w.add_blank_page(100, 100)
+    with open(sokvag, "wb") as f:
+        w.write(f)
+
+
+def test_dokument_utan_publik_adress_lagras_och_visas(api, database_url, monkeypatch, capsys, tmp_path):
+    """En delårsrapport som begärts ur diariet lagras i plattformen och visas först när uppföljningen är publicerad."""
+    mapp = tmp_path / "budgetforslag"
+    shutil.copytree(FIXTURER, mapp)
+    (mapp / "2027" / uppfoljning.DOKUMENTMAPP).mkdir()
+    _pdf(mapp / "2027" / uppfoljning.DOKUMENTMAPP / "delarsrapport-2027.pdf")
+    d = data()
+    d["delarsrapport"] = {"titel": "Delårsrapport augusti 2027", "fil": "delarsrapport-2027.pdf",
+                          "kalla": "Begärd ur kommunens diarium"}
+    (mapp / "2027" / uppfoljning.FILNAMN).write_text(json.dumps(d), encoding="utf-8")
+    las_in(database_url, monkeypatch, capsys, mapp)
+    publicera_alla(api)
+
+    logga_in(api, "redaktor")
+    [u] = api.get("/api/uppfoljning?status=utkast").json()
+    url = f"/api/uppfoljning/{u['id']}/dokument/delarsrapport"
+    assert u["dokument"]["delarsrapport"] == {"titel": "Delårsrapport augusti 2027", "url": url,
+                                              "kalla": "Begärd ur kommunens diarium"}
+    svar = api.get(url)
+    assert svar.status_code == 200 and svar.headers["content-type"] == "application/pdf"
+    assert svar.content.startswith(b"%PDF")
+    # Läsaren ser inte dokumentet förrän uppföljningen är publicerad.
+    logga_in(api, None)
+    assert api.get(url).status_code == 404
+    logga_in(api, "utgivare")
+    api.post(f"/api/uppfoljning/{u['id']}/granskning")
+    api.post(f"/api/uppfoljning/{u['id']}/publicering")
+    logga_in(api, None)
+    assert api.get(url).status_code == 200
+
+    # Samma fil igen ändrar inget. En ändrad PDF ger en ny version.
+    assert "1 oförändrade" in las_in(database_url, monkeypatch, capsys, mapp)
+    w_ = mapp / "2027" / uppfoljning.DOKUMENTMAPP / "delarsrapport-2027.pdf"
+    w_.write_bytes(w_.read_bytes() + b"%%EOF")
+    assert "1 nya utkast" in las_in(database_url, monkeypatch, capsys, mapp)
+
+
+@pytest.mark.parametrize("dok, fel", [
+    ({"titel": "D", "fil": "saknas.pdf", "kalla": "Diariet"}, "finns inte"),
+    ({"titel": "D", "fil": "d.pdf"}, "ange var filen kommer ifrån"),
+    ({"titel": "D", "fil": "../d.pdf", "kalla": "Diariet"}, "namnet på en PDF"),
+    ({"titel": "D", "fil": "d.pdf", "url": "https://example.org/d.pdf", "kalla": "Diariet"}, "inte båda"),
+])
+def test_fel_i_lagrat_dokument(tmp_path, dok, fel):
+    d = data()
+    d["delarsrapport"] = dok
+    with pytest.raises(Ogiltig, match=fel):
+        uppfoljning.uppgifter(d, tmp_path)

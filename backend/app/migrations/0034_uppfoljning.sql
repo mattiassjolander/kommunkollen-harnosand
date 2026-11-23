@@ -32,3 +32,13 @@ CREATE TABLE uppfoljning (
 CREATE INDEX ON uppfoljning (budgetar, status);
 CREATE UNIQUE INDEX uppfoljning_en_publicerad ON uppfoljning (budgetar) WHERE status = 'publicerad';
 CREATE UNIQUE INDEX uppfoljning_ett_oppet ON uppfoljning (budgetar) WHERE status IN ('utkast', 'granskad');
+
+-- Ett dokument som inte finns publikt, till exempel en delårsrapport som begärts ut ur kommunens diarium, lagras
+-- här och visas från plattformen. Dokumentet hör till versionen; en ny inläsning med en ändrad fil ger en ny version.
+CREATE TABLE uppfoljningsdokument (
+    uppfoljning_id  bigint NOT NULL REFERENCES uppfoljning(id) ON DELETE CASCADE,
+    nyckel          text NOT NULL CHECK (nyckel IN ('arsredovisning', 'delarsrapport')),
+    filnamn         text NOT NULL,
+    innehall        bytea NOT NULL,
+    PRIMARY KEY (uppfoljning_id, nyckel)
+);

@@ -304,10 +304,12 @@ function exportera() {
         ·
       </template>
       <template v-if="ars">
-        <a :href="ars.url" target="_blank" rel="noopener">{{ ars.titel }}</a> ·
+        <a :href="ars.url" target="_blank" rel="noopener">{{ ars.titel }}</a>
+        <template v-if="ars.kalla"> ({{ ars.kalla }}, visas från Kommunkollen)</template> ·
       </template>
       <template v-if="delar">
-        <a :href="delar.url" target="_blank" rel="noopener">{{ delar.titel }}</a> ·
+        <a :href="delar.url" target="_blank" rel="noopener">{{ delar.titel }}</a>
+        <template v-if="delar.kalla"> ({{ delar.kalla }}, visas från Kommunkollen)</template> ·
       </template>
       Avlästa av Kommunkollen och granskade före publicering<template v-if="data.publicerad">, publicerade {{ datum(data.publicerad) }}</template>.
     </p>

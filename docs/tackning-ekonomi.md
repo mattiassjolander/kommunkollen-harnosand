@@ -43,7 +43,7 @@ Fliken *Budget och utfall* under Ekonomi (`/ekonomi/budget-och-utfall?ar=2025`).
 |---|---|---|
 | Ursprunglig budget | Det antagna budgetförslaget (årsplanen): ram per nämnd och budgeterat resultat, med sida | Länkar till årsplanen och till behandlingen i fullmäktige. Resultatet står i procent av skatter och bidrag och räknas om till mnkr ur planförutsättningarna när de finns. |
 | Reviderad budget | Årsredovisningens driftredovisning (budget nettokostnad) och budgeterat resultat | Budgeten vid årets slut, efter fullmäktiges ändringar under året. Ändringarna länkas inte till sina beslut än. |
-| Delårsprognos | Delårsrapportens helårsprognos: prognosavvikelse per nämnd och prognostiserat resultat | Delårsrapporten för 2025 finns inte på kommunens webbplats eller bland de insamlade handlingarna, så 2025 visas utan prognos. 2026 års rapport finns i fullmäktiges handlingar 2026-10-26. |
+| Delårsprognos | Delårsrapportens helårsprognos: prognosavvikelse per nämnd och prognostiserat resultat | Delårsrapporten för 2025 finns inte publikt. Den är begärd ur kommunens diarium och lagras i plattformen, som visar den med sidlänkar. 2026 års rapport finns i fullmäktiges handlingar 2026-10-26. |
 | Faktiskt utfall | Årsredovisningens driftredovisning (nettokostnad) och årets resultat | Innevarande år har inget utfall förrän årsredovisningen finns. |
 | Avvikelse i kronor | Räknad: budget minus nettokostnad per nämnd, resultat minus budget för resultatet | Kontrolleras mot avvikelsen som årsredovisningen anger, med 0,15 mnkr för avrundning. |
 | Avvikelse i procent | Räknad av budgeten | Visas för nämnderna. För resultatet blir procenten av ett litet budgeterat resultat missvisande och visas inte. |

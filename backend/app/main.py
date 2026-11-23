@@ -672,6 +672,14 @@ def create_app(
         """Antagen och reviderad budget, delårsprognos och utfall för året, per nämnd och för resultatet."""
         return _budget(uppfoljning.publicerad, ar)
 
+    @app.get("/api/uppfoljning/{id_}/dokument/{nyckel}")
+    def uppfoljningsdokument(id_: int, nyckel: str, anv: Anvandare | None = Depends(krav_roll("lasare"))) -> Response:
+        """Ett dokument som inte finns publikt och lagras i plattformen, t.ex. en utbegärd delårsrapport."""
+        redaktion = bool(anv and anv.roller & {"redaktor", "utgivare"})
+        innehall, _ = _budget(uppfoljning.dokument, id_, nyckel, redaktion)
+        return Response(innehall, media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="{nyckel}-{id_}.pdf"'})
+
     @app.get("/api/uppfoljning", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
     def lista_uppfoljning(
         status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt|aterkallad)$"),

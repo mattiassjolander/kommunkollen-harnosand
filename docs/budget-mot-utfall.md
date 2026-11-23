@@ -50,7 +50,7 @@ Genomfört i #83: `uppfoljning.json` i budgetårets mapp (`data/budgetforslag/<�
 (`python -m app.budgetforslag MAPP`), granskas och publiceras. Formatet står i `backend/app/uppfoljning.py`.
 Uppgifterna för 2023–2026 är avlästa: årsredovisningarna 2023–2025, delårsrapporterna 2023 och 2024 och
 delårsrapporten 2026 i fullmäktiges handlingar 2026-10-26. Sidnumren är sidorna i PDF-filen, som i dessa dokument
-är desamma som de tryckta. Delårsrapporten för 2025 har inte hittats.
+är desamma som de tryckta. Delårsrapporten för 2025 finns inte publikt. Den är begärd ur kommunens diarium och lagras i plattformen (s. 31).
 
 Samma arbetssätt som budgetförslagen. Tabellerna i årsredovisningen och delårsrapporten har olika uppställning mellan åren, och vissa år har nämnder som läggs ned eller tillkommer. Därför tas siffrorna fram genom att läsa dokumenten och skrivs i en fil per år, med sida för varje siffra:
 

@@ -24,6 +24,9 @@ delårsrapporten och skrivs i `uppfoljning.json` i budgetårets mapp, bredvid bu
   nettokostnaden är eller väntas bli lägre än budgeten. För resultatet är avvikelsen resultat minus budget.
 - Ett år utan årsredovisning (innevarande år) har bara delårsrapporten, och ett år utan delårsrapport bara
   årsredovisningen.
+- Ett dokument som inte finns publikt, till exempel en delårsrapport som begärts ut ur kommunens diarium, anges
+  med {titel, fil, kalla} i stället för url. PDF:en läggs i `uppfoljning/` i årsmappen, lagras i plattformen och
+  visas därifrån, med var den kommer ifrån.
 
 Den antagna budgeten läses inte in här. Den hämtas ur det antagna budgetförslaget (årsplanen) för året, som redan
 finns med sida och behandling i fullmäktige. Avvikelserna räknas fram i mnkr och procent, och avvikelsen som
@@ -36,9 +39,10 @@ filen, och en ny inläsning ger ett nytt utkast, eller en ny version av den publ
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -50,6 +54,8 @@ from . import planforutsattningar as pf
 from .planforutsattningar import EjTillatet, Konflikt, Ogiltig
 
 FILNAMN = "uppfoljning.json"
+# Dokument som inte finns publikt läggs här i årsmappen och lagras i plattformen.
+DOKUMENTMAPP = "uppfoljning"
 DOKUMENT = {"arsredovisning": "årsredovisningen", "delarsrapport": "delårsrapporten"}
 # Vilket dokument varje uppgift står i.
 RESULTATFALT = {"budget": "arsredovisning", "utfall": "arsredovisning", "avvikelse": "arsredovisning",
@@ -65,6 +71,7 @@ class Uppfoljning:
     budgetar: int
     filnamn: str
     uppgifter: dict
+    filer: dict[str, tuple[str, bytes]] = field(default_factory=dict)
 
 
 # Filen
@@ -81,15 +88,33 @@ def _belopp(v: Any, falt: str) -> dict:
     return {"mnkr": round(float(mnkr), 3), "sida": sida}
 
 
-def _dokument(v: Any, falt: str) -> dict:
-    if not isinstance(v, dict) or set(v) - {"titel", "url"}:
-        raise Ogiltig(f"{falt} ska vara {{titel, url}}")
-    titel, url = str(v.get("titel") or "").strip(), str(v.get("url") or "").strip()
+def _dokument(v: Any, falt: str, katalog: Path | None) -> tuple[dict, bytes | None]:
+    """Dokumentet: {titel, url} när det finns publikt, annars {titel, fil, kalla} med PDF:en i `uppfoljning/`
+    i årsmappen. Filen lagras i plattformen och visas därifrån; `kalla` säger var den kommer ifrån."""
+    if not isinstance(v, dict) or set(v) - {"titel", "url", "fil", "kalla"}:
+        raise Ogiltig(f"{falt} ska vara {{titel, url}} eller {{titel, fil, kalla}}")
+    titel = str(v.get("titel") or "").strip()
     if not titel:
         raise Ogiltig(f"{falt}: titel saknas")
-    if not re.match(r"https://", url):
-        raise Ogiltig(f"{falt}: url ska vara en https-adress till dokumentet")
-    return {"titel": titel, "url": url}
+    if v.get("fil") is None:
+        url = str(v.get("url") or "").strip()
+        if not re.match(r"https://", url):
+            raise Ogiltig(f"{falt}: url ska vara en https-adress till dokumentet, eller ange fil")
+        return {"titel": titel, "url": url}, None
+    fil, kalla = str(v["fil"]).strip(), str(v.get("kalla") or "").strip()
+    if v.get("url") is not None:
+        raise Ogiltig(f"{falt}: ange url eller fil, inte båda")
+    if not kalla:
+        raise Ogiltig(f"{falt}: ange var filen kommer ifrån i kalla, t.ex. begärd ur kommunens diarium")
+    if not fil.lower().endswith(".pdf") or "/" in fil or "\\" in fil:
+        raise Ogiltig(f"{falt}: fil ska vara namnet på en PDF i mappen {DOKUMENTMAPP}/")
+    if katalog is None:
+        raise Ogiltig(f"{falt}: fil kan bara anges i filen, inte i gränssnittet")
+    sokvag = katalog / DOKUMENTMAPP / fil
+    if not sokvag.exists():
+        raise Ogiltig(f"{falt}: {DOKUMENTMAPP}/{fil} finns inte")
+    innehall = sokvag.read_bytes()
+    return {"titel": titel, "fil": fil, "kalla": kalla, "sha256": hashlib.sha256(innehall).hexdigest()}, innehall
 
 
 def _falt(post: dict, tillatna: dict[str, str], falt: str, dokument: dict) -> dict:
@@ -106,14 +131,24 @@ def _falt(post: dict, tillatna: dict[str, str], falt: str, dokument: dict) -> di
     return ut
 
 
-def uppgifter(data: Any) -> dict:
-    """Validerar filens innehåll. Ogiltig vid fel."""
+def uppgifter(data: Any, katalog: Path | None = None) -> dict:
+    """Validerar filens innehåll. Ogiltig vid fel. Utan `filer` för dokument som lagras, se `las_uppgifter`."""
+    return las_uppgifter(data, katalog)[0]
+
+
+def las_uppgifter(data: Any, katalog: Path | None = None) -> tuple[dict, dict[str, tuple[str, bytes]]]:
+    """Uppgifterna och de dokument som lagras i plattformen ({nyckel: (filnamn, innehåll)}). Ogiltig vid fel."""
     if not isinstance(data, dict):
         raise Ogiltig("Uppgifterna ska vara ett objekt")
     okanda = set(data) - {*DOKUMENT, "resultat", "namnder"}
     if okanda:
         raise Ogiltig(f"Okända fält: {', '.join(sorted(okanda))}")
-    dokument = {k: _dokument(data[k], k) for k in DOKUMENT if data.get(k) is not None}
+    dokument, filer = {}, {}
+    for k in DOKUMENT:
+        if data.get(k) is not None:
+            dokument[k], innehall = _dokument(data[k], k, katalog)
+            if innehall is not None:
+                filer[k] = (dokument[k]["fil"], innehall)
     if not dokument:
         raise Ogiltig("Ange årsredovisningen, delårsrapporten eller båda")
     resultat = data.get("resultat") or {}
@@ -134,7 +169,7 @@ def uppgifter(data: Any) -> dict:
                                                f"{f} ({organ})", dokument)})
     if len({r["organ"] for r in rader}) != len(rader):
         raise Ogiltig("Samma nämnd står flera gånger")
-    return {**dokument, "resultat": _falt(resultat, RESULTATFALT, "resultat", dokument), "namnder": rader}
+    return {**dokument, "resultat": _falt(resultat, RESULTATFALT, "resultat", dokument), "namnder": rader}, filer
 
 
 def las_mapp(rot: Path) -> list[Uppfoljning]:
@@ -145,7 +180,8 @@ def las_mapp(rot: Path) -> list[Uppfoljning]:
         if not fil.exists():
             continue
         try:
-            ut.append(Uppfoljning(int(katalog.name), FILNAMN, uppgifter(json.loads(fil.read_text(encoding="utf-8")))))
+            u, filer = las_uppgifter(json.loads(fil.read_text(encoding="utf-8")), katalog)
+            ut.append(Uppfoljning(int(katalog.name), FILNAMN, u, filer))
         except (Ogiltig, json.JSONDecodeError) as e:
             raise Ogiltig(f"{katalog.name}/{FILNAMN}: {e}") from e
     return ut
@@ -168,17 +204,22 @@ def las_in(conn: psycopg.Connection, lista_: list[Uppfoljning], redaktor: str, n
         varden = {"b": u.budgetar, "fil": u.filnamn, "u": Jsonb(u.uppgifter), "r": [redaktor], "nu": nu, "e": ersatter,
                   "a": pf.INLASNING if ersatter else None}
         if senaste and senaste["status"] in ("utkast", "granskad"):
+            id_ = senaste["id"]
             conn.execute(
                 "UPDATE uppfoljning SET filnamn = %(fil)s, uppgifter = %(u)s, status = 'utkast', redaktorer = %(r)s, "
                 "andrad = %(nu)s, granskad_av = NULL, granskad = NULL WHERE id = %(id)s", {**varden, "id": senaste["id"]},
             )
             antal["uppdaterade"] += 1
         else:
-            conn.execute(
+            id_ = conn.execute(
                 "INSERT INTO uppfoljning (budgetar, filnamn, uppgifter, status, redaktorer, skapad, andrad, ersatter_id, "
-                "andring) VALUES (%(b)s, %(fil)s, %(u)s, 'utkast', %(r)s, %(nu)s, %(nu)s, %(e)s, %(a)s)", varden,
-            )
+                "andring) VALUES (%(b)s, %(fil)s, %(u)s, 'utkast', %(r)s, %(nu)s, %(nu)s, %(e)s, %(a)s) RETURNING id", varden,
+            ).fetchone()["id"]
             antal["nya"] += 1
+        conn.execute("DELETE FROM uppfoljningsdokument WHERE uppfoljning_id = %s", (id_,))
+        for nyckel, (filnamn, innehall) in u.filer.items():
+            conn.execute("INSERT INTO uppfoljningsdokument (uppfoljning_id, nyckel, filnamn, innehall) "
+                         "VALUES (%s, %s, %s, %s)", (id_, nyckel, filnamn, innehall))
     return antal
 
 
@@ -296,11 +337,18 @@ _KOLUMNER = ("id, budgetar, filnamn, uppgifter, status, redaktorer, andrad, gran
              "publicerad, aterkallad_av, aterkallad, aterkallelse, ersatter_id, andring")
 
 
+def _visat_dokument(id_: int, nyckel: str, d: dict) -> dict:
+    """Dokumentet som läsaren ser: ett lagrat dokument visas från plattformen, med var det kommer ifrån."""
+    if "fil" not in d:
+        return d
+    return {"titel": d["titel"], "url": f"/api/uppfoljning/{id_}/dokument/{nyckel}", "kalla": d["kalla"]}
+
+
 def _ut(conn: psycopg.Connection, r: dict, redaktion: bool) -> dict:
     antagen = _antagen(conn, r["budgetar"], publicerade=not redaktion)
     u = r["uppgifter"]
     ut = {"id": r["id"], "budgetar": r["budgetar"], "status": r["status"], "filnamn": r["filnamn"],
-          "dokument": {k: u[k] for k in DOKUMENT if k in u},
+          "dokument": {k: _visat_dokument(r["id"], k, u[k]) for k in DOKUMENT if k in u},
           "antagen": {k: antagen[k] for k in ("id", "titel", "original", "behandling")} if antagen else None,
           "berakning": berakning(u, antagen),
           "publicerad": r["publicerad"].isoformat() if r["publicerad"] else None,
@@ -398,3 +446,14 @@ def publicerad(conn: psycopg.Connection, budgetar: int) -> dict:
     if conn.execute("SELECT 1 FROM uppfoljning WHERE budgetar = %s AND status = 'aterkallad'", (budgetar,)).fetchone():
         return {"budgetar": budgetar, "aterkallad": True}
     raise LookupError(f"Ingen publicerad uppföljning för {budgetar}")
+
+
+def dokument(conn: psycopg.Connection, id_: int, nyckel: str, redaktion: bool) -> tuple[bytes, str]:
+    """(innehåll, filnamn) för ett lagrat dokument. En opublicerad uppföljning visas bara för redaktionen."""
+    r = conn.execute(
+        "SELECT d.innehall, d.filnamn, u.status FROM uppfoljningsdokument d JOIN uppfoljning u ON u.id = d.uppfoljning_id "
+        "WHERE d.uppfoljning_id = %s AND d.nyckel = %s", (id_, nyckel),
+    ).fetchone()
+    if r is None or (r["status"] != "publicerad" and not redaktion):
+        raise LookupError("Dokumentet finns inte")
+    return bytes(r["innehall"]), r["filnamn"]
