@@ -158,7 +158,7 @@ def create_app(
                 }
                 for g in ekonomi.GRUPPER
             ]
-        huvudtal = [{"id": h.matt, "kort": h.kort, "forklaring": h.forklaring} for h in ekonomi.HUVUDTAL]
+        huvudtal = [{"id": h.matt, "kort": h.kort, "titel": h.titel, "forklaring": h.forklaring} for h in ekonomi.HUVUDTAL]
         return {"omrade": omrade, "grupper": grupper, "huvudtal": huvudtal}
 
     @app.get("/api/skatteunderlagsprognoser", dependencies=[Depends(krav_roll("lasare"))])

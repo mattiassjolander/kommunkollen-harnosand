@@ -184,6 +184,7 @@ function exportera() {
           :nyckeltal="h.nyckeltal"
           :lank="h.lank"
           :forklaring="h.forklaring"
+          :titel="h.titel"
         />
       </div>
     </section>
@@ -322,7 +323,7 @@ function exportera() {
 }
 .huvudtal {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
   gap: 16px;
 }
 .rutnat {

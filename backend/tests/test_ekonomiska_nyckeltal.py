@@ -201,6 +201,7 @@ def test_huvudtalen_har_forklaring_och_lankar_till_sitt_kort(api):
     ]
     for h in svar["huvudtal"]:
         assert h["forklaring"].endswith("."), h["id"]
+        assert h["titel"], h["id"]
         assert h["kort"] in kort, h["id"]
         assert h["id"] in (kort[h["kort"]]["id"], (kort[h["kort"]]["per_invanare"] or {}).get("id"))
         assert alla[h["id"]]["serie"]["punkter"], h["id"]

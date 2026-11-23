@@ -147,19 +147,20 @@ GRUPPER = [
 class Huvudtal:
     matt: str
     kort: str  # kortet som huvudtalet länkar till
+    titel: str  # kortare än källans titel
     forklaring: str  # en mening i klartext om vad måttet betyder, utan värdering
 
 
 HUVUDTAL = [
-    Huvudtal("kolada:N03102", "kolada:N03102",
+    Huvudtal("kolada:N03102", "kolada:N03102", "Årets resultat, andel av skatter och statsbidrag",
              "Andel av skatteintäkterna och de generella statsbidragen som blev kvar efter årets kostnader."),
-    Huvudtal("kolada:N03100", "kolada:N03100",
+    Huvudtal("kolada:N03100", "kolada:N03100", "Nettokostnadsandel",
              "Andel av skatteintäkterna och de generella statsbidragen som gick till verksamhetens nettokostnader."),
-    Huvudtal("kolada:N03103", "kolada:N03103",
+    Huvudtal("kolada:N03103", "kolada:N03103", "Självfinansieringsgrad för investeringar",
              "Andel av årets investeringar som betalades med egna medel, alltså resultat och avskrivningar, utan nya lån."),
-    Huvudtal("kolada:N03002", "kolada:N03002",
+    Huvudtal("kolada:N03002", "kolada:N03002", "Soliditet inklusive pensionsåtaganden",
              "Andel av tillgångarna som är finansierad med eget kapital, när alla pensionsåtaganden räknas som skuld."),
-    Huvudtal(LANESKULD_PER_INVANARE, LAN,
+    Huvudtal(LANESKULD_PER_INVANARE, LAN, "Låneskuld per invånare",
              "Kommunens långfristiga lån i banker och kreditinstitut delat med antalet invånare."),
 ]
 

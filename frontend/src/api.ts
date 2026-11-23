@@ -188,6 +188,8 @@ export interface Huvudtal {
   id: string
   /** Kortet huvudtalet länkar till. */
   kort: string
+  /** Kortare än källans titel. */
+  titel: string
   forklaring: string
 }
 

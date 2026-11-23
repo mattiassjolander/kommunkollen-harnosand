@@ -214,6 +214,7 @@ test('översikten visar fem huvudtal med förklaring, och ett huvudtal leder til
   const huvudtal = oversikt.getByTestId('statkort')
   await expect(huvudtal).toHaveCount(5)
   await expect(huvudtal.nth(0)).toHaveAttribute('data-matt', 'kolada:N03102')
+  await expect(huvudtal.nth(1).getByRole('heading')).toHaveText('Nettokostnadsandel')
   await expect(huvudtal.nth(0).getByTestId('forklaring')).toContainText('blev kvar efter årets kostnader')
   // Senaste året, förändringen mot året före och källan.
   await expect(huvudtal.nth(0).getByTestId('statvarde')).toContainText('%')
@@ -282,9 +283,10 @@ test('översikten och växeln fungerar i mobilbredd', async ({ page }) => {
   const kort = page.locator('[data-matt="scb:ResultKnN:030"]')
   await kort.getByTestId('enhet').getByRole('button', { name: 'Per invånare' }).click()
   await expect(kort).toHaveAttribute('data-visad', 'kolada:N03011')
-  // Översikten och korten ryms i bredden.
+  // Menyn ligger ovanför innehållet, och översikten och korten använder nästan hela bredden.
   for (const del of [page.getByTestId('huvudtal'), kort, page.locator('[data-matt="scb:BalansKnN:081"]')]) {
     const ruta = await del.boundingBox()
     expect(ruta!.x + ruta!.width).toBeLessThanOrEqual(375)
+    expect(ruta!.width).toBeGreaterThan(300)
   }
 })

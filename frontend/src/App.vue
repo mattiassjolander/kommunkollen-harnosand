@@ -201,4 +201,54 @@ onMounted(kontrollera)
   padding: 32px 48px;
   max-width: 1440px;
 }
+/* Mobilbredd: menyn läggs ovanför innehållet. */
+@media (max-width: 720px) {
+  .ram {
+    grid-template-columns: 1fr;
+  }
+  .nav {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 12px 16px;
+  }
+  .ordmarke {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .platslogotyp {
+    width: 112px;
+  }
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+  }
+  .navlank {
+    padding: 4px 8px;
+  }
+  .avsandare {
+    margin-top: 8px;
+    padding-bottom: 8px;
+  }
+  .rundlogotyp {
+    display: none;
+  }
+  .anvandare {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    padding-top: 8px;
+  }
+  .lank {
+    margin-top: 0;
+  }
+  .sidhuvud {
+    padding: 12px 16px;
+  }
+  .innehall {
+    padding: 16px;
+  }
+}
 </style>

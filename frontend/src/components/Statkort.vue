@@ -14,6 +14,8 @@ const props = defineProps<{
   lank: RouteLocationRaw
   /** En mening i klartext om vad måttet betyder (huvudtalen i ekonomivyn). */
   forklaring?: string
+  /** Visas i stället för källans titel. */
+  titel?: string
 }>()
 
 const serie = computed(() => props.nyckeltal.serie)
@@ -62,7 +64,7 @@ const beteckning = computed(() => {
 <template>
   <article class="statkort" data-testid="statkort" :data-matt="nyckeltal.id">
     <h3>
-      <RouterLink :to="lank">{{ serie?.matt.titel ?? nyckeltal.id }}</RouterLink>
+      <RouterLink :to="lank">{{ titel ?? serie?.matt.titel ?? nyckeltal.id }}</RouterLink>
     </h3>
     <p v-if="forklaring" class="forklaring" data-testid="forklaring">{{ forklaring }}</p>
     <template v-if="senaste">
@@ -120,7 +122,7 @@ h3 a:hover {
 }
 .varde {
   font-size: 32px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-weight: 600;
   line-height: 1.15;
   margin: 0;
