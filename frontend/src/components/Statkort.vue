@@ -5,7 +5,7 @@
 import { computed } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { Nyckeltal } from '../api'
-import { forandring } from '../analys'
+import { forandring, perPeriod, skillnad as skillnadMotRiket } from '../analys'
 import { datum, procentforandring, siffra, tal, visningsskala } from '../format'
 import Revisionsmarkering from './Revisionsmarkering.vue'
 
@@ -16,6 +16,8 @@ const props = defineProps<{
   forklaring?: string
   /** Visas i stället för källans titel. */
   titel?: string
+  /** Visa genomsnittet för riket samma år, när måttet har det (#82). */
+  riket?: boolean
 }>()
 
 const serie = computed(() => props.nyckeltal.serie)
@@ -34,6 +36,12 @@ const senaste = computed(() => {
     foreAr: String(Number(nu.period) - 1),
     f: forandring(skalad(fore?.varde ?? null), skalad(nu.varde), skala.value.enhet),
   }
+})
+
+const riket = computed(() => {
+  if (!props.riket || !props.nyckeltal.riket || !senaste.value) return null
+  const v = perPeriod(props.nyckeltal.riket).get(senaste.value.punkt.period) ?? null
+  return v === null ? null : { varde: skalad(v)!, skillnad: senaste.value.varde - skalad(v)! }
 })
 
 const revision = computed(() => {
@@ -80,6 +88,10 @@ const beteckning = computed(() => {
         <span class="mot">mot {{ senaste.foreAr }}</span>
       </p>
       <p v-else class="forandring saknas">Uppgift saknas för {{ senaste.foreAr }}</p>
+      <p v-if="riket" class="riket" data-testid="statriket">
+        Riket: <span class="tal">{{ tal(riket.varde, skala.enhet) }}</span>
+        <span class="mot">skillnad {{ skillnadMotRiket(riket.skillnad, skala.enhet) }}</span>
+      </p>
     </template>
     <p v-else class="varde saknas">Uppgift saknas</p>
     <p v-if="serie" class="kallrad" data-testid="kallrad">
@@ -150,6 +162,13 @@ h3 a:hover {
 .pil {
   font-size: 10px;
   color: var(--ink-secondary);
+}
+.riket {
+  font-size: 13px;
+  margin: -4px 0 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
 }
 .mot {
   color: var(--ink-muted);

@@ -197,10 +197,10 @@ test('tabelldata kan exporteras som CSV med källa och period', async ({ page })
   const text = (await (await import('node:fs/promises')).readFile(await nedladdning.path(), 'utf-8')).replace(/^﻿/, '')
   const rader = text.trim().split(/\r\n/)
   expect(rader[0]).toBe(
-    'Nyckeltal;Mått-id;Period;Värde;Enhet;Prisnivå;Källa;Källans webbplats;Publicerad av källan;Hämtad;Version',
+    'Nyckeltal;Mått-id;Period;Värde;Enhet;Prisnivå;Källa;Källans webbplats;Publicerad av källan;Hämtad;Version;Område',
   )
   expect(rader.slice(1).map((r) => r.split(';')[2])).toEqual(['2020', '2021', '2022', '2023'])
-  expect(rader[1]).toMatch(/^Likvida medel;scb:BalansKnN:065;2020;\d+;tkr;löpande priser;SCB;https:\/\/[^;]+;\d{4}-\d{2}-\d{2};\d{4}-\d{2}-\d{2};1$/)
+  expect(rader[1]).toMatch(/^Likvida medel;scb:BalansKnN:065;2020;\d+;tkr;löpande priser;SCB;https:\/\/[^;]+;\d{4}-\d{2}-\d{2};\d{4}-\d{2}-\d{2};1;Härnösand$/)
 
   const [alla] = await Promise.all([page.waitForEvent('download'), page.getByTestId('exportera-alla').click()])
   expect(alla.suggestedFilename()).toBe('kommunkollen-ekonomi-2020-2023.csv')
@@ -341,4 +341,52 @@ test('en länk under Hänger ihop med tar läsaren till kortet och markerar det'
   // Skatteintäkterna länkar till skatteunderlagsprognosen.
   await page.locator('[data-matt="scb:ResultKnN:040"]').getByTestId('samband').getByRole('link', { name: 'Skatteunderlagsprognos' }).click()
   await expect(page).toHaveURL(/\/ekonomi\/skatteunderlag$/)
+})
+
+// Genomsnittet för riket som jämförelselinje (#82)
+
+test('ett kort visar Härnösand och riket för samma år, i diagram, tabell, huvudtal och CSV', async ({ page }) => {
+  await page.goto('/ekonomi')
+  const kort = page.locator('[data-matt="kolada:N03002"]')
+  await expect(kort.getByTestId('riketstreck')).toHaveCount(0)
+
+  await page.getByTestId('riket').click()
+  await expect(page).toHaveURL(/riket=1/)
+  await expect(page.getByTestId('riket')).toHaveAttribute('aria-pressed', 'true')
+  // Ett streck per år, 2022–2025.
+  await expect(kort.getByTestId('riketstreck')).toHaveCount(4)
+  await expect(kort.getByTestId('riketforklaring')).toContainText('Riket')
+  await kort.locator('rect.traffyta').last().hover()
+  const tips = kort.getByTestId('riketstips')
+  await expect(tips).toContainText('Riket: 30,0 %')
+  await expect(tips).toContainText(/skillnad −\d+,\d procentenheter/)
+
+  // Översiktens huvudtal: Riket: x, för samma år som Härnösand.
+  const huvudtal = page.getByTestId('huvudtal').locator('[data-matt="kolada:N03002"]')
+  await expect(huvudtal.getByTestId('statriket')).toContainText('Riket: 30,0 %')
+
+  // Tabellen har riket och skillnaden.
+  await kort.getByRole('button', { name: 'Tabell' }).click()
+  const rad = kort.getByRole('row', { name: /2025/ })
+  await expect(rad.getByTestId('riketcell')).toHaveText('30,0')
+  await expect(rad).toContainText('procentenheter')
+
+  // SCB-mått utan motsvarighet för riket förklarar varför ingen linje visas.
+  await expect(page.locator('[data-matt="scb:BalansKnN:065"]').getByTestId('riket-saknas')).toContainText('inget genomsnitt för riket')
+  const skatt = page.locator('[data-matt="scb:ResultKnN:040"]')
+  await expect(skatt.getByTestId('riket-saknas')).toContainText('Riket finns per invånare')
+  await skatt.getByRole('button', { name: 'Visa per invånare' }).click()
+  await expect(page).toHaveURL(/enhet=inv/)
+  await expect(skatt.getByTestId('riket-saknas')).toHaveCount(0)
+
+  // CSV-exporten har med riket.
+  const [nedladdning] = await Promise.all([page.waitForEvent('download'), kort.getByTestId('csv').click()])
+  const text = await (await import('node:fs/promises')).readFile(await nedladdning.path(), 'utf-8')
+  expect(text).toMatch(/;kolada:N03002;2025;[^\r\n]*;Härnösand\r\n/)
+  expect(text).toMatch(/;kolada:N03002;2025;29,964932;[^\r\n]*;Riket\r\n/)
+
+  // Av igen: inga streck.
+  await page.getByTestId('riket').click()
+  await expect(page).not.toHaveURL(/riket=1/)
+  await expect(huvudtal.getByTestId('statriket')).toHaveCount(0)
 })

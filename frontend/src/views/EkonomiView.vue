@@ -88,6 +88,12 @@ const vy = computed({
   set: (v: 'diagram' | 'tabell') => satt({ vy: v === 'diagram' ? null : v }),
 })
 
+// Genomsnittet för riket som jämförelselinje (#82): ?riket=1. Av som standard.
+const riket = computed({
+  get: () => route.query.riket === '1',
+  set: (v: boolean) => satt({ riket: v ? '1' : null }),
+})
+
 // Totalt (mnkr) eller per invånare på de kort som har båda. Gäller alla kort (ADR-0007).
 const enhet = computed({
   get: () => (route.query.enhet === 'inv' ? 'inv' : 'totalt') as Enhet,
@@ -150,7 +156,7 @@ const procentTroskel = `${STOR_FORANDRING.andel * 100} %`
 
 function exportera() {
   const alla = grupper.value.flatMap((g) => g.nyckeltal.flatMap(varianter))
-  laddaNer(`kommunkollen-ekonomi-${franAr.value}-${tillAr.value}.csv`, csv(alla, franAr.value, tillAr.value))
+  laddaNer(`kommunkollen-ekonomi-${franAr.value}-${tillAr.value}.csv`, csv(alla, franAr.value, tillAr.value, riket.value))
 }
 </script>
 
@@ -199,10 +205,26 @@ function exportera() {
           <button type="button" :aria-pressed="vy === 'tabell'" @click="vy = 'tabell'">Tabell</button>
         </div>
       </fieldset>
+      <fieldset>
+        <legend>Jämför med</legend>
+        <button
+          type="button"
+          class="knapp"
+          :aria-pressed="riket"
+          data-testid="riket"
+          @click="riket = !riket"
+        >
+          Riket
+        </button>
+      </fieldset>
       <button type="button" class="knapp" data-testid="exportera-alla" @click="exportera">
         Ladda ner alla som CSV
       </button>
     </div>
+    <p v-if="riket" class="notis" data-testid="riket-info">
+      Det streckade strecket visar genomsnittet för riket enligt Kolada, för de nyckeltal som Kolada har. Bara
+      skillnaden visas.
+    </p>
     <p v-if="jamforelse" class="notis" data-testid="jamforelse-info">
       Förändring {{ jamforelse[0] }}–{{ jamforelse[1] }}. Förändringar på minst {{ procentTroskel }}, eller minst
       {{ STOR_FORANDRING.procentenheter }} procentenheter för nyckeltal i procent, markeras som större.
@@ -221,6 +243,7 @@ function exportera() {
           :lank="h.lank"
           :forklaring="h.forklaring"
           :titel="h.titel"
+          :riket="riket"
         />
       </div>
     </section>
@@ -252,6 +275,7 @@ function exportera() {
           :enhet="enhet"
           :jamforelse="jamforelse"
           :samband="samband(n)"
+          :riket="riket"
           @vy="vy = $event"
           @enhet="enhet = $event"
         />
@@ -328,6 +352,12 @@ function exportera() {
 }
 .knapp:hover {
   background: var(--accent-wash);
+}
+.knapp[aria-pressed='true'] {
+  background: var(--accent-wash);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
 }
 .notis {
   color: var(--ink-secondary);

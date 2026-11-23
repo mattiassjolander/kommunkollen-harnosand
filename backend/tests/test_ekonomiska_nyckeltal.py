@@ -226,3 +226,46 @@ def test_api_visar_sambanden_pa_korten(api):
     svar = api.get("/api/ekonomi").json()
     kort = {n["id"]: n for g in svar["grupper"] for n in g["nyckeltal"]}
     assert [s["till"] for s in kort["kolada:N03103"]["samband"]] == ["kolada:N03132", "scb:BalansKnN:081"]
+
+
+# Genomsnittet för riket (#82)
+
+
+def test_kolada_hamtas_aven_for_riket_i_samma_insamling(api):
+    alla = nyckeltal(api)
+    for kpi in ekonomi.KOLADA:
+        riket = alla[f"kolada:{kpi}"]["riket"]
+        assert riket is not None, kpi
+        assert riket["omrade"] == "0000"
+        assert riket["punkter"], kpi
+    # Riket från inspelningen: soliditet 2025.
+    soliditet = {p["period"]: p["varde"] for p in alla["kolada:N03002"]["riket"]["punkter"]}
+    assert soliditet["2025"] == pytest.approx(29.964932)
+    # Härnösand och riket är olika serier.
+    assert punkter(alla["kolada:N03002"]) != soliditet
+
+
+def test_scb_och_beraknade_matt_har_inget_riket(api):
+    alla = nyckeltal(api)
+    assert alla["scb:ResultKnN:120"]["riket"] is None
+    assert alla[ekonomi.LANESKULD_PER_INVANARE]["riket"] is None
+    assert alla["scb:rorelsekapital"]["riket"] is None
+
+
+def test_misslyckad_hamtning_for_riket_redovisas_per_nyckeltal(database_url, google, tmp_path):
+    shutil.copytree(INSPELNINGAR, tmp_path / "rec")
+    manifest = json.loads((tmp_path / "rec" / "manifest.json").read_text(encoding="utf-8"))
+    del manifest["api.kolada.se/v3/data/kpi/N03002/municipality/0000"]
+    (tmp_path / "rec" / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    from app.sources.kolada import Kolada
+
+    kalla = Kolada(["N03002", "N03106"], riket=["N03002", "N03106"])
+    api = TestClient(skapa_app(database_url, google, kallor=[kalla], inspelningar=tmp_path / "rec", anonym_lasning=True))
+    assert api.post("/api/auth/test/redaktor").status_code == 200
+    res = api.post("/api/insamlingar").json()
+    [kolada] = res["kallor"]
+    assert kolada["status"] == "delvis_fel"
+    assert "N03002 (riket)" in kolada["fel"]
+    serie = api.get("/api/matt/kolada:N03106/serie", params={"omrade": "0000"}).json()
+    assert serie["punkter"]

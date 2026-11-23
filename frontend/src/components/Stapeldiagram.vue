@@ -4,7 +4,7 @@
 import { computed, ref } from 'vue'
 import { axeltal, tabelldatum, tal } from '../format'
 import type { Revision } from '../api'
-import type { Mandatperiod } from '../analys'
+import { skillnad, type Mandatperiod } from '../analys'
 
 const props = defineProps<{
   punkter: { period: string; varde: number | null; revision?: Revision }[]
@@ -12,7 +12,11 @@ const props = defineProps<{
   kalla: string
   /** Mandatperioder som ritas som diskreta bakgrundsband, utan partifärg. */
   mandatperioder?: Mandatperiod[]
+  /** Jämförelselinje (genomsnittet för riket, #82): värde per period i samma enhet, ritas som ett streck per år. */
+  jamforelse?: { etikett: string; kalla: string; varden: Record<string, number | null> }
 }>()
+
+const jamfort = (period: string) => props.jamforelse?.varden[period] ?? null
 
 const B = 720
 const H = 280
@@ -28,7 +32,10 @@ function snyggtSteg(spann: number): number {
 }
 
 const skala = computed(() => {
-  const v = props.punkter.map((p) => p.varde ?? 0)
+  const v = [
+    ...props.punkter.map((p) => p.varde ?? 0),
+    ...props.punkter.map((p) => jamfort(p.period) ?? 0),
+  ]
   const steg = snyggtSteg(Math.max(...v, 0) - Math.min(...v, 0))
   const min = Math.floor(Math.min(...v, 0) / steg) * steg
   const max = Math.ceil(Math.max(...v, 0) / steg) * steg || steg
@@ -111,6 +118,16 @@ const tipsX = computed(() =>
           @mouseenter="aktiv = i"
         />
         <path v-if="p.varde !== null" :d="stapel(i, p.varde)" class="stapel" data-testid="stapel" />
+        <line
+          v-if="jamfort(p.period) !== null"
+          :x1="M.left + band * i + (band - stapelB) / 2 - 10"
+          :x2="M.left + band * i + (band + stapelB) / 2 + 10"
+          :y1="skala.y(jamfort(p.period)!)"
+          :y2="skala.y(jamfort(p.period)!)"
+          class="jamforelselinje"
+          data-testid="riketstreck"
+          :data-period="p.period"
+        />
         <template v-if="p.varde === null">
           <!-- Saknat värde ritas aldrig som noll: ordet där det får plats, annars ett streck med förklaring. -->
           <text
@@ -154,6 +171,10 @@ const tipsX = computed(() =>
       Uppgift saknas
     </p>
     <p v-if="band_.length" class="forklaring">Bakgrundsbanden visar mandatperioder (valår–valår).</p>
+    <p v-if="jamforelse" class="forklaring" data-testid="riketforklaring">
+      <svg width="18" height="8" aria-hidden="true"><line x1="0" x2="18" y1="4" y2="4" class="jamforelselinje" /></svg>
+      {{ jamforelse.etikett }}
+    </p>
     <div v-if="aktiv !== null" class="tips" :style="{ left: `${tipsX}%` }" role="tooltip">
       <strong>{{ punkter[aktiv].period }}</strong>
       <span class="tal">{{ tal(punkter[aktiv].varde, enhet) }}</span>
@@ -164,6 +185,15 @@ const tipsX = computed(() =>
         <span class="tipskalla">Ändrat {{ tabelldatum(punkter[aktiv].revision!.andrad) }} · {{ punkter[aktiv].revision!.kalla }}</span>
       </template>
       <span class="tipskalla">{{ kalla }}</span>
+      <template v-if="jamforelse && jamfort(punkter[aktiv].period) !== null">
+        <span class="tipsjamforelse" data-testid="riketstips">
+          Riket: <span class="tal">{{ tal(jamfort(punkter[aktiv].period), enhet) }}</span>
+          <template v-if="punkter[aktiv].varde !== null">
+            · skillnad <span class="tal">{{ skillnad(punkter[aktiv].varde! - jamfort(punkter[aktiv].period)!, enhet) }}</span>
+          </template>
+        </span>
+        <span class="tipskalla">{{ jamforelse.kalla }}</span>
+      </template>
     </div>
   </div>
 </template>
@@ -177,11 +207,11 @@ const tipsX = computed(() =>
   height: auto;
   display: block;
 }
-.rutnat line {
+g.rutnat > g > line {
   stroke: var(--line);
   stroke-width: 1;
 }
-.rutnat line.bas {
+g.rutnat > g > line.bas {
   stroke: var(--line-strong);
 }
 text {
@@ -218,6 +248,15 @@ text {
 .stapel {
   fill: var(--series-1);
   pointer-events: none;
+}
+.jamforelselinje {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+.tipsjamforelse {
+  margin-top: 4px;
 }
 .traffyta {
   fill: transparent;

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import { kortankare, varianter, type Nyckeltalskort } from '../api'
-import { csv, forandring, laddaNer, mandatperioder } from '../analys'
+import { csv, forandring, laddaNer, mandatperioder, perPeriod, skillnad as skillnadMotRiket } from '../analys'
 import { procentforandring, siffra, tal, visningsskala } from '../format'
 import Kallrad from './Kallrad.vue'
 import Revisionsmarkering from './Revisionsmarkering.vue'
@@ -19,6 +19,8 @@ const props = defineProps<{
   vy: 'diagram' | 'tabell'
   /** Två år att jämföra, eller null. */
   jamforelse: [number, number] | null
+  /** Visa genomsnittet för riket som jämförelselinje (#82). */
+  riket?: boolean
   /** "Hänger ihop med": länkar till andra kort med en mening om sambandet. */
   samband?: { till: string; titel: string; text: string; lank: RouteLocationRaw }[]
 }>()
@@ -45,6 +47,32 @@ const punkter = computed(() =>
 )
 const perioder = computed(() => mandatperioder(props.franAr, props.tillAr))
 
+// Genomsnittet för riket i visningsenheten, när valet är på och måttet har det.
+const riketSerie = computed(() => (props.riket ? visad.value.riket : null))
+const riketVarden = computed(() => {
+  const m = perPeriod(riketSerie.value)
+  const ut: Record<string, number | null> = {}
+  for (const p of punkter.value) {
+    const v = m.get(p.period) ?? null
+    ut[p.period] = v === null ? null : v * skala.value.faktor
+  }
+  return ut
+})
+const riketJamforelse = computed(() =>
+  riketSerie.value
+    ? {
+        etikett: `Riket, genomsnitt för alla kommuner (${riketSerie.value.matt.datakalla.titel}, kommun-id 0000)`,
+        kalla: `Källa: ${riketSerie.value.matt.datakalla.titel}, riket`,
+        varden: riketVarden.value,
+      }
+    : undefined,
+)
+// Varför ingen linje visas: SCB-totalen har riket per invånare, övriga mått saknar det.
+const riketSaknas = computed(() => {
+  if (!props.riket || riketSerie.value) return null
+  return props.nyckeltal.per_invanare?.riket && visad.value.id === props.nyckeltal.id ? 'per-invanare' : 'saknas'
+})
+
 // Jämförelsen gäller de valda åren oavsett visad period, i visningsenheten.
 const jamforelse = computed(() => {
   if (!props.jamforelse || !serie.value) return null
@@ -64,12 +92,12 @@ const skillnad = (v: number) => {
     : `${tecken}${tal(Math.abs(v), enhet)}`
 }
 
-// Exporten innehåller båda varianterna, oavsett vilken som visas.
+// Exporten innehåller båda varianterna, oavsett vilken som visas, och riket när det visas.
 function exportera() {
   const id = props.nyckeltal.id.replace(/[^\w]+/g, '-')
   laddaNer(
     `kommunkollen-${id}-${props.franAr}-${props.tillAr}.csv`,
-    csv(varianter(props.nyckeltal), props.franAr, props.tillAr),
+    csv(varianter(props.nyckeltal), props.franAr, props.tillAr, props.riket),
   )
 }
 
@@ -133,6 +161,7 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
         :enhet="skala.enhet"
         :kalla="kallnamn"
         :mandatperioder="perioder"
+        :jamforelse="riketJamforelse"
       />
       <table v-else class="tabell">
         <caption class="dold">{{ serie.matt.titel }}</caption>
@@ -140,6 +169,10 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
           <tr>
             <th scope="col">År</th>
             <th scope="col" class="hoger">{{ skala.enhet }}</th>
+            <template v-if="riketSerie">
+              <th scope="col" class="hoger">Riket</th>
+              <th scope="col" class="hoger">Skillnad</th>
+            </template>
           </tr>
         </thead>
         <tbody>
@@ -149,9 +182,28 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
               {{ siffra(p.varde, skala.enhet) }}
               <Revisionsmarkering v-if="p.revision" :revision="p.revision" :nytt="p.varde" :enhet="skala.enhet" />
             </td>
+            <template v-if="riketSerie">
+              <td class="tal hoger" data-testid="riketcell" :class="{ saknas: riketVarden[p.period] === null }">
+                {{ siffra(riketVarden[p.period], skala.enhet) }}
+              </td>
+              <td class="tal hoger">
+                {{
+                  p.varde !== null && riketVarden[p.period] !== null
+                    ? skillnadMotRiket(p.varde - riketVarden[p.period]!, skala.enhet)
+                    : ''
+                }}
+              </td>
+            </template>
           </tr>
         </tbody>
       </table>
+      <p v-if="riketSaknas === 'per-invanare'" class="riketsaknas" data-testid="riket-saknas">
+        Riket finns per invånare.
+        <button type="button" class="lankknapp" @click="emit('enhet', 'inv')">Visa per invånare</button>
+      </p>
+      <p v-else-if="riketSaknas" class="riketsaknas" data-testid="riket-saknas">
+        Riket visas för Kolada-måtten. För det här måttet finns inget genomsnitt för riket.
+      </p>
       <div v-if="samband?.length" class="samband" data-testid="samband">
         <h4>Hänger ihop med</h4>
         <ul>
@@ -252,6 +304,20 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
   border: 1px solid var(--accent);
   border-radius: 999px;
   padding: 0 8px;
+}
+.riketsaknas {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 8px 0 0;
+}
+.lankknapp {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
 }
 .samband {
   margin: 16px 0 0;

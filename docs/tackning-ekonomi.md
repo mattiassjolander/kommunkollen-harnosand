@@ -6,6 +6,8 @@ Vilken källa och vilket mått som används för varje punkt i kravspecens avsni
 - **Kolada** (api.kolada.se v3): nyckeltal för kommunen (inte koncernen) i kr/inv eller procent.
 - **SCB** (statistikdatabasen, räkenskapssammandraget OE0107A): resultat- och balansräkning i tkr. Tabellerna `ResultKnN`, `BalansKnN` och `SkatteIntKnN`. Ekonomivyn visar tkr som mnkr. Det lagrade värdet är källans.
 
+**Riket** (#82). Kolada-nyckeltalen i `ekonomi.KOLADA` hämtas även för riket (kommun-id 0000, genomsnittet för alla kommuner) i samma insamling och lagras med område `0000`. Ett misslyckande redovisas per nyckeltal som "N03002 (riket): …" i källans fel, som för kommunen. SCB-måtten och de beräknade måtten (rörelsekapital och låneskuld per invånare) har ingen motsvarighet för riket.
+
 **Prisnivå.** Alla kronbelopp är i löpande priser. Varken Kolada eller SCB:s räkenskapssammandrag publicerar fasta priser för de här måtten. Kr/inv gör åren jämförbara för befolkningsförändringar, men inte för inflation.
 
 **Beräknat av Kommunkollen.** Två mått finns inte hos källorna och beräknas: rörelsekapitalet (SCB, vid insamlingen) och låneskulden per invånare, som räknas fram när den läses: SCB BalansKnN 081 (långfristiga lån i banker och kreditinstitut, tkr) × 1 000 delat med folkmängden 31 december (Kolada N01951). Ett år där någon av uppgifterna saknas visas som "Uppgift saknas". Båda är märkta "Beräknat av Kommunkollen" i förklaringen och källraden.
@@ -87,9 +89,10 @@ Alla val speglas i URL:en, så att en länk visar exakt samma sak:
 | `vy=tabell` | Visa alla nyckeltal som tabell | Diagram |
 | `enhet=inv` | Visa korten med båda varianterna per invånare | Totalt (mnkr) |
 | `bro=2024` | Brodiagrammets år | Senaste året med fullständigt underlag |
+| `riket=1` | Visa genomsnittet för riket som jämförelselinje: ett streckat streck per år i diagrammen, kolumnerna Riket och Skillnad i tabellen, *Riket: x* i huvudtalen och rader med området Riket i CSV-exporten. Kort utan riket förklarar varför. På ett sammanslaget kort i läget Totalt står att riket finns per invånare | Av |
 
 **Större förändring.** En jämförelse markeras som *större förändring* när värdet har ändrats med minst **10 %** jämfört med det tidigare året (relativt beloppet, även när det är negativt). Nyckeltal som själva är procentsatser, t.ex. soliditet, jämförs i procentenheter och markeras vid minst **5 procentenheter**. Tröskeln är densamma för alla nyckeltal och ändras i `frontend/src/analys.ts` (`STOR_FORANDRING`). Jämförelsen görs i löpande priser, utan justering för inflation.
 
 **Mandatperioder.** Tidsdiagrammen har diskreta bakgrundsband för mandatperioderna, utan partifärg. En period skrivs valår–valår (t.ex. 2022–2026) och omfattar budgetåren efter valet (2023–2026), eftersom nya fullmäktige tillträder den 15 oktober valåret.
 
-**CSV-export.** Varje kort har en CSV-knapp, som exporterar båda varianterna när kortet har växeln Totalt / Per invånare, och *Ladda ner alla som CSV* exporterar alla nyckeltal för den visade perioden. Filen har semikolon som fältavgränsare och decimalkomma (svenskt Excel). Varje rad är ett värde i källans enhet, med nyckeltal, mått-id, period, prisnivå, källa, källans publiceringsdatum, hämtdatum och version. Ett saknat värde är en tom cell, aldrig 0.
+**CSV-export.** Varje kort har en CSV-knapp, som exporterar båda varianterna när kortet har växeln Totalt / Per invånare, och *Ladda ner alla som CSV* exporterar alla nyckeltal för den visade perioden. Filen har semikolon som fältavgränsare och decimalkomma (svenskt Excel). Varje rad är ett värde i källans enhet, med nyckeltal, mått-id, period, prisnivå, källa, källans publiceringsdatum, hämtdatum, version och område (Härnösand eller Riket). Ett saknat värde är en tom cell, aldrig 0.

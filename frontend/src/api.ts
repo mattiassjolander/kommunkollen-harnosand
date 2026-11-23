@@ -167,6 +167,8 @@ export interface Nyckeltal {
   prisniva: string | null
   /** null om ingen insamling har hämtat måttet än. */
   serie: Serie | null
+  /** Genomsnittet för riket (Kolada, kommun-id 0000). null för SCB-mått och beräknade mått (#82). */
+  riket: Serie | null
 }
 
 /** Ett kort per företeelse. Visas samma sak per invånare från en annan källa har kortet växeln

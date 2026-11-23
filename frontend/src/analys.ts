@@ -2,6 +2,7 @@
 // Allt här är rena funktioner, så att samma regler gäller i diagram, tabell och export.
 
 import type { Nyckeltal } from './api'
+import { siffra, tal } from './format'
 
 // Mandatperioder
 
@@ -54,6 +55,21 @@ export function forandring(fore: number | null, efter: number | null, enhet: str
   return { fore, efter, skillnad, andel, stor: andel !== null && Math.abs(andel) >= STOR_FORANDRING.andel }
 }
 
+// Jämförelse med riket (#82)
+
+/** Skillnaden mot riket med tecken: "+1,2 procentenheter" eller "−3 400 kr/inv". Ingen värdering. */
+export function skillnad(v: number, enhet: string): string {
+  const tecken = v > 0 ? '+' : v < 0 ? '−' : '±'
+  return enhet.includes('%') ? `${tecken}${siffra(Math.abs(v), enhet)} procentenheter` : `${tecken}${tal(Math.abs(v), enhet)}`
+}
+
+/** Värdet per period i en serie. */
+export function perPeriod(serie: { punkter: { period: string; varde: number | null }[] } | null): Map<string, number | null> {
+  return new Map((serie?.punkter ?? []).map((p) => [p.period, p.varde]))
+}
+
+export const OMRADEN: Record<string, string> = { '2280': 'Härnösand', '0000': 'Riket' }
+
 // CSV-export
 
 const KOLUMNER = [
@@ -68,6 +84,7 @@ const KOLUMNER = [
   'Publicerad av källan',
   'Hämtad',
   'Version',
+  'Område',
 ] as const
 
 function cell(v: string | number | null | undefined): string {
@@ -83,11 +100,15 @@ function exportdatum(iso: string | null): string {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm' }).format(new Date(iso))
 }
 
-/** CSV med ett värde per rad, i källans enhet, för åren `fran`–`till`. */
-export function csv(nyckeltal: Nyckeltal[], fran: number, till: number): string {
+/** CSV med ett värde per rad, i källans enhet, för åren `fran`–`till`. Med `medRiket` kommer även
+ * genomsnittet för riket med, för de nyckeltal som har det. */
+export function csv(nyckeltal: Nyckeltal[], fran: number, till: number, medRiket = false): string {
   const rader: string[] = [KOLUMNER.join(';')]
-  for (const n of nyckeltal) {
-    const s = n.serie
+  const serier = nyckeltal.flatMap((n) => [
+    { n, s: n.serie },
+    ...(medRiket && n.riket ? [{ n, s: n.riket }] : []),
+  ])
+  for (const { n, s } of serier) {
     if (!s) continue
     for (const p of s.punkter) {
       const ar = Number(p.period)
@@ -105,6 +126,7 @@ export function csv(nyckeltal: Nyckeltal[], fran: number, till: number): string 
           exportdatum(p.kallans_publicering ?? s.matt.kallans_publicering),
           exportdatum(p.hamtad),
           p.version,
+          OMRADEN[s.omrade] ?? s.omrade,
         ]
           .map(cell)
           .join(';'),
