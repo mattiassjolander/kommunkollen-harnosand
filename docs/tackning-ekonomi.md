@@ -8,6 +8,8 @@ Vilken källa och vilket mått som används för varje punkt i kravspecens avsni
 
 **Prisnivå.** Alla kronbelopp är i löpande priser. Varken Kolada eller SCB:s räkenskapssammandrag publicerar fasta priser för de här måtten. Kr/inv gör åren jämförbara för befolkningsförändringar, men inte för inflation.
 
+**Beräknat av Kommunkollen.** Två mått finns inte hos källorna och beräknas: rörelsekapitalet (SCB, vid insamlingen) och låneskulden per invånare, som räknas fram när den läses: SCB BalansKnN 081 (långfristiga lån i banker och kreditinstitut, tkr) × 1 000 delat med folkmängden 31 december (Kolada N01951). Ett år där någon av uppgifterna saknas visas som "Uppgift saknas". Båda är märkta "Beräknat av Kommunkollen" i förklaringen och källraden.
+
 **Historik.** Hela tidsserien hämtas: SCB från 1998, och Kolada så långt tillbaka som nyckeltalet finns. Vyn börjar som standard 2022.
 
 ## 3.1 Ekonomisk översikt
@@ -23,7 +25,7 @@ Vilken källa och vilket mått som används för varje punkt i kravspecens avsni
 | Utjämningsbidrag och utjämningsavgifter | SCB SkatteIntKnN 080 (bidrag inkl. generella statsbidrag) och 160 (avgifter), tkr | Uppdelning per utjämningssystem finns i tabellen och kan läggas till. |
 | Verksamheternas nettokostnader | SCB ResultKnN 030 (tkr). Kolada N03011 (kr/inv), N03100 (% av skatt och generella statsbidrag) | |
 | Investeringar | Kolada N03132 (nettoinvesteringar, kr/inv), N03103 (självfinansieringsgrad, %) | Kolada anger 2027 som nästa publicering för N03132. Framtida datum visas inte som publicering. |
-| Låneskuld | SCB BalansKnN 081 (långfristiga lån i banker och kreditinstitut, tkr) | Den kortfristiga delen av lånen ingår i kortfristiga skulder och syns inte här. |
+| Låneskuld | SCB BalansKnN 081 (långfristiga lån i banker och kreditinstitut, tkr). Per invånare: beräknat ur 081 och Kolada N01951 (folkmängd) | Den kortfristiga delen av lånen ingår i kortfristiga skulder och syns inte här. Låneskulden per invånare är ett huvudtal och beräknas av Kommunkollen. |
 | Pensionsåtaganden | SCB BalansKnN 072 (avsättningar i balansräkningen, tkr). Kolada N03044 (avsättning, kr/inv), N03048 (förpliktelser utanför balansräkningen, kr/inv) | |
 | Likviditet | SCB BalansKnN 065 (likvida medel, tkr). Kolada N03105 (kassalikviditet, %) | |
 | Soliditet | Kolada N03002 (inkl. pensionsåtaganden) och N03106 (exkl.) | |
@@ -49,6 +51,27 @@ Kravet på absoluta värden och utveckling över tid uppfylls med tkr från SCB 
 
 Ett värde som källan inte har (SCB `..`, eller ett tomt värde i Kolada) lagras som saknat och visas som "Uppgift saknas", aldrig som noll. SCB:s `-` betyder att inget finns att redovisa och lagras som noll.
 
+## Ekonomivyns upplägg (ADR-0007)
+
+**Översikt.** Vyn börjar med fem huvudtal, som `ekonomi.HUVUDTAL` anger: årets resultat i procent av skatter och generella statsbidrag (Kolada N03102), nettokostnadsandel (N03100), självfinansieringsgrad (N03103), soliditet inklusive pensionsåtaganden (N03002) och låneskuld per invånare (beräknad, se ovan). Varje huvudtal visar senaste året med ett värde, förändringen mot året före och en mening om vad måttet betyder, och länkar till sitt kort. Åren kan skilja sig mellan huvudtalen, eftersom källorna publicerar vid olika tidpunkter.
+
+**Grupper som frågor.** `ekonomi.GRUPPER` har en fråga som rubrik och en kort ingress per grupp: *Går kommunen med överskott?*, *Var kommer pengarna ifrån?*, *Vad kostar verksamheten och investeringarna?*, *Hur mycket är lånat och vad är utlovat i pensioner?* och *Klarar kommunen sina betalningar?*
+
+**Ett kort per företeelse.** Där SCB redovisar totalt och Kolada samma sak per invånare visas de på ett kort med växeln *Totalt (mnkr) / Per invånare*. Källraden gäller den variant som visas.
+
+| Kort (totalt) | Per invånare |
+|---|---|
+| Årets resultat, SCB ResultKnN 120 | Kolada N03007 |
+| Skatteintäkter, SCB ResultKnN 040 | Kolada N03010 |
+| Generella statsbidrag och utjämning, SCB ResultKnN 050 | Kolada N03009 |
+| Verksamhetens nettokostnader, SCB ResultKnN 030 | Kolada N03011 |
+| Långfristiga lån, SCB BalansKnN 081 | Låneskuld per invånare (beräknad) |
+| Långfristiga skulder, SCB BalansKnN 089 | Kolada N03046 |
+| Kortfristiga skulder, SCB BalansKnN 098 | Kolada N03047 |
+| Pensionsavsättningar, SCB BalansKnN 072 | Kolada N03044 |
+
+Övriga nyckeltal har ett eget kort. Kortets id är måttet för varianten Totalt, och kortet nås med `#kort-<id>`, t.ex. `/ekonomi#kort-kolada-N03102`.
+
 ## Analysverktyg i ekonomivyn
 
 Alla val speglas i URL:en, så att en länk visar exakt samma sak:
@@ -58,9 +81,10 @@ Alla val speglas i URL:en, så att en länk visar exakt samma sak:
 | `fran`, `till` | Visad period | 2022 till senaste året |
 | `jamfor=2018-2024` | Jämför två år | Ingen jämförelse |
 | `vy=tabell` | Visa alla nyckeltal som tabell | Diagram |
+| `enhet=inv` | Visa korten med båda varianterna per invånare | Totalt (mnkr) |
 
 **Större förändring.** En jämförelse markeras som *större förändring* när värdet har ändrats med minst **10 %** jämfört med det tidigare året (relativt beloppet, även när det är negativt). Nyckeltal som själva är procentsatser, t.ex. soliditet, jämförs i procentenheter och markeras vid minst **5 procentenheter**. Tröskeln är densamma för alla nyckeltal och ändras i `frontend/src/analys.ts` (`STOR_FORANDRING`). Jämförelsen görs i löpande priser, utan justering för inflation.
 
 **Mandatperioder.** Tidsdiagrammen har diskreta bakgrundsband för mandatperioderna, utan partifärg. En period skrivs valår–valår (t.ex. 2022–2026) och omfattar budgetåren efter valet (2023–2026), eftersom nya fullmäktige tillträder den 15 oktober valåret.
 
-**CSV-export.** Varje nyckeltal har en CSV-knapp, och *Ladda ner alla som CSV* exporterar alla nyckeltal för den visade perioden. Filen har semikolon som fältavgränsare och decimalkomma (svenskt Excel). Varje rad är ett värde i källans enhet, med nyckeltal, mått-id, period, prisnivå, källa, källans publiceringsdatum, hämtdatum och version. Ett saknat värde är en tom cell, aldrig 0.
+**CSV-export.** Varje kort har en CSV-knapp, som exporterar båda varianterna när kortet har växeln Totalt / Per invånare, och *Ladda ner alla som CSV* exporterar alla nyckeltal för den visade perioden. Filen har semikolon som fältavgränsare och decimalkomma (svenskt Excel). Varje rad är ett värde i källans enhet, med nyckeltal, mått-id, period, prisnivå, källa, källans publiceringsdatum, hämtdatum och version. Ett saknat värde är en tom cell, aldrig 0.

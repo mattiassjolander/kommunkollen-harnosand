@@ -10,13 +10,15 @@ test.beforeAll(async ({ request }) => {
 })
 
 test('ekonomivyn är öppen och visar årets resultat som tidsserie med källrad', async ({ page }) => {
-  await page.goto('/ekonomi')
+  await page.goto('/ekonomi?enhet=inv')
 
   // Ingen inloggning krävs för att läsa.
   await expect(page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' })).toBeVisible()
 
-  const kort = page.locator('[data-matt="kolada:N03007"]')
-  await expect(kort.getByRole('heading', { name: 'Årets resultat kommun, kr/inv' })).toBeVisible()
+  // Årets resultat per invånare (Kolada) visas på samma kort som totalen från SCB.
+  const kort = page.locator('[data-matt="scb:ResultKnN:120"]')
+  await expect(kort).toHaveAttribute('data-visad', 'kolada:N03007')
+  await expect(kort.getByRole('heading', { name: 'Årets resultat', exact: true })).toBeVisible()
 
   // Standardvisning från 2022: 2022–2025 i inspelningen.
   await expect(kort.getByTestId('stapel')).toHaveCount(4)
@@ -202,4 +204,87 @@ test('tabelldata kan exporteras som CSV med källa och period', async ({ page })
 
   const [alla] = await Promise.all([page.waitForEvent('download'), page.getByTestId('exportera-alla').click()])
   expect(alla.suggestedFilename()).toBe('kommunkollen-ekonomi-2020-2023.csv')
+})
+
+// Översikt med huvudtal, grupper som frågor och sammanslagna kort (#80)
+
+test('översikten visar fem huvudtal med förklaring, och ett huvudtal leder till sitt kort', async ({ page }) => {
+  await page.goto('/ekonomi')
+  const oversikt = page.getByTestId('huvudtal')
+  const huvudtal = oversikt.getByTestId('statkort')
+  await expect(huvudtal).toHaveCount(5)
+  await expect(huvudtal.nth(0)).toHaveAttribute('data-matt', 'kolada:N03102')
+  await expect(huvudtal.nth(0).getByTestId('forklaring')).toContainText('blev kvar efter årets kostnader')
+  // Senaste året, förändringen mot året före och källan.
+  await expect(huvudtal.nth(0).getByTestId('statvarde')).toContainText('%')
+  await expect(huvudtal.nth(0).getByTestId('statforandring')).toContainText(/procentenheter\s*mot \d{4}/)
+
+  // Låneskulden per invånare beräknas av Kommunkollen och leder till lånekortet i varianten per invånare.
+  const laneskuld = huvudtal.nth(4)
+  await expect(laneskuld).toHaveAttribute('data-matt', 'kommunkollen:laneskuld-per-invanare')
+  await expect(laneskuld.getByTestId('statvarde')).toContainText('kr/inv')
+  await expect(laneskuld.getByTestId('kallrad')).toContainText('Beräknat av Kommunkollen')
+  await laneskuld.getByRole('link', { name: 'Låneskuld per invånare' }).click()
+  await expect(page).toHaveURL(/enhet=inv/)
+  await expect(page).toHaveURL(/#kort-scb-BalansKnN-081$/)
+  const kort = page.locator('[data-matt="scb:BalansKnN:081"]')
+  await expect(kort).toHaveClass(/markerad/)
+  await expect(kort).toBeInViewport()
+  await expect(kort).toHaveAttribute('data-visad', 'kommunkollen:laneskuld-per-invanare')
+  await expect(kort.getByTestId('kallrad')).toContainText('Beräknat av Kommunkollen')
+})
+
+test('grupperna är frågor med ingress', async ({ page }) => {
+  await page.goto('/ekonomi')
+  await expect(page.locator('#resultat').getByRole('heading', { name: 'Går kommunen med överskott?' })).toBeVisible()
+  await expect(page.locator('#resultat .gruppingress')).toContainText('Årets resultat är skillnaden')
+  await expect(page.getByRole('navigation', { name: 'Avsnitt' }).getByRole('link')).toHaveText([
+    'Går kommunen med överskott?',
+    'Var kommer pengarna ifrån?',
+    'Vad kostar verksamheten och investeringarna?',
+    'Hur mycket är lånat och vad är utlovat i pensioner?',
+    'Klarar kommunen sina betalningar?',
+  ])
+})
+
+test('ett kort växlar mellan totalt och per invånare med rätt källa, och valet speglas i URL:en', async ({ page }) => {
+  await page.goto('/ekonomi')
+  const kort = page.locator('[data-matt="scb:ResultKnN:040"]')
+  const vaxel = kort.getByTestId('enhet')
+  await expect(vaxel.getByRole('button', { name: 'Totalt (mnkr)' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(kort.getByTestId('kallrad')).toContainText('ResultKnN, post 040')
+
+  await vaxel.getByRole('button', { name: 'Per invånare' }).click()
+  await expect(page).toHaveURL(/enhet=inv/)
+  await expect(kort.getByTestId('kallrad')).toContainText('Kolada')
+  await expect(kort.getByTestId('kallrad')).toContainText('N03010')
+  // Valet gäller alla kort med båda varianterna. Kort med bara en variant påverkas inte.
+  await expect(page.locator('[data-matt="scb:BalansKnN:089"]')).toHaveAttribute('data-visad', 'kolada:N03046')
+  await expect(page.locator('[data-matt="scb:BalansKnN:065"]').getByTestId('enhet')).toHaveCount(0)
+
+  await kort.getByRole('button', { name: 'Tabell' }).click()
+  await expect(kort.getByRole('table').getByRole('columnheader', { name: 'kr/inv' })).toBeVisible()
+
+  await page.reload()
+  await expect(kort.getByTestId('enhet').getByRole('button', { name: 'Per invånare' })).toHaveAttribute('aria-pressed', 'true')
+
+  // CSV-exporten innehåller båda varianterna.
+  const [nedladdning] = await Promise.all([page.waitForEvent('download'), kort.getByTestId('csv').click()])
+  const text = await (await import('node:fs/promises')).readFile(await nedladdning.path(), 'utf-8')
+  expect(text).toContain(';scb:ResultKnN:040;')
+  expect(text).toContain(';kolada:N03010;')
+})
+
+test('översikten och växeln fungerar i mobilbredd', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/ekonomi')
+  await expect(page.getByTestId('huvudtal').getByTestId('statkort')).toHaveCount(5)
+  const kort = page.locator('[data-matt="scb:ResultKnN:030"]')
+  await kort.getByTestId('enhet').getByRole('button', { name: 'Per invånare' }).click()
+  await expect(kort).toHaveAttribute('data-visad', 'kolada:N03011')
+  // Översikten och korten ryms i bredden.
+  for (const del of [page.getByTestId('huvudtal'), kort, page.locator('[data-matt="scb:BalansKnN:081"]')]) {
+    const ruta = await del.boundingBox()
+    expect(ruta!.x + ruta!.width).toBeLessThanOrEqual(375)
+  }
 })

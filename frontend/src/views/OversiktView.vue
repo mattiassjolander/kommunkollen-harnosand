@@ -5,8 +5,8 @@ import {
   hamtaEkonomi,
   hamtaStatus,
   type GlobalStatus,
-  type Nyckeltal,
   type Nyckeltalsgrupp,
+  varianter,
 } from '../api'
 import { datumTid } from '../format'
 import Statkort from '../components/Statkort.vue'
@@ -64,8 +64,8 @@ onMounted(async () => {
 
 const kort = computed(() =>
   URVAL.flatMap((id) => {
-    const grupp = grupper.value.find((g) => g.nyckeltal.some((n) => n.id === id))
-    const nyckeltal = grupp?.nyckeltal.find((n) => n.id === id) as Nyckeltal | undefined
+    const grupp = grupper.value.find((g) => g.nyckeltal.flatMap(varianter).some((n) => n.id === id))
+    const nyckeltal = grupp?.nyckeltal.flatMap(varianter).find((n) => n.id === id)
     return grupp && nyckeltal ? [{ nyckeltal, lank: `/ekonomi#${grupp.id}` }] : []
   }),
 )

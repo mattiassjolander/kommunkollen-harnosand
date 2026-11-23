@@ -27,8 +27,9 @@ def api(database_url, google) -> TestClient:
 
 
 def nyckeltal(api: TestClient) -> dict[str, dict]:
+    """Alla nyckeltal, även varianten per invånare på sammanslagna kort."""
     svar = api.get("/api/ekonomi").json()
-    return {n["id"]: n for g in svar["grupper"] for n in g["nyckeltal"]}
+    return {v["id"]: v for g in svar["grupper"] for n in g["nyckeltal"] for v in (n, n["per_invanare"]) if v}
 
 
 def punkter(n: dict) -> dict[str, float | None]:
@@ -40,11 +41,13 @@ def test_alla_nyckeltal_i_katalogen_visas_grupperade_med_forklaring_och_enhet(ap
     assert [g["id"] for g in svar["grupper"]] == [g.id for g in ekonomi.GRUPPER]
     alla = nyckeltal(api)
     assert list(alla) == [m for g in ekonomi.GRUPPER for m in g.matt]
+    for g in svar["grupper"]:
+        assert g["titel"].endswith("?") and g["ingress"], g["id"]
     for id, n in alla.items():
         assert n["serie"] is not None, f"{id} saknar data"
         matt = n["serie"]["matt"]
         assert matt["titel"] and matt["beskrivning"] and matt["enhet"], id
-        assert matt["datakalla"]["id"] in ("kolada", "scb")
+        assert matt["datakalla"]["id"] in ("kolada", "scb", "kommunkollen")
         assert n["serie"]["punkter"], id
 
 
@@ -136,3 +139,68 @@ def test_nyckeltal_som_laggs_till_i_katalogen_far_hela_historiken(database_url, 
     assert anrop and not any("from_date" in u for u in anrop)
     kolada = inspelning("api.kolada.se/v3/data/kpi/N03010/municipality/2280")
     assert len(andra.get("/api/matt/kolada:N03010/serie").json()["punkter"]) == len(kolada["values"])
+
+
+# Översikt med huvudtal och sammanslagna kort (#80)
+
+
+def test_samma_foreteelse_ar_ett_kort_med_totalt_fran_scb_och_per_invanare(api):
+    svar = api.get("/api/ekonomi").json()
+    kort = [n for g in svar["grupper"] for n in g["nyckeltal"]]
+    sammanslagna = [n for n in kort if n["per_invanare"]]
+    assert len(kort) < len(nyckeltal(api))  # antalet kort minskar
+    assert {n["id"]: n["per_invanare"]["id"] for n in sammanslagna} == {
+        "scb:ResultKnN:120": "kolada:N03007",
+        "scb:ResultKnN:040": "kolada:N03010",
+        "scb:ResultKnN:050": "kolada:N03009",
+        "scb:ResultKnN:030": "kolada:N03011",
+        "scb:BalansKnN:081": ekonomi.LANESKULD_PER_INVANARE,
+        "scb:BalansKnN:089": "kolada:N03046",
+        "scb:BalansKnN:098": "kolada:N03047",
+        "scb:BalansKnN:072": "kolada:N03044",
+    }
+    for n in sammanslagna:
+        assert n["serie"]["matt"]["enhet"] == "tkr", n["id"]
+        assert n["per_invanare"]["serie"]["matt"]["enhet"] == "kr/inv", n["id"]
+        # Källan anges för varianten som visas.
+        assert n["serie"]["matt"]["datakalla"]["id"] == "scb"
+
+
+def test_laneskulden_per_invanare_beraknas_ur_scbs_lan_och_folkmangden(api):
+    alla = nyckeltal(api)
+    lan = punkter(alla["scb:BalansKnN:081"])
+    folk = {p["period"]: p["varde"] for p in api.get("/api/matt/kolada:N01951/serie").json()["punkter"]}
+    laneskuld = alla[ekonomi.LANESKULD_PER_INVANARE]
+    ar = max(set(lan) & set(folk))
+    assert punkter(laneskuld)[ar] == pytest.approx(lan[ar] * 1000 / folk[ar], abs=1)
+    matt = laneskuld["serie"]["matt"]
+    assert "Beräknat av Kommunkollen" in matt["beskrivning"]
+    assert matt["datakalla"]["titel"].startswith("Beräknat av Kommunkollen")
+    assert laneskuld["prisniva"] == "löpande priser"
+    # Samma serie nås som enskilt mått.
+    assert api.get(f"/api/matt/{ekonomi.LANESKULD_PER_INVANARE}/serie").json()["punkter"] == laneskuld["serie"]["punkter"]
+
+
+def test_laneskulden_saknas_ett_ar_utan_folkmangd():
+    punkt = {"varde": 500000.0, "kallans_publicering": None, "hamtad": "2026-01-01", "version": 1,
+             "senast_hamtad": "2026-01-01", "senast_andrad": "2026-01-01"}
+    lan = {"matt": {"kallans_publicering": None, "datakalla": {"url": "https://scb.se"}}, "omrade": "2280",
+           "punkter": [punkt | {"period": "2024"}, punkt | {"period": "2025"}]}
+    folk = {"punkter": [punkt | {"period": "2024", "varde": 25000.0}]}
+    serie = ekonomi.laneskuld_per_invanare(lan, folk)
+    assert {p["period"]: p["varde"] for p in serie["punkter"]} == {"2024": 20000, "2025": None}
+    assert ekonomi.laneskuld_per_invanare(None, folk) is None
+
+
+def test_huvudtalen_har_forklaring_och_lankar_till_sitt_kort(api):
+    svar = api.get("/api/ekonomi").json()
+    kort = {n["id"]: n for g in svar["grupper"] for n in g["nyckeltal"]}
+    alla = nyckeltal(api)
+    assert [h["id"] for h in svar["huvudtal"]] == [
+        "kolada:N03102", "kolada:N03100", "kolada:N03103", "kolada:N03002", ekonomi.LANESKULD_PER_INVANARE,
+    ]
+    for h in svar["huvudtal"]:
+        assert h["forklaring"].endswith("."), h["id"]
+        assert h["kort"] in kort, h["id"]
+        assert h["id"] in (kort[h["kort"]]["id"], (kort[h["kort"]]["per_invanare"] or {}).get("id"))
+        assert alla[h["id"]]["serie"]["punkter"], h["id"]

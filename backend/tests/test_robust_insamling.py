@@ -70,7 +70,9 @@ def test_en_kalla_med_fel_stoppar_inte_de_andra(database_url, google):
     assert "500" in res["scb"]["fel"]
     # Kolada:s uppgifter finns, SCB:s inte.
     ekonomi = api.get("/api/ekonomi").json()
-    serier = {n["id"]: n["serie"] for g in ekonomi["grupper"] for n in g["nyckeltal"]}
+    serier = {
+        v["id"]: v["serie"] for g in ekonomi["grupper"] for n in g["nyckeltal"] for v in (n, n["per_invanare"]) if v
+    }
     assert serier["kolada:N03007"]["punkter"]
     assert serier["scb:ResultKnN:120"] is None
     # Varje anrop försöktes tre gånger innan det gav upp.

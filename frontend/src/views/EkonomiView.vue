@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onMounted, ref } from 'vue'
+import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { EjInloggad, hamtaEkonomi, type Nyckeltalsgrupp } from '../api'
+import { EjInloggad, hamtaEkonomi, kortankare, varianter, type Huvudtal, type Nyckeltalsgrupp } from '../api'
 import { STOR_FORANDRING, csv, laddaNer } from '../analys'
-import Nyckeltalskort from '../components/Nyckeltalskort.vue'
+import Nyckeltalskort, { type Enhet } from '../components/Nyckeltalskort.vue'
+import Statkort from '../components/Statkort.vue'
 import EkonomiFlikar from '../components/EkonomiFlikar.vue'
 
 const STANDARD_FRAN = 2022 // standardvisning enligt kravspec avsnitt 18
@@ -11,37 +12,48 @@ const STANDARD_FRAN = 2022 // standardvisning enligt kravspec avsnitt 18
 const route = useRoute()
 const router = useRouter()
 const grupper = ref<Nyckeltalsgrupp[]>([])
+const huvudtal = ref<Huvudtal[]>([])
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 const utloggad = inject<() => void>('utloggad', () => {})
 
 onMounted(async () => {
   try {
-    grupper.value = (await hamtaEkonomi()).grupper
+    const svar = await hamtaEkonomi()
+    grupper.value = svar.grupper
+    huvudtal.value = svar.huvudtal
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
   } finally {
     laddar.value = false
   }
-  // Länkar som /ekonomi#resultat (t.ex. från översikten) hoppar till gruppen när den finns.
-  if (route.hash) {
-    await nextTick()
-    document.getElementById(route.hash.slice(1))?.scrollIntoView()
-  }
+  hoppa()
 })
+
+// Länkar som /ekonomi#resultat (t.ex. från översikten) hoppar till gruppen, och /ekonomi#kort-… (från ett
+// huvudtal) till kortet, som markeras.
+async function hoppa() {
+  if (!route.hash) return
+  await nextTick()
+  const mal = document.getElementById(route.hash.slice(1))
+  mal?.scrollIntoView()
+  if (mal?.classList.contains('kort')) mal.focus({ preventScroll: true })
+}
+watch(() => route.hash, hoppa)
+const markeratKort = computed(() => (route.hash.startsWith('#kort-') ? route.hash.slice(1) : null))
 
 // Alla år som någon serie har.
 const ar = computed(() => {
   const alla = new Set<number>()
   for (const g of grupper.value)
-    for (const n of g.nyckeltal) for (const p of n.serie?.punkter ?? []) alla.add(Number(p.period))
+    for (const n of g.nyckeltal.flatMap(varianter)) for (const p of n.serie?.punkter ?? []) alla.add(Number(p.period))
   return [...alla].sort((a, b) => a - b)
 })
 const senasteAr = computed(() => ar.value[ar.value.length - 1] ?? STANDARD_FRAN)
 
 // Hela tillståndet ligger i URL:en, så att en länk visar exakt samma sak:
-// ?fran=2015&till=2024&jamfor=2018-2024&vy=tabell. Standardvärden skrivs inte ut.
+// ?fran=2015&till=2024&jamfor=2018-2024&vy=tabell&enhet=inv. Standardvärden skrivs inte ut.
 const tal = (namn: string) => Number(route.query[namn]) || null
 function satt(andring: Record<string, string | null>) {
   const query: Record<string, string> = {}
@@ -62,6 +74,27 @@ const vy = computed({
   set: (v: 'diagram' | 'tabell') => satt({ vy: v === 'diagram' ? null : v }),
 })
 
+// Totalt (mnkr) eller per invånare på de kort som har båda. Gäller alla kort (ADR-0007).
+const enhet = computed({
+  get: () => (route.query.enhet === 'inv' ? 'inv' : 'totalt') as Enhet,
+  set: (v: Enhet) => satt({ enhet: v === 'totalt' ? null : v }),
+})
+
+// Huvudtalen: serien hämtas ur kortet, och länken visar kortet i huvudtalets variant.
+const oversikt = computed(() =>
+  huvudtal.value.flatMap((h) => {
+    const kort = grupper.value.flatMap((g) => g.nyckeltal).find((k) => k.id === h.kort)
+    const nyckeltal = kort && varianter(kort).find((v) => v.id === h.id)
+    if (!kort || !nyckeltal) return []
+    const perInvanare = nyckeltal !== kort
+    const lank = {
+      query: { ...route.query, enhet: perInvanare ? 'inv' : route.query.enhet },
+      hash: `#${kortankare(kort.id)}`,
+    }
+    return [{ ...h, nyckeltal, lank }]
+  }),
+)
+
 // Jämförelse mellan två år: ?jamfor=2018-2024
 const jamforelse = computed<[number, number] | null>(() => {
   const m = /^(\d{4})-(\d{4})$/.exec((route.query.jamfor as string) ?? '')
@@ -76,11 +109,11 @@ const jamforTill = computed({
   set: (v: number | '') => satt({ jamfor: v === '' ? null : `${jamforelse.value?.[0] ?? franAr.value}-${v}` }),
 })
 
-const harData = computed(() => grupper.value.some((g) => g.nyckeltal.some((n) => n.serie)))
+const harData = computed(() => grupper.value.some((g) => g.nyckeltal.flatMap(varianter).some((n) => n.serie)))
 const procentTroskel = `${STOR_FORANDRING.andel * 100} %`
 
 function exportera() {
-  const alla = grupper.value.flatMap((g) => g.nyckeltal)
+  const alla = grupper.value.flatMap((g) => g.nyckeltal.flatMap(varianter))
   laddaNer(`kommunkollen-ekonomi-${franAr.value}-${tillAr.value}.csv`, csv(alla, franAr.value, tillAr.value))
 }
 </script>
@@ -138,22 +171,43 @@ function exportera() {
       Förändring {{ jamforelse[0] }}–{{ jamforelse[1] }}. Förändringar på minst {{ procentTroskel }}, eller minst
       {{ STOR_FORANDRING.procentenheter }} procentenheter för nyckeltal i procent, markeras som större.
     </p>
+    <section class="oversikt" aria-labelledby="oversikt-rubrik" data-testid="huvudtal">
+      <h2 id="oversikt-rubrik">Översikt</h2>
+      <p class="gruppingress">
+        Fem huvudtal som sammanfattar kommunens ekonomi, med senaste året och förändringen mot året före. Korten
+        längre ned visar fler nyckeltal och hela tidsserien.
+      </p>
+      <div class="huvudtal">
+        <Statkort
+          v-for="h in oversikt"
+          :key="h.id"
+          :nyckeltal="h.nyckeltal"
+          :lank="h.lank"
+          :forklaring="h.forklaring"
+        />
+      </div>
+    </section>
+
     <nav class="hopp" aria-label="Avsnitt">
       <a v-for="g in grupper" :key="g.id" :href="`#${g.id}`">{{ g.titel }}</a>
     </nav>
 
     <section v-for="g in grupper" :id="g.id" :key="g.id" class="grupp">
       <h2>{{ g.titel }}</h2>
+      <p class="gruppingress">{{ g.ingress }}</p>
       <div class="rutnat">
         <Nyckeltalskort
           v-for="n in g.nyckeltal"
           :key="n.id"
+          :class="{ markerad: kortankare(n.id) === markeratKort }"
           :nyckeltal="n"
           :fran-ar="franAr"
           :till-ar="tillAr"
           :vy="vy"
+          :enhet="enhet"
           :jamforelse="jamforelse"
           @vy="vy = $event"
+          @enhet="enhet = $event"
         />
       </div>
     </section>
@@ -180,6 +234,7 @@ function exportera() {
 }
 .filterrad fieldset {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   border: 0;
@@ -253,8 +308,22 @@ function exportera() {
   margin-bottom: 48px;
   scroll-margin-top: 16px;
 }
-.grupp h2 {
-  margin-bottom: 16px;
+.grupp h2,
+.oversikt h2 {
+  margin-bottom: 4px;
+}
+.gruppingress {
+  color: var(--ink-secondary);
+  margin: 0 0 16px;
+  max-width: 70ch;
+}
+.oversikt {
+  margin-bottom: 40px;
+}
+.huvudtal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
 }
 .rutnat {
   display: grid;

@@ -130,27 +130,36 @@ def create_app(
     @app.get("/api/matt/{matt_id}/serie", dependencies=[Depends(krav_roll("lasare"))])
     def serie(matt_id: str, omrade: str = KOMMUN) -> dict:
         with db.connect(database_url) as conn:
-            resultat = serier.las_serie(conn, matt_id, omrade)
+            resultat = ekonomi.las_nyckeltal(conn, matt_id, omrade)
         if resultat is None:
             raise HTTPException(404, f"Måttet {matt_id} finns inte")
         return resultat
 
     @app.get("/api/ekonomi", dependencies=[Depends(krav_roll("lasare"))])
     def ekonomiska_nyckeltal(omrade: str = KOMMUN) -> dict:
-        """Alla ekonomiska nyckeltal i katalogen, grupperade. Ett mått som inte samlats in än har serie null."""
+        """Alla ekonomiska nyckeltal i katalogen, grupperade som kort, och huvudtalen för översikten.
+        Ett mått som inte samlats in än har serie null. Ett kort med växeln Totalt / Per invånare har
+        varianten per invånare i `per_invanare`."""
+
+        def nyckeltal(conn, matt_id: str) -> dict:
+            s = ekonomi.las_nyckeltal(conn, matt_id, omrade)
+            return {"id": matt_id, "prisniva": ekonomi.prisniva(s["matt"]["enhet"]) if s else None, "serie": s}
+
         with db.connect(database_url) as conn:
-            grupper = []
-            for g in ekonomi.GRUPPER:
-                nyckeltal = []
-                for matt_id in g.matt:
-                    s = serier.las_serie(conn, matt_id, omrade)
-                    nyckeltal.append({
-                        "id": matt_id,
-                        "prisniva": ekonomi.prisniva(s["matt"]["enhet"]) if s else None,
-                        "serie": s,
-                    })
-                grupper.append({"id": g.id, "titel": g.titel, "nyckeltal": nyckeltal})
-        return {"omrade": omrade, "grupper": grupper}
+            grupper = [
+                {
+                    "id": g.id,
+                    "titel": g.titel,
+                    "ingress": g.ingress,
+                    "nyckeltal": [
+                        nyckeltal(conn, k.matt) | {"per_invanare": nyckeltal(conn, k.per_invanare) if k.per_invanare else None}
+                        for k in g.kort
+                    ],
+                }
+                for g in ekonomi.GRUPPER
+            ]
+        huvudtal = [{"id": h.matt, "kort": h.kort, "forklaring": h.forklaring} for h in ekonomi.HUVUDTAL]
+        return {"omrade": omrade, "grupper": grupper, "huvudtal": huvudtal}
 
     @app.get("/api/skatteunderlagsprognoser", dependencies=[Depends(krav_roll("lasare"))])
     def skatteunderlagsprognoser() -> dict:
