@@ -97,6 +97,17 @@ def diarienummer(organ: str, prefix: str, skiljetecken: str, ar: str, lopnummer:
     return f"{ar}-{lopnummer}" if _EGEN_SERIE.get(organ) == prefix else f"{prefix}/{ar}-{lopnummer}"
 
 
+_GLYFKODER = re.compile(r"(?:/i?\d+)+")
+
+
+def _olasbar(rader: list[str]) -> bool:
+    """Sidans text är glyfkoder ("/21/29/87/i255"), inte bokstäver: typsnittet saknar teckentabell
+    (kommunstyrelsen 2026-02-24)."""
+    text = "".join("".join(rader).split())
+    koder = sum(len(m) for m in _GLYFKODER.findall(text))
+    return len(text) > 200 and koder > len(text) / 2
+
+
 def _rader(text: str) -> list[str]:
     return [r for r in (" ".join(x.split()) for x in text.splitlines()) if r]
 
@@ -251,8 +262,10 @@ def las(pdf: bytes | str | Path, organ: str) -> Foredragningslista:
     langd: int | None = None
     med_sida = True
     i = 0
+    olasbara = 0
     while i < min(antal_sidor, 4):
         rader = text(i)
+        olasbara += _olasbar(rader)
         if langd is None and (m := _SIDA_1.search(" ".join(rader))):
             langd = int(m[1])
         start = _tabellrubrik(rader)
@@ -271,6 +284,8 @@ def las(pdf: bytes | str | Path, organ: str) -> Foredragningslista:
                     tabellage = "layout"
             break
     if not tabell:
+        if olasbara:
+            return Foredragningslista("fel", fel=("texten går inte att läsa, typsnittet saknar teckentabell",))
         return Foredragningslista("saknas")
     rad = _RAD_HEL if med_sida else _RAD_UTAN_SIDA
     while i < antal_sidor:
