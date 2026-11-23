@@ -150,6 +150,15 @@ _Avoid_: Omröstning (som begrepp), röstning
 **Reservation**:
 En ledamots eller ett partis anmälan i protokollet om att de inte står bakom beslutet vid en behandling.
 
+## Ekonomiska nyckeltal
+
+**Nyckeltal**:
+Ett mått på kommunens ekonomi som följs över tid, t.ex. årets resultat eller soliditet, hämtat från en datakälla eller beräknat ur andra nyckeltal.
+_Avoid_: Indikator, KPI
+
+**Huvudtal**:
+Ett av de nyckeltal som sammanfattar kommunens ekonomi i översikten på ekonomisidan: årets resultat i procent av skatter och generella statsbidrag, nettokostnadsandel, självfinansieringsgrad, soliditet inklusive pensionsåtaganden och låneskuld per invånare.
+
 ## Ekonomiska konsekvenser
 
 **Kostnadshändelse**:
