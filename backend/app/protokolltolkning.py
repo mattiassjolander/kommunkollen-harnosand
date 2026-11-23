@@ -854,7 +854,8 @@ def _ratta_lasordning(sidrader: list[str], layoutsida: str | None) -> list[str]:
 def _behandlingar(t: Tolkning, lop: list[str], layout: list[str] | None = None) -> None:
     intervall = paragrafintervall(layout or [])
     forteckning = innehallsforteckning(lop)
-    lista = arendelista(lop)
+    # OCR-text läser ofta "§ 45" som "845", så ärendelistan blir fel. Där görs ingen motkontroll (#88).
+    lista = {} if t.ocr else arendelista(lop)
     rader: list[str] = []
     sidor: list[int] = []
     for index, sida in enumerate(lop):

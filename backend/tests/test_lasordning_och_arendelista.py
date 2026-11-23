@@ -161,3 +161,12 @@ def test_rubriken_ur_arendelistan_sparas_och_visas(api, database_url, monkeypatc
                nytt="Rättad rubrik", motivering="Rubriken i paragrafen")
     b = behandling(api, "2026-06-15", paragraf)
     assert (b["rubrik"], b["rubrik_ur_arendelistan"]) == ("Rättad rubrik", False)
+
+
+def test_ingen_motkontroll_mot_ocr_text():
+    # OCR läser "§ 45" som "845", och ärendelistans poster flyter ihop. Ärendelistan används inte då.
+    lop = [sida(1, FORSTA), sida(2, "Ärendelista", "§ 1 Ett 3 844 Två 3"), sida(3, "§ 1", "Ettan", *BESLUT, "§ 2", *BESLUT)]
+    t = Tolkning(ocr=True)
+    _behandlingar(t, lop, [FORSTA, "", ""])
+    assert [(b.rubrik, b.rubrik_ur_arendelistan) for b in t.behandlingar] == [("Ettan", False), ("", False)]
+    assert t.avvikelser == ["§ 2: rubriken hittades inte"]
