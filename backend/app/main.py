@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammantradesplan, serier, skatteunderlag, statistik, status
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammantradesplan, serier, skatteunderlag, statistik, status, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -659,6 +659,49 @@ def create_app(
                                           anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
         """En ny version av publicerade eller återkallade planförutsättningar, som utkast: {motivering} (#76)."""
         return _budget(planforutsattningar.ny_version, pf_id, data, anv.epost, datetime.now(timezone.utc))
+
+    # Budget jämfört med utfall per budgetår (#83): läses in som utkast tillsammans med budgetförslagen.
+
+    @app.get("/api/budget-och-utfall", dependencies=[Depends(krav_roll("lasare"))])
+    def budget_och_utfall_ar() -> list[dict]:
+        """Budgetåren med publicerad uppföljning."""
+        return _budget(uppfoljning.ar)
+
+    @app.get("/api/budget-och-utfall/{ar}", dependencies=[Depends(krav_roll("lasare"))])
+    def budget_och_utfall(ar: int) -> dict:
+        """Antagen och reviderad budget, delårsprognos och utfall för året, per nämnd och för resultatet."""
+        return _budget(uppfoljning.publicerad, ar)
+
+    @app.get("/api/uppfoljning/{id_}/dokument/{nyckel}")
+    def uppfoljningsdokument(id_: int, nyckel: str, anv: Anvandare | None = Depends(krav_roll("lasare"))) -> Response:
+        """Ett dokument som inte finns publikt och lagras i plattformen, t.ex. en utbegärd delårsrapport."""
+        redaktion = bool(anv and anv.roller & {"redaktor", "utgivare"})
+        innehall, _ = _budget(uppfoljning.dokument, id_, nyckel, redaktion)
+        return Response(innehall, media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="{nyckel}-{id_}.pdf"'})
+
+    @app.get("/api/uppfoljning", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def lista_uppfoljning(
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|ersatt|aterkallad)$"),
+    ) -> list[dict]:
+        return _budget(uppfoljning.lista, status)
+
+    @app.get("/api/uppfoljning/{id_}", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def las_uppfoljning(id_: int) -> dict:
+        return _budget(uppfoljning.las, id_)
+
+    @app.post("/api/uppfoljning/{id_}/granskning")
+    def granska_uppfoljning(id_: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(uppfoljning.granska, id_, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/uppfoljning/{id_}/publicering")
+    def publicera_uppfoljning(id_: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _budget(uppfoljning.publicera, id_, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/uppfoljning/{id_}/aterkallelse")
+    def aterkalla_uppfoljning(id_: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        """En utgivare återkallar en publicerad uppföljning direkt, med motivering."""
+        return _budget(uppfoljning.aterkalla, id_, data, anv.epost, datetime.now(timezone.utc))
 
     @app.post("/api/planforutsattningar/{pf_id}/aterkallelse")
     def aterkalla_planforutsattningar(pf_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:

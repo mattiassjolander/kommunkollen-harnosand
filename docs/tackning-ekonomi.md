@@ -19,8 +19,8 @@ Vilken källa och vilket mått som används för varje punkt i kravspecens avsni
 | Krav | Källa och mått | Anmärkning |
 |---|---|---|
 | Årets resultat | Kolada N03007 (kr/inv), N03102 (% av skatt och generella statsbidrag). SCB ResultKnN 120 (tkr) | |
-| Budgeterat resultat | Saknas i fas 1 | Finns bara i kommunens budgetdokument (årsplan). Kommer med budget mot utfall (3.2). |
-| Resultatprognos | Saknas i fas 1 | Finns bara i delårsrapporterna. Kommer med budget mot utfall (3.2). |
+| Budgeterat resultat | Årsplanen (antaget budgetförslag) och årsredovisningen (reviderad budget), se 3.2 | Avläst ur kommunens PDF:er och granskat före publicering. |
+| Resultatprognos | Delårsrapportens helårsprognos, se 3.2 | Avläst ur kommunens PDF:er och granskat före publicering. |
 | Skatteintäkter | SCB ResultKnN 040 (tkr). Kolada N03010 (kr/inv) | |
 | Generella statsbidrag | SCB ResultKnN 050 (tkr) och SkatteIntKnN 080 (brutto). Kolada N03009 (kr/inv) | Redovisas tillsammans med utjämningen. Generella bidrag från staten finns som egen post (SkatteIntKnN 150) men visas inte än. |
 | Riktade statsbidrag | Saknas i fas 1 | Ingår i verksamhetens intäkter och redovisas inte separat per kommun i Kolada eller i de SCB-tabeller som används. Kan komma från SCB:s VerksInt eller årsredovisningen. |
@@ -33,6 +33,24 @@ Vilken källa och vilket mått som används för varje punkt i kravspecens avsni
 | Soliditet | Kolada N03002 (inkl. pensionsåtaganden) och N03106 (exkl.) | |
 | Kassaflöde | Saknas i fas 1 | Kassaflödesanalysen finns bara i årsredovisningen. |
 | Kostnad per invånare | Kolada N03011 (nettokostnader kr/inv) | Övriga kr/inv-mått ovan kompletterar. |
+
+## 3.2 Budget jämfört med utfall
+
+Fliken *Budget och utfall* under Ekonomi (`/ekonomi/budget-och-utfall?ar=2025`). Källorna och inläsningen beskrivs i
+`docs/budget-mot-utfall.md` och `backend/app/uppfoljning.py`.
+
+| Krav | Källa | Anmärkning |
+|---|---|---|
+| Ursprunglig budget | Det antagna budgetförslaget (årsplanen): ram per nämnd och budgeterat resultat, med sida | Länkar till årsplanen och till behandlingen i fullmäktige. Resultatet står i procent av skatter och bidrag och räknas om till mnkr ur planförutsättningarna när de finns. |
+| Reviderad budget | Årsredovisningens driftredovisning (budget nettokostnad) och budgeterat resultat | Budgeten vid årets slut, efter fullmäktiges ändringar under året. Ändringarna länkas inte till sina beslut än. |
+| Delårsprognos | Delårsrapportens helårsprognos: prognosavvikelse per nämnd och prognostiserat resultat | Delårsrapporten för 2025 finns inte publikt. Den är begärd ur kommunens diarium och lagras i plattformen, som visar den med sidlänkar. 2026 års rapport finns i fullmäktiges handlingar 2026-10-26. |
+| Faktiskt utfall | Årsredovisningens driftredovisning (nettokostnad) och årets resultat | Innevarande år har inget utfall förrän årsredovisningen finns. |
+| Avvikelse i kronor | Räknad: budget minus nettokostnad per nämnd, resultat minus budget för resultatet | Kontrolleras mot avvikelsen som årsredovisningen anger, med 0,15 mnkr för avrundning. |
+| Avvikelse i procent | Räknad av budgeten | Visas för nämnderna. För resultatet blir procenten av ett litet budgeterat resultat missvisande och visas inte. |
+| Orsak till avvikelsen | Saknas | Förklaringarna står i text under driftredovisningen och i delårsrapporten och kan läsas in senare. |
+
+Nämnderna heter som i årsplanen. Årsredovisningens *Kommunövergripande verksamhet* är årsplanens *Kommungemensam
+verksamhet* (samma budgetbelopp). Korrigeringsposter och finansiell leasing visas inte.
 
 ## 3.3 Likviditet och soliditet
 

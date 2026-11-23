@@ -342,3 +342,43 @@ test('återkallade uppgifter rättas i en ny version och publiceras igen (#76)',
   await page.getByTestId('plan-andrad').getByTestId('forra-versionen').click()
   await expect(page.getByTestId('tidigare-version').locator('[data-tabell="namnder"] tr', { hasText: 'Kommunstyrelsen' })).toContainText('L s. 8')
 })
+
+// Budget jämfört med utfall (#83): uppföljningen för 2027 läses in som utkast med förslagen. Utgivaren
+// kontrollerar den räknade avvikelsen mot dokumentets och publicerar, och läsaren ser antagen och reviderad
+// budget, prognos och utfall per nämnd under Ekonomi, med sidlänkar och den antagna budgeten ur årsplanen.
+test('läsaren jämför budget och utfall per nämnd (#83)', async ({ page }) => {
+  await page.request.post('/api/auth/test/utgivare')
+  await page.goto('/politik/budgetutkast')
+  await expect(page.getByTestId('budgetutkast').or(page.getByTestId('inga-utkast')).first()).toBeVisible()
+  const utkast = page.locator('[data-testid="uppfoljningsutkast"][data-budgetar="2027"]')
+  if ((await utkast.count()) > 0) {
+    const soc = utkast.locator('tr[data-organ="Socialnämnden"]')
+    await expect(soc.getByTestId('uppfoljning-raknad')).toHaveText('-10,2')
+    await expect(soc.getByRole('link', { name: '905,2' })).toHaveAttribute('href', /arsredovisning-2027\.pdf#page=81$/)
+    await utkast.getByTestId('granska-uppfoljning').click()
+    await utkast.getByTestId('publicera-uppfoljning').click()
+    await expect(utkast).toHaveCount(0)
+  }
+
+  // Läsaren hittar fliken under Ekonomi. Brodiagrammets länk prövas i ekonomi.spec.ts.
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/ekonomi')
+  await page.getByRole('navigation', { name: 'Ekonomi' }).getByRole('link', { name: 'Budget och utfall' }).click()
+  await expect(page).toHaveURL(/\/ekonomi\/budget-och-utfall/)
+  await expect(page.getByTestId('uppfoljning-ar')).toHaveValue('2027')
+
+  const soc = page.getByTestId('namndtabell').locator('tr[data-organ="Socialnämnden"]')
+  await expect(soc).toContainText('893,1 mnkr')
+  await expect(soc).toContainText('905,2 mnkr')
+  await expect(soc).toContainText('915,4 mnkr')
+  await expect(soc.locator('[data-kolumn="avvikelse"]')).toContainText('−10,2 mnkr')
+  await expect(soc.locator('[data-kolumn="avvikelse-antagen"]')).toContainText('mot antagen −22,3 mnkr')
+  await expect(soc.locator('[data-kolumn="prognos"]')).toContainText('−12,5 mnkr')
+  // Den antagna ramen länkar till sidan i årsplanen, utfallet till sidan i årsredovisningen.
+  await expect(soc.getByRole('link', { name: '893,1 mnkr' })).toHaveAttribute('href', /\/api\/budgetforslag\/\d+\/original#page=4$/)
+  await expect(soc.getByRole('link', { name: '915,4 mnkr' })).toHaveAttribute('href', /#page=81$/)
+  await expect(page.getByTestId('uppfoljning-kontroll')).toBeVisible()
+  await expect(page.getByTestId('utan-uppfoljning')).toContainText('Kommungemensam verksamhet')
+  await expect(page.getByTestId('avvikelse-resultat')).toHaveText('−12,2 mnkr')
+  await expect(page.getByTestId('uppfoljning-kallor')).toContainText('antagen av KF')
+})

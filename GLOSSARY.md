@@ -250,6 +250,24 @@ Skillnaden mellan ett budgetförslags siffra och den antagna budgetens för samm
 En sammanfattning av ett budgetförslag med samma frågor för alla förslag, med sidorna i originalet. Den är redaktionens analys, inte en uppgift ur förslaget, och märks Analys.
 _Avoid_: Bedömning, recension
 
+**Reviderad budget**:
+Budgeten vid årets slut, efter fullmäktiges ändringar under året, som årsredovisningen redovisar den per organ. Skiljer sig från den antagna budgeten när ramar flyttas, till exempel när en nämnd läggs ned.
+_Avoid_: Ändrad budget, slutlig budget
+
+**Delårsprognos**:
+Delårsrapportens helårsprognos: årets väntade resultat och varje organs väntade avvikelse mot budgeten.
+_Avoid_: Prognos (utan bestämning), resultatprognos (för organen)
+
+**Utfall**:
+Det årsredovisningen redovisar för året: nettokostnad per organ och årets resultat.
+
+**Budgetavvikelse**:
+Skillnaden mellan budget och utfall eller prognos, i mnkr och procent av budgeten. För ett organ är den budget minus nettokostnad, för resultatet resultat minus budget, som i kommunens dokument.
+_Avoid_: Överskott, underskott (som värderande ord)
+
+**Uppföljning**:
+Budget jämfört med utfall för ett budgetår: reviderad budget, delårsprognos och utfall avlästa ur årsredovisningen och delårsrapporten med sida, bredvid den antagna budgeten. Den granskas och publiceras som budgetförslagen.
+
 ## Redaktionellt arbete
 
 **Redaktör**:

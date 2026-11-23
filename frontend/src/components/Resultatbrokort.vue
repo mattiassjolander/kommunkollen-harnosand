@@ -131,6 +131,7 @@ function exportera() {
           <a :href="resultatkalla?.datakalla.url" target="_blank" rel="noopener">{{ resultatkalla?.datakalla.titel }}</a>
           (ResultKnN) · Avser {{ ar }} · Löpande priser · Publicerad {{ datum(resultatkalla?.kallans_publicering ?? null) }}
         </p>
+        <RouterLink to="/ekonomi/budget-och-utfall" class="budgetlank" data-testid="bro-budget">Budget och utfall per nämnd</RouterLink>
         <button type="button" class="csv" data-testid="bro-csv" @click="exportera">CSV</button>
       </div>
     </template>

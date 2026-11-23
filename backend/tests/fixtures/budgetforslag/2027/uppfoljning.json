@@ -1,0 +1,25 @@
+{
+  "arsredovisning": {"titel": "Årsredovisning 2027", "url": "https://example.org/arsredovisning-2027.pdf"},
+  "delarsrapport": {"titel": "Delårsrapport augusti 2027", "url": "https://example.org/delarsrapport-2027.pdf"},
+  "resultat": {
+    "budget": {"mnkr": 50.3, "sida": 48},
+    "utfall": {"mnkr": 38.1, "sida": 46},
+    "avvikelse": {"mnkr": -12.2, "sida": 48},
+    "prognos_budget": {"mnkr": 50.3, "sida": 25},
+    "prognos": {"mnkr": 31.0, "sida": 25}
+  },
+  "namnder": [
+    {"organ": "Kommunstyrelsen", "budget": {"mnkr": 195.0, "sida": 81}, "utfall": {"mnkr": 190.2, "sida": 81},
+     "avvikelse": {"mnkr": 4.8, "sida": 81}, "prognosavvikelse": {"mnkr": 1.0, "sida": 25}},
+    {"organ": "Kommunfullmäktige", "budget": {"mnkr": 13.4, "sida": 81}, "utfall": {"mnkr": 12.9, "sida": 81},
+     "avvikelse": {"mnkr": 0.5, "sida": 81}, "prognosavvikelse": {"mnkr": 0.2, "sida": 25}},
+    {"organ": "Samhällsnämnden", "budget": {"mnkr": 245.1, "sida": 81}, "utfall": {"mnkr": 248.0, "sida": 81},
+     "avvikelse": {"mnkr": -2.9, "sida": 81}, "prognosavvikelse": {"mnkr": -1.5, "sida": 25}},
+    {"organ": "Skolnämnden", "budget": {"mnkr": 670.0, "sida": 81}, "utfall": {"mnkr": 666.7, "sida": 81},
+     "avvikelse": {"mnkr": 3.3, "sida": 81}, "prognosavvikelse": {"mnkr": -4.0, "sida": 25}},
+    {"organ": "Socialnämnden", "budget": {"mnkr": 905.2, "sida": 81}, "utfall": {"mnkr": 915.4, "sida": 81},
+     "avvikelse": {"mnkr": -10.2, "sida": 81}, "prognosavvikelse": {"mnkr": -12.5, "sida": 25}},
+    {"organ": "Kommunövergripande verksamhet", "budget": {"mnkr": 120.4, "sida": 81},
+     "utfall": {"mnkr": 112.0, "sida": 81}, "avvikelse": {"mnkr": 8.4, "sida": 81}}
+  ]
+}
