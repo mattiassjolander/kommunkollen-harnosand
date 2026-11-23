@@ -181,7 +181,11 @@ def sidtexter(pdf: bytes) -> tuple[list[str], list[str]]:
 
 _DATUM = re.compile(r"(\d{4})-\s*(\d{2})-\s*(\d{2})")
 _TID = re.compile(r"(\d{1,2})[.:](\d{2})")
-_PARTI = re.compile(r"^(?P<namn>.+?)\s*\((?P<parti>[A-ZÅÄÖ]{1,4}|-)\)\s*$")
+# Partiförkortning som protokollen skriver den. Ett parti vars förkortning i protokollen inte är
+# versaler ("NorrP") står i _SKRIVSATT och sparas med plattformens förkortning (NP).
+_SKRIVSATT = {"NorrP": "NP"}
+_KOD = r"NorrP|[A-ZÅÄÖ]{1,4}|-"
+_PARTI = re.compile(rf"^(?P<namn>.+?)\s*\((?P<parti>{_KOD})\)\s*$")
 # Textlagret delar ibland förkortningen ("S AM/2026-131"), så ett mellanslag inuti tillåts.
 _DIARIENUMMER = re.compile(r"\b([A-ZÅÄÖ]{1,5} ?[A-ZÅÄÖ]{1,5})\s?/\s?(\d{4})\s?[-:]\s?(\d+)\b")
 
@@ -480,7 +484,7 @@ def _kolumner(rubrikrad: str) -> list[tuple[int, str]]:
     return [(kol, namn(text)) for kol, text in _falt(rubrikrad)]
 
 
-_PARTIKOD = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
+_PARTIKOD = re.compile(_KOD)
 _PARAGRAFTEXT = re.compile(r"[\d\s,\-–§]*\d[\d\s,\-–§]*")
 
 
@@ -1026,9 +1030,10 @@ def _stycke(rader: list[str]) -> str:
 _PARTINAMN = {
     "Socialdemokraterna": "S", "Moderaterna": "M", "Sverigedemokraterna": "SD", "Centerpartiet": "C",
     "Vänsterpartiet": "V", "Kristdemokraterna": "KD", "Liberalerna": "L", "Miljöpartiet": "MP",
+    "Norrlandspartiet": "NP",
 }
 _ORD = r"[A-ZÅÄÖÉ][\wåäöéüÅÄÖ'’-]*"
-_NAMN_PARTI = re.compile(rf"(?P<namn>{_ORD}(?: {_ORD}){{1,3}}) \((?P<parti>[A-ZÅÄÖ]{{1,4}}|-)\)")
+_NAMN_PARTI = re.compile(rf"(?P<namn>{_ORD}(?: {_ORD}){{1,3}}) \((?P<parti>{_KOD})\)")
 
 
 # Hänvisningar till protokollsutdrag i beslutsunderlaget
@@ -1156,7 +1161,7 @@ def motionarer(text: str) -> list[tuple[str | None, str | None]]:
     if not m:
         return []
     fore = re.split(r"[.:;]\s", text[: m.start()])[-1].strip(" ,")
-    kod = {**{n: k for n, k in _PARTINAMN.items()}, **{k: k for k in _PARTINAMN.values()}, "-": "-"}
+    kod = {**{n: k for n, k in _PARTINAMN.items()}, **{k: k for k in _PARTINAMN.values()}, **_SKRIVSATT, "-": "-"}
     ut: list[list] = []
     utan_parti: list[list] = []
     for del_ in re.split(r",\s*|\s+och\s+", fore):
@@ -1208,7 +1213,7 @@ def _reservationer(text: str) -> list[Reservation]:
 # samlade under "Voteringsbilagor", i samma ordning som voteringarna. Listorna läses ur layouten,
 # eftersom rösten i de flesta protokoll är ett kryss i kolumnen Ja, Nej eller Avstår.
 
-_PARTIER = ("S", "V", "MP", "M", "C", "L", "KD", "SD", "-")
+_PARTIER = ("S", "V", "MP", "M", "C", "L", "KD", "SD", "NP", "-")
 _ROSTORD = {"ja": "ja", "nej": "nej", "avstår": "avstar", "avstod": "avstar", "frånvarande": "franvarande"}
 
 
@@ -1405,7 +1410,7 @@ def _namnkolumntabell(rader: list[str], i: int) -> tuple[list[Rost], int]:
     roster: list[Rost] = []
     i += 1
     while i < len(rader):
-        m = re.fullmatch(r"\s*(?P<namn>\S.*?)(?: \((?P<parti>[A-ZÅÄÖ]{1,4}|-)\))?\s{2,}(?P<x>X|x)\s*", rader[i])
+        m = re.fullmatch(rf"\s*(?P<namn>\S.*?)(?: \((?P<parti>{_KOD})\))?\s{{2,}}(?P<x>X|x)\s*", rader[i])
         if not m:
             break
         rost = min(kolumner, key=lambda k: abs(kolumner[k] - m.start("x")))
@@ -1605,9 +1610,9 @@ def _eget_parti(r: Rost | None) -> Rost | None:
     plats för S. Partikolumnen gäller ledamoten."""
     if r is None:
         return None
-    if r.namn and (m := re.fullmatch(r"(.+?) \(([A-ZÅÄÖ]{1,4}|-)\)", r.namn)):
+    if r.namn and (m := re.fullmatch(rf"(.+?) \(({_KOD})\)", r.namn)):
         r.namn, r.parti = m[1], m[2]
-    if r.ersatt and (m := re.fullmatch(r"(.+?) \(([A-ZÅÄÖ]{1,4}|-)\)", r.ersatt)):
+    if r.ersatt and (m := re.fullmatch(rf"(.+?) \(({_KOD})\)", r.ersatt)):
         r.ersatt, r.ersatt_parti = m[1], m[2]
     return r
 
@@ -1913,7 +1918,29 @@ def _tolka(pdf: bytes) -> Tolkning:
         if angivna and alla_sidor < int(angivna[1]):
             t.avvikelser.append(f"PDF:en har {alla_sidor} av protokollets {angivna[1]} sidor")
     _kontrollera(t, lop, layout)
+    _forkortningar(t)
     return t
+
+
+def _forkortningar(t: Tolkning) -> None:
+    """Byter protokollens skrivsätt mot plattformens förkortning: "(NorrP)" sparas som NP."""
+    def k(p):
+        return _SKRIVSATT.get(p, p)
+
+    def personer(lista):
+        return [(n, k(p)) for n, p in lista]
+
+    for n in t.narvaro:
+        n.parti, n.tjanstgor_for_parti = k(n.parti), k(n.tjanstgor_for_parti)
+    for b in t.behandlingar:
+        b.motionarer = personer(b.motionarer)
+        for y in b.yrkanden:
+            y.personer = personer(y.personer)
+        for r in b.reservationer:
+            r.personer, r.partier = personer(r.personer), [k(p) for p in r.partier]
+        for v in b.voteringar:
+            for r in v.roster:
+                r.parti, r.ersatt_parti = k(r.parti), k(r.ersatt_parti)
 
 
 def beslutande_i(narvaro: list[Narvaro], paragrafer: list[int]) -> list[Narvaro]:
