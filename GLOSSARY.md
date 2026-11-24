@@ -328,7 +328,7 @@ En person som registrerar och redigerar uppgifter på plattformen.
 En person som godkänner en redaktörs registrering för publicering. Ingen godkänner sin egen registrering.
 _Avoid_: Granskare, godkännare
 
-**Automatiskt tolkad uppgift**:
+Plattformen är fullständigt uppdaterad när varje datakälla har kontrollerats och den senaste kontrollen av den utan fel, oavsett om det skedde i en körning av alla källor eller i en omkörning av en enskild källa. Annars är informationen delvis inaktuell.
 En uppgift som plattformen har läst ut ur ett protokoll utan att någon redaktör har granskat den. Den visas för läsare med en markering om att den inte är granskad.
 _Avoid_: Ogranskad uppgift, maskinuppgift
 

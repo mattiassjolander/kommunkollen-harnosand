@@ -22,22 +22,20 @@ def global_status(conn: psycopg.Connection, kallor: list[Datakalla]) -> dict:
         f"{_KORNING} WHERE status = 'lyckad' ORDER BY avslutad DESC, id DESC LIMIT 1"
     ).fetchone()
 
-    kontrollerade = utan_fel = 0
-    kontrollerade_kallor: set[str] = set()
-    if senaste is not None:
-        rader = conn.execute(
-            "SELECT datakalla_id, status FROM kallkorning WHERE korning_id = %s", (senaste["id"],)
-        ).fetchall()
-        kontrollerade = len(rader)
-        utan_fel = sum(r["status"] in UTAN_FEL for r in rader)
-        kontrollerade_kallor = {r["datakalla_id"] for r in rader}
+    # Varje konfigurerad källas senaste kontroll, oavsett i vilken körning den gjordes. En omkörning
+    # av en enskild källa gör alltså inte de andra källornas kontroller inaktuella.
+    rader = conn.execute(
+        """
+        SELECT DISTINCT ON (datakalla_id) datakalla_id, status FROM kallkorning
+        WHERE datakalla_id = ANY(%s) ORDER BY datakalla_id, startad DESC
+        """,
+        ([k.id for k in kallor],),
+    ).fetchall()
+    kontrollerade = len(rader)
+    utan_fel = sum(r["status"] in UTAN_FEL for r in rader)
 
-    # Fullständigt uppdaterad: senaste körningen kontrollerade alla konfigurerade källor utan fel.
-    fullstandigt = (
-        senaste is not None
-        and utan_fel == kontrollerade
-        and {k.id for k in kallor} <= kontrollerade_kallor
-    )
+    # Fullständigt uppdaterad: varje konfigurerad källa är kontrollerad och dess senaste kontroll var utan fel.
+    fullstandigt = bool(kallor) and utan_fel == kontrollerade == len(kallor)
     return {
         "senaste_korning": senaste,
         "senaste_lyckade_korning": senaste_lyckade,
