@@ -20,6 +20,8 @@
     {"organ": "Socialnämnden", "budget": {"mnkr": 905.2, "sida": 81}, "utfall": {"mnkr": 915.4, "sida": 81},
      "avvikelse": {"mnkr": -10.2, "sida": 81}, "prognosavvikelse": {"mnkr": -12.5, "sida": 25}},
     {"organ": "Kommunövergripande verksamhet", "budget": {"mnkr": 120.4, "sida": 81},
-     "utfall": {"mnkr": 112.0, "sida": 81}, "avvikelse": {"mnkr": 8.4, "sida": 81}}
+     "utfall": {"mnkr": 112.0, "sida": 81}, "avvikelse": {"mnkr": 8.4, "sida": 81}},
+    {"organ": "Arbetslivsnämnden", "budget": {"mnkr": 0.0, "sida": 81}, "utfall": {"mnkr": 0.3, "sida": 81},
+     "avvikelse": {"mnkr": -0.3, "sida": 81}}
   ]
 }
