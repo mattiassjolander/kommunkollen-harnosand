@@ -5,9 +5,9 @@ import { BEHANDLINGSTYPER } from './api'
 const heltal = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 })
 const endecimal = new Intl.NumberFormat('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
-/** Procent och miljoner kronor visas med en decimal, övrigt i heltal. */
+/** Procent, index och miljoner kronor visas med en decimal, övrigt i heltal. */
 function decimaler(enhet: string): Intl.NumberFormat {
-  return enhet.includes('%') || enhet === 'mnkr' ? endecimal : heltal
+  return enhet.includes('%') || enhet === 'mnkr' || enhet === 'index' ? endecimal : heltal
 }
 
 export function tal(v: number | null, enhet = ''): string {
