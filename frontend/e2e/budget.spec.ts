@@ -411,4 +411,34 @@ test('läsaren jämför budget och utfall per nämnd (#83)', async ({ page }) =>
   await expect(tips).toContainText('−12,5 mnkr enligt prognosen i delårsrapporten')
   await expect(tips).toContainText('Årsredovisning 2027, s. 81')
   await expect(tips).toContainText('Delårsrapport augusti 2027, s. 25')
+
+  // #134: ändringarna av budgeten under året, kopplade till beslutet. Socialnämndens och skolnämndens ändring
+  // hänvisar till KF 2026-06-15 § 108. Protokollet ingår inte i e2e-urvalet, så beslutet visas som hänvisning;
+  // länken till behandlingen prövas i söm 1. Kommunstyrelsens belopp står inte i beslutet utan i
+  // årsredovisningen. Samhällsnämndens ändring saknar beslut.
+  const rev = page.getByTestId('revideringstabell')
+  const socRev = rev.locator('tr[data-organ="Socialnämnden"]')
+  await expect(socRev).toContainText('+12,1 mnkr')
+  await expect(rev.locator('[data-beslut="KF 2026-06-15 108"]').first()).toContainText('§ 108')
+  await expect(rev.locator('[data-beslut="KF 2026-06-15 108"]').first()).toContainText('Protokollet finns inte i Kommunkollen')
+  await expect(rev.locator('tr[data-organ="Skolnämnden"]')).toContainText('+5,6 mnkr')
+  const ksRev = rev.locator('tr[data-organ="Kommunstyrelsen"]')
+  await expect(ksRev).toContainText('Protokollet finns inte i Kommunkollen')
+  await expect(ksRev.getByTestId('belopp-ur-dokument').getByRole('link')).toHaveAttribute('href', /arsredovisning-2027\.pdf#page=82$/)
+  const rest = rev.locator('tr[data-rest="ja"]')
+  await expect(rest).toHaveCount(1)
+  await expect(rest).toContainText('Ej kopplat till beslut')
+  await expect(rest).toContainText('Samhällsnämnden')
+  await expect(rest).toContainText('+1,6 mnkr')
+
+  // Orsakerna till avvikelserna som citat vid nämnden, med sidan i dokumentet.
+  const socOrsak = page.getByTestId('namndtabell').locator('tr[data-orsak="Socialnämnden"]')
+  await expect(socOrsak.locator('blockquote')).toHaveText([
+    'Socialnämndens underskott beror främst på högre kostnader för placeringar än budgeterat.',
+    'Socialnämnden prognostiserar ett underskott inom äldreomsorgen.',
+  ])
+  await expect(socOrsak.getByRole('link', { name: 'Årsredovisning 2027, s. 81' })).toHaveAttribute('href', /arsredovisning-2027\.pdf#page=81$/)
+  await expect(socOrsak.getByRole('link', { name: 'Delårsrapport augusti 2027, s. 25' })).toBeVisible()
+  await expect(page.getByTestId('namndtabell').locator('tr[data-orsak="Kommunstyrelsen"]')).toHaveCount(0)
+  await expect(page.getByTestId('allmanna-orsaker')).toContainText('återfinns i respektive nämndsrapport')
 })

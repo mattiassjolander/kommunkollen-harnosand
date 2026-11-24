@@ -28,6 +28,21 @@ delårsrapporten och skrivs i `uppfoljning.json` i budgetårets mapp, bredvid bu
   med {titel, fil, kalla} i stället för url. PDF:en läggs i `uppfoljning/` i årsmappen, lagras i plattformen och
   visas därifrån, med var den kommer ifrån.
 
+Revideringarna under året och orsakerna till avvikelserna (#134, `docs/budget-mot-utfall.md`):
+
+    "revideringar": [{"beslut": {"organ": "KF", "datum": "2023-06-19", "paragraf": 104},
+                      "andringar": [{"organ": "Socialnämnden", "mnkr": 20.2}]},
+                     {"beslut": {"organ": "KF", "datum": "2025-05-26", "paragraf": 75}, "belopp_sida": 81,
+                      "andringar": [{"organ": "Arbetslivsnämnden", "mnkr": -60.3}, …]}],
+    "orsaker": [{"dokument": "arsredovisning", "sida": 81, "organ": ["Socialnämnden"], "text": "…"}]
+
+- En revidering är ett beslut om ändrad budget, med beloppet per nämnd i mnkr (plus = högre budget). Står beloppen
+  inte i beslutet anges `belopp_sida`, sidan i årsredovisningen som visar dem. Det som skiljer mellan antagen och
+  reviderad budget och inte förklaras av besluten räknas fram och visas som ej kopplat till beslut. `revideringar`
+  som tom lista betyder att inga beslut hittats; utan fältet är revideringarna inte utredda för året.
+- En orsak är dokumentets egen förklaring till avvikelsen, som citat ordagrant som källan skriver det, med sida.
+  `organ` är nämnderna citatet handlar om; utan nämnd gäller det nämnderna i stort.
+
 Den antagna budgeten läses inte in här. Den hämtas ur det antagna budgetförslaget (årsplanen) för året, som redan
 finns med sida och behandling i fullmäktige. Avvikelserna räknas fram i mnkr och procent, och avvikelsen som
 dokumentet anger kontrolleras mot den räknade, på samma sätt som brodiagrammet kontrolleras mot SCB.
@@ -62,6 +77,8 @@ RESULTATFALT = {"budget": "arsredovisning", "utfall": "arsredovisning", "avvikel
                 "prognos_budget": "delarsrapport", "prognos": "delarsrapport"}
 NAMNDFALT = {"budget": "arsredovisning", "utfall": "arsredovisning", "avvikelse": "arsredovisning",
              "prognosavvikelse": "delarsrapport"}
+# En rest mellan antagen och reviderad budget som är mindre än så är avrundning.
+REST_TOLERANS_MNKR = 0.05
 # Avvikelsen i dokumentet är avrundad till en decimal, liksom beloppen den räknas ur.
 TOLERANS_MNKR = 0.15
 
@@ -140,7 +157,7 @@ def las_uppgifter(data: Any, katalog: Path | None = None) -> tuple[dict, dict[st
     """Uppgifterna och de dokument som lagras i plattformen ({nyckel: (filnamn, innehåll)}). Ogiltig vid fel."""
     if not isinstance(data, dict):
         raise Ogiltig("Uppgifterna ska vara ett objekt")
-    okanda = set(data) - {*DOKUMENT, "resultat", "namnder"}
+    okanda = set(data) - {*DOKUMENT, "resultat", "namnder", "revideringar", "orsaker"}
     if okanda:
         raise Ogiltig(f"Okända fält: {', '.join(sorted(okanda))}")
     dokument, filer = {}, {}
@@ -169,7 +186,90 @@ def las_uppgifter(data: Any, katalog: Path | None = None) -> tuple[dict, dict[st
                                                f"{f} ({organ})", dokument)})
     if len({r["organ"] for r in rader}) != len(rader):
         raise Ogiltig("Samma nämnd står flera gånger")
-    return {**dokument, "resultat": _falt(resultat, RESULTATFALT, "resultat", dokument), "namnder": rader}, filer
+    ut = {**dokument, "resultat": _falt(resultat, RESULTATFALT, "resultat", dokument), "namnder": rader}
+    organ = {r["organ"] for r in rader}
+    if data.get("revideringar") is not None:
+        ut["revideringar"] = _revideringar(data["revideringar"], organ, dokument)
+    if data.get("orsaker") is not None:
+        ut["orsaker"] = _orsaker(data["orsaker"], organ, dokument)
+    return ut, filer
+
+
+def _sida(v: Any, falt: str) -> int:
+    if isinstance(v, bool) or not isinstance(v, int) or v < 1:
+        raise Ogiltig(f"{falt}: sida ska vara sidnumret i dokumentet")
+    return v
+
+
+def _organlista(v: Any, organ: set[str], falt: str) -> list[str]:
+    if not isinstance(v, list) or not all(isinstance(o, str) and o.strip() for o in v):
+        raise Ogiltig(f"{falt}: organ ska vara en lista med nämnder")
+    lista_ = [o.strip() for o in v]
+    okanda = [o for o in lista_ if o not in organ]
+    if okanda:
+        raise Ogiltig(f"{falt}: {', '.join(okanda)} finns inte bland nämnderna")
+    if len(set(lista_)) != len(lista_):
+        raise Ogiltig(f"{falt}: samma nämnd står flera gånger")
+    return lista_
+
+
+def _revideringar(v: Any, organ: set[str], dokument: dict) -> list[dict]:
+    """Besluten om ändrad budget under året, med beloppen per nämnd."""
+    from .budgetforslag import behandling
+
+    if not isinstance(v, list):
+        raise Ogiltig("revideringar ska vara en lista, tom om inga beslut hittats")
+    ut = []
+    for i, r in enumerate(v):
+        f = f"revidering {i + 1}"
+        if not isinstance(r, dict) or set(r) - {"beslut", "andringar", "belopp_sida"}:
+            raise Ogiltig(f"{f} ska vara {{beslut, andringar}} och vid behov belopp_sida")
+        try:
+            beslut = behandling(r.get("beslut"))
+        except Ogiltig as e:
+            raise Ogiltig(f"{f}: {str(e).replace('behandling', 'beslut')}") from e
+        andringar = r.get("andringar")
+        if not isinstance(andringar, list) or not andringar:
+            raise Ogiltig(f"{f}: andringar ska vara en lista med {{organ, mnkr}}")
+        rader = []
+        for a in andringar:
+            if not isinstance(a, dict) or set(a) != {"organ", "mnkr"}:
+                raise Ogiltig(f"{f}: varje ändring ska vara {{organ, mnkr}}")
+            [o] = _organlista([a["organ"]], organ, f)
+            if isinstance(a["mnkr"], bool) or not isinstance(a["mnkr"], (int, float)):
+                raise Ogiltig(f"{f} ({o}): mnkr ska vara ett tal")
+            rader.append({"organ": o, "mnkr": round(float(a["mnkr"]), 3)})
+        if len({a["organ"] for a in rader}) != len(rader):
+            raise Ogiltig(f"{f}: samma nämnd står flera gånger")
+        post = {"beslut": beslut, "andringar": rader}
+        if r.get("belopp_sida") is not None:
+            if "arsredovisning" not in dokument:
+                raise Ogiltig(f"{f}: belopp_sida är sidan i årsredovisningen, ange den under arsredovisning")
+            post["belopp_sida"] = _sida(r["belopp_sida"], f)
+        ut.append(post)
+    return ut
+
+
+def _orsaker(v: Any, organ: set[str], dokument: dict) -> list[dict]:
+    """Dokumentens förklaringar till avvikelserna, som citat med sida."""
+    if not isinstance(v, list):
+        raise Ogiltig("orsaker ska vara en lista")
+    ut = []
+    for i, o in enumerate(v):
+        f = f"orsak {i + 1}"
+        if not isinstance(o, dict) or set(o) - {"dokument", "sida", "organ", "text"}:
+            raise Ogiltig(f"{f} ska vara {{dokument, sida, organ, text}}")
+        dok = o.get("dokument")
+        if dok not in DOKUMENT:
+            raise Ogiltig(f"{f}: dokument ska vara {' eller '.join(DOKUMENT)}")
+        if dok not in dokument:
+            raise Ogiltig(f"{f}: står i {DOKUMENT[dok]}, ange den under {dok}")
+        text = o.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise Ogiltig(f"{f}: text saknas")
+        ut.append({"dokument": dok, "sida": _sida(o.get("sida"), f),
+                   "organ": _organlista(o.get("organ") or [], organ, f), "text": text.strip()})
+    return ut
 
 
 def las_mapp(rot: Path) -> list[Uppfoljning]:
@@ -254,13 +354,31 @@ def _mnkr(v: dict | None) -> float | None:
     return v["mnkr"] if v else None
 
 
-def berakning(u: dict, antagen: dict | None) -> dict:
+def _beslutsnyckel(b: dict) -> tuple[str, str, int]:
+    return b["organ"], b["datum"], b["paragraf"]
+
+
+def berakning(u: dict, antagen: dict | None, beslut: dict[tuple[str, str, int], dict] | None = None) -> dict:
     """Tabellen per nämnd och för resultatet: antagen och reviderad budget, prognos och utfall, med avvikelser.
 
     `antagen` är {ramar: {organ: {mnkr, sida}}, resultat: {mnkr, sida} | None} ur det antagna budgetförslaget.
     För nämnderna är avvikelsen budget minus nettokostnad, för resultatet resultat minus budget, som i dokumenten.
-    Prognosavvikelsen i procent räknas av den reviderade budgeten, eller av den antagna när den reviderade saknas."""
+    Prognosavvikelsen i procent räknas av den reviderade budgeten, eller av den antagna när den reviderade saknas.
+
+    Revideringarna fördelas på nämnderna. `beslut` är behandlingarna som besluten kopplats till, per
+    (organ, datum, paragraf); ett beslut som inte finns där visas som hänvisning. Resten mellan antagen och
+    reviderad budget som besluten inte förklarar är `ej_kopplat`, när revideringarna är utredda."""
     ramar = (antagen or {}).get("ramar", {})
+    beslut = beslut or {}
+    utredda = "revideringar" in u
+    per_organ: dict[str, list[dict]] = {}
+    for r in u.get("revideringar", []):
+        b = beslut.get(_beslutsnyckel(r["beslut"])) or {**r["beslut"], "hittad": False, "sammantrade_id": None,
+                                                         "rubrik": None}
+        for a in r["andringar"]:
+            per_organ.setdefault(a["organ"], []).append(
+                {"beslut": b, "mnkr": a["mnkr"], "belopp_sida": r.get("belopp_sida")})
+    orsaker = u.get("orsaker", [])
     namnder = []
     for n in u["namnder"]:
         ram = ramar.get(n["organ"])
@@ -268,6 +386,11 @@ def berakning(u: dict, antagen: dict | None) -> dict:
         mot_reviderad = kostnadsavvikelse(budget, utfall)
         prognosavv = n.get("prognosavvikelse")
         bas = budget if budget is not None else _mnkr(ram)
+        revideringar = per_organ.get(n["organ"], [])
+        ej_kopplat = None
+        if utredda and budget is not None and ram is not None:
+            rest = round(budget - ram["mnkr"] - sum(x["mnkr"] for x in revideringar), 1)
+            ej_kopplat = rest if abs(rest) >= REST_TOLERANS_MNKR else None
         namnder.append({
             "organ": n["organ"],
             "antagen": ram,
@@ -279,6 +402,9 @@ def berakning(u: dict, antagen: dict | None) -> dict:
             "avvikelse_reviderad": mot_reviderad,
             "avvikelse_antagen": kostnadsavvikelse(_mnkr(ram), utfall),
             "kontroll": _kontroll(mot_reviderad, n.get("avvikelse")),
+            "revideringar": revideringar,
+            "ej_kopplat": ej_kopplat,
+            "orsaker": [{k: o[k] for k in ("dokument", "sida", "text")} for o in orsaker if n["organ"] in o["organ"]],
         })
     # Antagna ramar för nämnder som inte finns i uppföljningen, till exempel en nämnd som lagts ned.
     finns = {n["organ"] for n in namnder}
@@ -297,7 +423,8 @@ def berakning(u: dict, antagen: dict | None) -> dict:
         "avvikelse_antagen": avvikelse(utfall, _mnkr(res_antagen)),
         "prognosavvikelse": avvikelse(_mnkr(r.get("prognos")), _mnkr(r.get("prognos_budget"))),
     }
-    return {"namnder": namnder, "utan_uppfoljning": utan, "resultat": resultat}
+    return {"namnder": namnder, "utan_uppfoljning": utan, "resultat": resultat, "revideringar_utredda": utredda,
+            "orsaker": [{k: o[k] for k in ("dokument", "sida", "text")} for o in orsaker if not o["organ"]]}
 
 
 def _antagen(conn: psycopg.Connection, budgetar: int, publicerade: bool) -> dict | None:
@@ -331,6 +458,19 @@ def _antagen(conn: psycopg.Connection, budgetar: int, publicerade: bool) -> dict
     }
 
 
+def _beslut(conn: psycopg.Connection, u: dict) -> dict[tuple[str, str, int], dict]:
+    """Behandlingarna som revideringarnas beslut hänvisar till, med rubrik och sammanträde när de finns."""
+    from . import budgetforslag
+
+    ut = {}
+    for r in u.get("revideringar", []):
+        k = _beslutsnyckel(r["beslut"])
+        if k not in ut:
+            b = budgetforslag.koppling(conn, r["beslut"], [])
+            ut[k] = {x: b[x] for x in ("organ", "datum", "paragraf", "hittad", "sammantrade_id", "rubrik")}
+    return ut
+
+
 # Granskning och publicering
 
 _KOLUMNER = ("id, budgetar, filnamn, uppgifter, status, redaktorer, andrad, granskad_av, granskad, publicerad_av, "
@@ -350,7 +490,7 @@ def _ut(conn: psycopg.Connection, r: dict, redaktion: bool) -> dict:
     ut = {"id": r["id"], "budgetar": r["budgetar"], "status": r["status"], "filnamn": r["filnamn"],
           "dokument": {k: _visat_dokument(r["id"], k, u[k]) for k in DOKUMENT if k in u},
           "antagen": {k: antagen[k] for k in ("id", "titel", "original", "behandling")} if antagen else None,
-          "berakning": berakning(u, antagen),
+          "berakning": berakning(u, antagen, _beslut(conn, u)),
           "publicerad": r["publicerad"].isoformat() if r["publicerad"] else None,
           "andring": pf.andring(conn, "uppfoljning", r)}
     if redaktion:
