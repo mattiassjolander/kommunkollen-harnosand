@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -19,7 +19,9 @@ from .recorded import InspeladTransport
 from .robust import Robusthet
 from .schema import SVERIGE, Schema
 from .sources.base import Datakalla
+from .sources.foretagsklimat import Foretagsklimat
 from .sources.kolada import Kolada
+from .sources.miljobarometern import Miljobarometern
 from .sources.harnosand import ORGAN, Protokollkalla
 from .sources.sammantradesplaner import Sammantradesplaner
 from .sources.scb import Scb
@@ -51,6 +53,8 @@ def standardkallor() -> list[Datakalla]:
                          anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
         Sammantradesplaner(anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)),
         Valmyndigheten(anrop_per_sekund=_anropsgrans("VALMYNDIGHETEN", 1)),
+        Foretagsklimat(anrop_per_sekund=_anropsgrans("RANKNINGAR", 1)),
+        Miljobarometern(anrop_per_sekund=_anropsgrans("RANKNINGAR", 1)),
     ]
 
 
@@ -188,6 +192,41 @@ def create_app(
             raise HTTPException(404, f"Nyckeltalet {matt_id} finns inte bland undersökningarna")
         with db.connect(database_url) as conn:
             return undersokningar.nyckeltal(conn, matt_id, omrade)
+
+    @app.get("/api/rankningar", dependencies=[Depends(krav_roll("lasare"))])
+    def rankningslista() -> list[dict]:
+        """Rankningarna (#66) med Härnösands senaste placering och förändringen mot året innan."""
+        with db.connect(database_url) as conn:
+            return rankningar.lista(conn)
+
+    @app.get("/api/rankningar/{rankning_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def rankningssida(rankning_id: str) -> dict:
+        """En rankning: placeringen över tid för Härnösand och grannkommunerna, delmåtten och metodbytena."""
+        with db.connect(database_url) as conn:
+            try:
+                return rankningar.rankning(conn, rankning_id)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+
+    @app.post("/api/rankningar/{rankning_id}/metodbyten", status_code=201)
+    def registrera_metodbyte(rankning_id: str, data: dict,
+                             anv: Anvandare = Depends(krav_roll("redaktor"))) -> list[dict]:
+        with db.connect(database_url) as conn:
+            try:
+                return rankningar.registrera_metodbyte(conn, rankning_id, data, anv.epost)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except rankningar.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
+
+    @app.delete("/api/rankningar/{rankning_id}/metodbyten/{ar}")
+    def ta_bort_metodbyte(rankning_id: str, ar: int,
+                          anv: Anvandare = Depends(krav_roll("redaktor"))) -> list[dict]:
+        with db.connect(database_url) as conn:
+            try:
+                return rankningar.ta_bort_metodbyte(conn, rankning_id, ar)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
 
     @app.get("/api/ekonomi/resultatbro", dependencies=[Depends(krav_roll("lasare"))])
     def ekonomisk_resultatbro(omrade: str = KOMMUN) -> dict:

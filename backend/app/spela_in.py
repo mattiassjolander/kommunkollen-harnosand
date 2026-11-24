@@ -39,7 +39,7 @@ class InspelandeTransport(httpx.BaseTransport):
             # Filändelsen behålls för annat än JSON (HTML-sidor, PDF:er, SKR:s Excelfiler), så att svarets typ
             # går att återskapa.
             andelse = Path(delar[-1]).suffix.lower() if delar else ""
-            if andelse not in (".pdf", ".html", ".xlsm"):
+            if andelse not in (".pdf", ".html", ".xlsm", ".xlsx"):
                 andelse = ".json"
             stam = "_".join(delar[-4:])
             if stam.lower().endswith(andelse):

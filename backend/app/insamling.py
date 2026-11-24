@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import kalender, kallelsepunkter, sammansattning, sammantradesplan, skatteunderlag
+from . import kalender, kallelsepunkter, rankningar, sammansattning, sammantradesplan, skatteunderlag
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -144,6 +144,11 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         res.antal_oforandrade += antal["oforandrade"]
     for v in hamtning.val:
         antal = sammansattning.lagra(conn, v, korning_id, hamtad)
+        res.antal_nya += antal["nya"]
+        res.antal_andrade += antal["andrade"]
+        res.antal_oforandrade += antal["oforandrade"]
+    for r in hamtning.rankningar:
+        antal = rankningar.lagra(conn, r, kalla.id, korning_id, hamtad)
         res.antal_nya += antal["nya"]
         res.antal_andrade += antal["andrade"]
         res.antal_oforandrade += antal["oforandrade"]

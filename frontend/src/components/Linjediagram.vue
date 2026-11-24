@@ -12,6 +12,10 @@ const props = defineProps<{
   kalla: string
   /** Beskrivning för skärmläsare. */
   etikett: string
+  /** Lägst värde överst, t.ex. för placeringar där plats 1 ska stå överst. */
+  omvand?: boolean
+  /** År då linjen bryts (t.ex. metodbyten): ingen linje dras från året före. Markeras med en streckad linje. */
+  brott?: number[]
 }>()
 
 const B = 720
@@ -35,7 +39,7 @@ const skala = computed(() => {
   const steg = snyggtSteg(hog - lag)
   const min = Math.floor(lag / steg) * steg
   const max = Math.ceil(hog / steg) * steg
-  const y = (x: number) => M.top + ((max - x) / (max - min || 1)) * inreH
+  const y = (x: number) => M.top + ((props.omvand ? x - min : max - x) / (max - min || 1)) * inreH
   const ticks: number[] = []
   for (let t = min; t <= max + steg / 2; t += steg) ticks.push(t)
   return { y, ticks, steg }
@@ -50,13 +54,24 @@ const linje = (punkter: { ar: number; varde: number | null }[]) =>
     .map((p, i) =>
       p.varde === null
         ? ''
-        : `${i && punkter[i - 1].varde !== null ? 'L' : 'M'}${x(p.ar).toFixed(1)},${skala.value.y(p.varde).toFixed(1)}`,
+        : `${i && punkter[i - 1].varde !== null && !props.brott?.includes(p.ar) ? 'L' : 'M'}${x(p.ar).toFixed(1)},${skala.value.y(p.varde).toFixed(1)}`,
     )
     .filter(Boolean)
     .join(' ')
-// Ett värde utan grannar syns inte som linje, så det ritas som en punkt.
+// Ett värde utan grannar syns inte som linje, så det ritas som en punkt. Ett brott räknas som en saknad granne.
 const ensamma = (punkter: { ar: number; varde: number | null }[]) =>
-  punkter.filter((p, i) => p.varde !== null && punkter[i - 1]?.varde == null && punkter[i + 1]?.varde == null)
+  punkter.filter(
+    (p, i) =>
+      p.varde !== null &&
+      (punkter[i - 1]?.varde == null || !!props.brott?.includes(p.ar)) &&
+      (punkter[i + 1]?.varde == null || !!props.brott?.includes(punkter[i + 1].ar)),
+  )
+// Den streckade linjen för ett brott står mitt emellan året före och brottsåret.
+const brottslinjer = computed(() =>
+  (props.brott ?? [])
+    .filter((a) => ar.value.indexOf(a) > 0)
+    .map((a) => ({ ar: a, x: (x(a) + x(ar.value[ar.value.indexOf(a) - 1])) / 2 })),
+)
 
 const aktivt = ref<number | null>(null)
 function hover(e: MouseEvent) {
@@ -86,6 +101,10 @@ const tooltip = computed(() =>
             <text :x="M.left - 8" :y="skala.y(t)" dy="0.32em" text-anchor="end">{{ axeltal(t, skala.steg) }}</text>
           </template>
           <text v-for="a in ar" :key="a" :x="x(a)" :y="H - 10" text-anchor="middle">{{ a }}</text>
+        </g>
+        <g v-for="b in brottslinjer" :key="`brott-${b.ar}`" class="brott" data-testid="metodbyte">
+          <line :x1="b.x" :x2="b.x" :y1="M.top" :y2="H - M.bottom" />
+          <text :x="b.x + 4" :y="M.top + 10">Metodbyte {{ b.ar }}</text>
         </g>
         <line v-if="aktivt !== null" class="markor" :x1="x(aktivt)" :x2="x(aktivt)" :y1="M.top" :y2="H - M.bottom" />
         <g v-for="(s, i) in serier" :key="s.namn">
@@ -141,6 +160,15 @@ svg {
 .linje {
   fill: none;
   stroke-width: 2;
+}
+.brott line {
+  stroke: var(--ink-muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.brott text {
+  font-size: 11px;
+  fill: var(--ink-muted);
 }
 .markor {
   stroke: var(--line-strong);

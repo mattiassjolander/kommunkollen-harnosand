@@ -175,5 +175,21 @@
   "api.kolada.se/v3/kpi/N00600,N00601,N00602,N00603,N00604,N00605,N00606,N00607,N00608,N00609,N00610,N00611,N00612,N00613,N00614,N00615,N00616,N00617,N00618,N00619,N00620,N00621,N00622,N00623,N00624": "kolada/v3_kpi_N00600_N00624.json",
   "api.kolada.se/v3/kpi/N00625,N00626,N00627,N00628,N00629,N00630,N00631,N00632,N00633,N00634,N00635,N00636,N00637,N00638,N00640,N00641,N00646,N00647,N00649,N00650,N00651,N00652,N00653,N00654,N00655": "kolada/v3_kpi_N00625_N00655.json",
   "api.kolada.se/v3/kpi/N00656,N00657,N00658,N00659,N00660,N00661,N00662,N00664,N00665,N00666,N00667,N00668,N00669,N00670,U07453,U07451,U07446,U07447,U07448,U07449,U07450,N07540,N07403,N07536,N07537": "kolada/v3_kpi_N00656_N07537.json",
-  "api.kolada.se/v3/kpi/N07544,N07546,N07547,N07548,N07402": "kolada/v3_kpi_N07544_N07402.json"
+  "api.kolada.se/v3/kpi/N07544,N07546,N07547,N07548,N07402": "kolada/v3_kpi_N07544_N07402.json",
+  "kommunrankning.miljobarometern.se/resultat/härnösand/": "miljobarometern/resultat_harnosand.html",
+  "kommunrankning.miljobarometern.se/resultat/kramfors/": "miljobarometern/resultat_kramfors.html",
+  "kommunrankning.miljobarometern.se/resultat/placering/härnösand/table": "miljobarometern/placering_harnosand.html",
+  "kommunrankning.miljobarometern.se/resultat/placering/kramfors/table": "miljobarometern/placering_kramfors.html",
+  "kommunrankning.miljobarometern.se/resultat/placering/sollefteå/table": "miljobarometern/placering_solleftea.html",
+  "kommunrankning.miljobarometern.se/resultat/placering/sundsvall/table": "miljobarometern/placering_sundsvall.html",
+  "kommunrankning.miljobarometern.se/resultat/placering/timrå/table": "miljobarometern/placering_timra.html",
+  "kommunrankning.miljobarometern.se/resultat/placering/örnsköldsvik/table": "miljobarometern/placering_ornskoldsvik.html",
+  "kommunrankning.miljobarometern.se/resultat/sollefteå/": "miljobarometern/resultat_solleftea.html",
+  "kommunrankning.miljobarometern.se/resultat/sundsvall/": "miljobarometern/resultat_sundsvall.html",
+  "kommunrankning.miljobarometern.se/resultat/timrå/": "miljobarometern/resultat_timra.html",
+  "kommunrankning.miljobarometern.se/resultat/örnsköldsvik/": "miljobarometern/resultat_ornskoldsvik.html",
+  "www.foretagsklimat.se/ladda-ner/": "foretagsklimat/ladda_ner.html",
+  "www.foretagsklimat.se/ladda-ner/j0o69c_rankingresultatxlsx_1231708.html/Rankingresultat.xlsx": "foretagsklimat/ranking.xlsx",
+  "www.foretagsklimat.se/ladda-ner/mgj4d2_statistikfaktorerxlsx_1231710.html/Statistik.xlsx": "foretagsklimat/statistik.xlsx",
+  "www.foretagsklimat.se/ladda-ner/xun406_enkatresultatxlsx_1231709.html/Enkätresultat.xlsx": "foretagsklimat/enkat.xlsx"
 }

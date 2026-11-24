@@ -13,6 +13,7 @@ const vyer = [
   { till: '/ekonomi', namn: 'Ekonomi' },
   { till: '/floden', namn: 'Ekonomiska flöden' },
   { till: '/undersokningar', namn: 'Undersökningar' },
+  { till: '/rankningar', namn: 'Rankningar' },
   { till: '/politik', namn: 'Politik och beslut' },
   { till: '/kalender', namn: 'Kalender' },
   { till: '/kommande', namn: 'Kommande' },
