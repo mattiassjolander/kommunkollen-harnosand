@@ -59,6 +59,8 @@ class Hamtning:
     # Kallelser och webbsändningar (kallelser.Kallelse, kallelser.Webbsandning), som lagras i app.sammantradesplan.
     kallelser: list = field(default_factory=list)
     webbsandningar: list = field(default_factory=list)
+    # Valmyndighetens uppgifter om kandidater och valda (valmyndigheten.Valdata), som lagras i app.sammansattning.
+    val: list = field(default_factory=list)
     # Delar av hämtningen som misslyckades medan resten gick bra. Ger status "delvis fel".
     # Om ingenting gick att hämta ska källan i stället kasta ett undantag.
     fel: list[str] = field(default_factory=list)

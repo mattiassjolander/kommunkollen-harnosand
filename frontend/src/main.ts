@@ -29,6 +29,7 @@ import RattelserView from './views/politik/RattelserView.vue'
 import PartitillhorighetView from './views/politik/PartitillhorighetView.vue'
 import StatistikView from './views/politik/StatistikView.vue'
 import SammantradeView from './views/politik/SammantradeView.vue'
+import SammansattningView from './views/politik/SammansattningView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -67,6 +68,7 @@ const router = createRouter({
     { path: '/politik/budgetutkast', component: BudgetutkastView, meta: { titel: 'Budgetutkast' } },
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
+    { path: '/politik/sammansattning', component: SammansattningView, meta: { titel: 'Sammansättning' } },
     { path: '/kalender', component: KalenderView, meta: { titel: 'Kalender' } },
     { path: '/kommande', component: KommandeView, meta: { titel: 'Kommande' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },

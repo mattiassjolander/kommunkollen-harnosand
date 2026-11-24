@@ -56,6 +56,14 @@ _Avoid_: Politiker, representant
 Ett av flera sätt som samma ledamot skrivs på i protokollen. En redaktör slår ihop namnvarianter till en person och kan dela upp dem igen.
 _Avoid_: Alias, dubblett
 
+**Kandidat**:
+En person på ett partis lista till kommunfullmäktige i ett val, med placering på listan. Valmyndigheten anger kandidatens kön och ålder på valdagen, men gallrar uppgifterna i efterhand. Plattformen behåller de uppgifter den redan har sparat.
+_Avoid_: Nominerad, listkandidat
+
+**Sammansättning**:
+Fördelningen av kön och ålder bland kandidater, valda eller tjänstgörande ledamöter i ett organ eller ett parti. Personer utan uppgift ingår som en egen grupp, "uppgift saknas". Bara sammanställd statistik publiceras.
+_Avoid_: Demografi, representativitet
+
 ## Beslutsprocessen
 
 **Ärende**:

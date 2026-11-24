@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import kalender, kallelsepunkter, sammantradesplan, skatteunderlag
+from . import kalender, kallelsepunkter, sammansattning, sammantradesplan, skatteunderlag
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -142,6 +142,14 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         res.antal_nya += antal["nya"]
         res.antal_andrade += antal["andrade"]
         res.antal_oforandrade += antal["oforandrade"]
+    for v in hamtning.val:
+        antal = sammansattning.lagra(conn, v, korning_id, hamtad)
+        res.antal_nya += antal["nya"]
+        res.antal_andrade += antal["andrade"]
+        res.antal_oforandrade += antal["oforandrade"]
+    if hamtning.val or dokument_andrade:
+        # Nya val- eller protokolluppgifter kan ge nya kopplingar till ledamotsregistret (#65).
+        sammansattning.koppla(conn)
     publiceringar = [d for d in (*(m.kallans_publicering for m in hamtning.matt),
                                  *(u.kallans_publicering for u in hamtning.uppgifter), *prognosdatum) if d]
     res.senaste_publicering = max(publiceringar, default=None)

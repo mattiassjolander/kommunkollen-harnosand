@@ -1795,3 +1795,138 @@ export const publiceraUppfoljning = (id: number) =>
   skrivRattelse(`/api/uppfoljning/${id}/publicering`, 'POST') as unknown as Promise<Uppfoljningsutkast>
 export const aterkallaUppfoljning = (id: number, motivering: string) =>
   skrivRattelse(`/api/uppfoljning/${id}/aterkallelse`, 'POST', { motivering }) as unknown as Promise<Uppfoljningsutkast>
+
+// Sammansättning: kön och ålder bland kandidater, valda och tjänstgörande (#65)
+
+export interface Sammansattningsmatt {
+  antal: number
+  kvinnor: number
+  man: number
+  kon_saknas: number
+  andel_kvinnor: number | null
+  andel_man: number | null
+  andel_kon_saknas: number | null
+  medelalder: number | null
+  aldersgrupper: Record<string, number>
+}
+
+export interface Sammansattningskalla {
+  titel: string
+  url: string | null
+  stampel: string | null
+  hamtad: string | null
+}
+
+export interface Sammansattningsled {
+  totalt: Sammansattningsmatt
+  per_parti: (Sammansattningsmatt & { parti: string })[]
+  kallor: (Sammansattningskalla | null)[]
+  /** Tjänstgörande: antal personer och sammanträden bakom tjänstgöringarna. */
+  personer?: number
+  sammantraden?: number
+}
+
+export interface Sammansattning {
+  period: { ar: number; namn: string; fran: string; till: string; valdag: string }
+  organ: Organ
+  perioder: { ar: number; namn: string }[]
+  organlista: Organ[]
+  kandidater: { alla: Sammansattningsled; topp: Sammansattningsled | null } | null
+  valda: {
+    vid_start: Sammansattningsled | null
+    med_eftertradare: Sammansattningsled | null
+    enligt_protokollen?: Sammansattningsled | null
+  } | null
+  tjanstgorande: Sammansattningsled | null
+  referens: {
+    valar: number
+    antal: number
+    andel_kvinnor: number
+    andel_man: number
+    aldersgrupper: Record<string, number>
+    kallor: (Sammansattningskalla | null)[]
+  } | null
+  aldersgrupper: string[]
+  konstext: string
+}
+
+export const hamtaSammansattning = (period: string, organ: string) =>
+  hamta<Sammansattning>(
+    `/api/sammansattning?${new URLSearchParams({ ...(period ? { period } : {}), ...(organ ? { organ } : {}) })}`,
+  )
+
+export type Valkopplingsstatus = 'automatisk' | 'forslag' | 'bekraftad' | 'avvisad'
+
+export interface Valkoppling {
+  id: number
+  status: Valkopplingsstatus
+  skal: string
+  beslutad_av: string | null
+  beslutad: string | null
+  ledamot: { id: number; namn: string }
+  val: {
+    valar: number
+    kandidatnummer: number
+    namn: string | null
+    parti: string | null
+    kon: 'K' | 'M' | null
+    alder: number | null
+    vald: boolean
+    ersattare: boolean
+    ordning: number | null
+  }
+}
+
+export type Personuppgiftsstatus = 'utkast' | 'granskad' | 'publicerad' | 'aterkallad'
+
+export interface Personuppgift {
+  id: number
+  ledamot: { id: number; namn: string }
+  kon: 'K' | 'M' | null
+  fodelsear: number | null
+  kalla: string
+  status: Personuppgiftsstatus
+  redaktor: string
+  granskad_av: string | null
+  publicerad_av: string | null
+  publicerad: string | null
+  aterkallelse: string | null
+}
+
+export interface Sammansattningsperson {
+  id: number
+  namn: string
+  kon: 'K' | 'M' | null
+  alder: number | null
+  kalla: 'valmyndigheten' | 'redaktionen' | null
+  kopplingar: Valkoppling[]
+  vantande_uppgifter: Personuppgift[]
+}
+
+async function skrivSammansattning<T>(url: string, metod = 'POST', data?: unknown): Promise<T> {
+  const svar = await fetch(url, {
+    method: metod,
+    headers: data === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: data === undefined ? undefined : JSON.stringify(data),
+  })
+  if (svar.status === 401) throw new EjInloggad()
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.status === 204 ? (null as T) : svar.json()
+}
+
+export const hamtaValkopplingar = (status: Valkopplingsstatus = 'forslag') =>
+  hamta<Valkoppling[]>(`/api/sammansattning/kopplingar?status=${status}`)
+export const bekraftaValkoppling = (id: number) =>
+  skrivSammansattning<Valkoppling>(`/api/sammansattning/kopplingar/${id}/bekraftelse`)
+export const avvisaValkoppling = (id: number) =>
+  skrivSammansattning<Valkoppling>(`/api/sammansattning/kopplingar/${id}/avvisning`)
+export const hamtaSammansattningspersoner = () => hamta<Sammansattningsperson[]>('/api/sammansattning/personer')
+export const hamtaPersonuppgifter = () => hamta<Personuppgift[]>('/api/sammansattning/uppgifter')
+export const skapaPersonuppgift = (u: { ledamot_id: number; kon: string | null; fodelsear: number | null; kalla: string }) =>
+  skrivSammansattning<Personuppgift>('/api/sammansattning/uppgifter', 'POST', u)
+export const taBortPersonuppgift = (id: number) =>
+  skrivSammansattning<null>(`/api/sammansattning/uppgifter/${id}`, 'DELETE')
+export const granskaPersonuppgift = (id: number) =>
+  skrivSammansattning<Personuppgift>(`/api/sammansattning/uppgifter/${id}/granskning`)
+export const publiceraPersonuppgift = (id: number) =>
+  skrivSammansattning<Personuppgift>(`/api/sammansattning/uppgifter/${id}/publicering`)
