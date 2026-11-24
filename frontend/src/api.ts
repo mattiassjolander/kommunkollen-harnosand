@@ -811,6 +811,77 @@ export const hamtaAterkommande = (fran?: string, till?: string, organ?: string) 
   hamta<Aterkommande>(`/api/statistik/aterkommande?${intervallparametrar(fran, till, organ)}`)
 export const hamtaAvvikelser = (fran?: string, till?: string, organ?: string) =>
   hamta<Avvikelser>(`/api/avvikelser?${intervallparametrar(fran, till, organ)}`)
+// Protokollavvikelser att anmäla till kommunen (#47)
+
+export type Protokollavvikelsetyp =
+  | 'rostsumma'
+  | 'parti_olika'
+  | 'ersattare'
+  | 'paragrafnummer'
+  | 'parti_saknas'
+  | 'stavning'
+export type Protokollavvikelsestatus = 'ny' | 'anmald' | 'rattad' | 'inte_fel'
+
+/** En uppgift i protokollet som inte stämmer med en annan uppgift i samma protokoll. */
+export interface Protokollavvikelse {
+  id: number
+  typ: Protokollavvikelsetyp
+  typnamn: string
+  paragraf: number | null
+  rubrik: string | null
+  sida: number | null
+  /** Till sidan i protokollet (#page=N). */
+  lank: string
+  text: string
+  /** Kontrollen hittar avvikelsen i den senaste tolkningen av protokollet. */
+  hittas: boolean
+  /** Kommunen har publicerat protokollet på nytt, och där finns avvikelsen inte (Reviderad av källan). */
+  reviderad: { datum: string; url: string } | null
+  status: Protokollavvikelsestatus
+  statusnamn: string
+  statusdatum: string | null
+  anteckning: string | null
+}
+
+export interface Protokollavvikelser {
+  fran: number
+  till: number
+  organ: Organ | null
+  typer: { id: Protokollavvikelsetyp; namn: string; antal: number }[]
+  statusar: { id: Protokollavvikelsestatus; namn: string; antal: number }[]
+  sammantraden: {
+    sammantrade: Kortsammantrade
+    url: string
+    /** Saklig text att skicka till nämndsekreteraren. Tom när inget finns att anmäla. */
+    sammanstallning: string
+    avvikelser: Protokollavvikelse[]
+  }[]
+}
+
+export function hamtaProtokollavvikelser(filter: { fran?: string; till?: string; organ?: string; typ?: string; status?: string }) {
+  const p = new URLSearchParams(intervallparametrar(filter.fran, filter.till, filter.organ))
+  if (filter.typ) p.set('typ', filter.typ)
+  if (filter.status) p.set('status', filter.status)
+  return hamta<Protokollavvikelser>(`/api/protokollavvikelser?${p}`)
+}
+
+/** Redaktören sätter status med datum och anteckning. */
+export async function sattProtokollavvikelsestatus(
+  id: number,
+  status: Protokollavvikelsestatus,
+  datum: string,
+  anteckning: string,
+): Promise<Protokollavvikelse> {
+  const svar = await fetch(`/api/protokollavvikelser/${id}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, datum: datum || null, anteckning }),
+  })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
 export const hamtaSammantrade = (id: number | string) => hamtaEllerSaknas<Sammantrade>(`/api/sammantraden/${id}`)
 export const hamtaBehandling = (id: number | string, paragraf: number | string) =>
   hamtaEllerSaknas<Behandling>(`/api/sammantraden/${id}/behandlingar/${paragraf}`)

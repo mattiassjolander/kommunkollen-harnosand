@@ -114,7 +114,9 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
     <p class="ingress">
       Protokoll där tolkningen hittade något som inte stämmer, eller där redaktionen har publicerat rättelser. En del
       avvikelser finns i själva protokollet och kan lämnas till kommunen. Andra beror på att plattformen inte kunde läsa
-      protokollet. Kontrollera alltid mot originalet innan du hör av dig till kommunen.
+      protokollet. Kontrollera alltid mot originalet innan du hör av dig till kommunen. Uppgifter i protokollen som inte
+      stämmer med varandra, till exempel röster som inte går ihop med närvarolistan, finns under
+      <RouterLink to="/politik/protokollavvikelser">Att anmäla</RouterLink>.
     </p>
   </header>
   <PolitikFlikar />

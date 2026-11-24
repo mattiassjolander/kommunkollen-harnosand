@@ -24,6 +24,7 @@ import KalenderView from './views/KalenderView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
 import LedamoterView from './views/politik/LedamoterView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
+import ProtokollavvikelserView from './views/politik/ProtokollavvikelserView.vue'
 import RattelserView from './views/politik/RattelserView.vue'
 import PartitillhorighetView from './views/politik/PartitillhorighetView.vue'
 import StatistikView from './views/politik/StatistikView.vue'
@@ -52,6 +53,11 @@ const router = createRouter({
     { path: '/politik/partitillhorighet', component: PartitillhorighetView, meta: { titel: 'Partitillhörighet' } },
     { path: '/politik/statistik', component: StatistikView, meta: { titel: 'Statistik' } },
     { path: '/politik/avvikelser', component: AvvikelserView, meta: { titel: 'Avvikelser i protokollen' } },
+    {
+      path: '/politik/protokollavvikelser',
+      component: ProtokollavvikelserView,
+      meta: { titel: 'Protokollavvikelser att anmäla' },
+    },
     { path: '/politik/budget', component: BudgetforslagView, meta: { titel: 'Budgetförslag' } },
     {
       path: '/politik/budget/tidigare/:slag(forslag|planforutsattningar)/:id(\\d+)',

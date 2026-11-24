@@ -328,6 +328,14 @@ _Avoid_: Konflikt, avvikelse
 En publicerad rättelse av ett fel som finns i själva protokollet: protokollet saknar eller anger fel uppgift. Ett protokoll med minst en sådan rättelse märks "Innehåller felaktigheter". Ett fel i inläsningen, där plattformen läste eller tolkade protokollet fel, är ingen felaktighet i protokollet.
 _Avoid_: Fel i protokollet (om tolkningsfel), protokollfel
 
+**Tolkningens avvikelse**:
+Något som tolkningen inte kunde läsa eller som inte gick ihop när plattformen läste protokollet, till exempel en närvarolista som inte hittades eller en rubrik som skiljer sig från ärendelistan. Den beror oftast på inläsningen och visas under Avvikelser.
+_Avoid_: Fel (om tolkningens avvikelser)
+
+**Protokollavvikelse**:
+En uppgift i ett protokoll som inte stämmer med en annan uppgift i samma protokoll, eller som saknas där den ska stå, enligt plattformens kontroller (#47): röster som inte går ihop med antalet beslutande, olika parti för samma person, en ersättare för någon som själv är beslutande, paragrafnummer som saknas eller upprepas, parti som saknas i närvarolistan och namn som stavas olika. Den är ett möjligt fel i källan som kan anmälas till kommunen, till skillnad från tolkningens avvikelser. Kontrollerna hoppar över det tolkningen inte säkert har läst rätt. En redaktör sätter status: *ny*, *anmäld till kommunen*, *rättad av kommunen* eller *inte ett fel*, med datum och anteckning, och statusen bevaras vid omtolkning. När kommunen publicerar ett nytt protokoll där uppgifterna stämmer märks avvikelsen "Reviderad av källan". En protokollavvikelse som en redaktör har bekräftat kan rättas som en felaktighet i protokollet.
+_Avoid_: Fel i protokollet (innan någon har tittat på originalet), protokollfel
+
 ## Datainsamling
 
 **Datakälla**:
