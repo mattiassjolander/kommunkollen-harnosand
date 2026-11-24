@@ -131,6 +131,7 @@ Paletten klarar alltså inte kontrollerna, och det går inte att rätta utan att
 
 - Desktop-first. Innehållets maxbredd är 1440 px, och en vänsterställd navigering listar huvudvyerna (kravspec avsnitt 14).
 - Statusindikatorn för datainsamlingen ligger alltid synlig i sidhuvudet.
+- Under högtider står en kort rad i sidhuvudet och en liten symbol vid ordmärket (se *Högtidsteman*). Sidfoten har länken "Visa inte teman".
 - Till höger i sidhuvudet finns en knapp som byter mellan ljust och mörkt läge. Utan eget val följer sidan systemets inställning. Valet sparas i webbläsaren.
 - Filter (år, period, organ, verksamhetsområde) ligger samlade i en rad ovanför diagrammen de påverkar och speglas i URL:en.
 - Avståndsskala med bas 4 px: 4, 8, 12, 16, 24, 32, 48.
@@ -187,7 +188,56 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 Härnösands platsvarumärke (grafisk profil, logotyper, ikoner, mönster och bilder) är fritt att använda för samprofilering. Plattformen använder:
 
 - den primära logotypen (blå och vit) och den runda sekundära logotypen (blå), beskurna och nedskalade, i `frontend/public/platsvarumarke/`,
+- ikonerna stjärnan och vågen (linjevarianten), nedskalade på samma ställe, i högtidstemana (se *Högtidsteman*),
 - färgerna blå #0070B3, ljusrosa #FCE8EC, ljusgrön #E6F1E0 och ljusgrå #F5F5F5 (se *Gränssnitt*),
 - bilden från Smitingen som sidhuvud på Översikt, med texten "Foto: Härnösands platsvarumärke".
 
 Platsvarumärkets egna regler gäller: logotyperna används som de är och görs aldrig om. Originalfilerna ligger i `platsvarumarke/` i projektmappen och checkas inte in, eftersom bilderna är stora.
+
+## Högtidsteman
+
+På några svenska högtidsdagar och på Härnösands dag får ramen ett diskret tema (#70). Det är ett begränsat undantag från *Data före dekor*.
+
+**Vad ett tema får ändra.** Bara ramen:
+
+- en liten symbol vid ordmärket i navigeringen, högst 24 px och dold för skärmläsare,
+- en kort rad i sidhuvudet, bredvid statusindikatorn.
+
+Diagram, datafärger, partifärger, statusfärger, `--accent`, navigeringens bakgrund och säkerhetsmarkeringar ändras aldrig. Inget rör sig: temana har inga animationer eller övergångar.
+
+**Färger.** Bara platsvarumärkets blå, ljusrosa, ljusgröna och vita. Inga röda, gula eller gröna fyllytor, eftersom de ligger nära partifärgerna. Undantaget är Sverigeflaggan på nationaldagen, som är en officiell flaggdag och visas som en liten symbol.
+
+| Token | Ljust | Mörkt | Användning |
+|---|---|---|---|
+| `--hogtid-linje` | `#0070b3` | `#6cb6ea` | Symbolernas linjer, 1,5 px. Mot navigeringen 4,5:1 (mörkt läge 7,2:1) |
+| `--hogtid-rosa` | `#fce8ec` | `#fce8ec` | Påskägget |
+| `--hogtid-gron` | `#e6f1e0` | `#e6f1e0` | Blommorna i midsommarkransen |
+| `--hogtid-vit` | `#ffffff` | `#ffffff` | Valsedeln och ljuset |
+| `--flagga-bla`, `--flagga-gul` | `#006aa7`, `#fecc02` | samma | Bara Sverigeflaggan |
+
+Raden i sidhuvudet är vit på sidhuvudets blå (5,3:1, mörkt läge 7,3:1). Ljusa fyllningar har alltid en linje i `--hogtid-linje`, så att symbolen syns mot den ljusrosa navigeringen.
+
+**Symboler.** Stjärnan och vågen är platsvarumärkets ikoner (linjevarianten), nedskalade i `frontend/public/platsvarumarke/`. Formen används som den är och fylls med `--hogtid-linje`. Övriga symboler är enkla egna SVG:er med tunna linjer och utan gradienter.
+
+| Tema | Period (svensk tid) | Symbol | Rad i sidhuvudet |
+|---|---|---|---|
+| Nyår | 31 dec–1 jan | Gnistor | Gott nytt år |
+| Påsk | Skärtorsdag–annandag påsk (gregoriansk påskberäkning) | Ägg i ljusrosa | Glad påsk |
+| Nationaldagen | 6 juni | Sverigeflaggan | Sveriges nationaldag |
+| Midsommar | Midsommarafton (fredagen 19–25 juni) och midsommardagen | Blomkrans i ljusgrönt | Glad midsommar |
+| Valdagen | Andra söndagen i september valåren (2026, 2030 …) | Valsedel | I dag är det val – val.se |
+| Härnösands dag | 11 mars | Vågen | Härnösand fick sina stadsprivilegier i dag för N år sedan (1585) |
+| Lucia | 13 dec | Ljus | Glad lucia |
+| Jul | 24–26 dec | Stjärnan | God jul |
+
+**Härnösands dag** är den 11 mars. Den 11 mars 1585 fick Härnösand sina stadsprivilegier av Johan III, och det är den dag som brukar firas. N är året minus 1585. Raden har en tooltip med källan. Andra datum som förekommer i källorna (till exempel 14 september 1585 och 8 februari 1587) används inte.
+
+**Nedräkning.** Under de 30 dagarna före den 11 mars visar sidhuvudet en nedräkning, till exempel "12 dagar kvar till Härnösands dag – 441 år sedan stadsprivilegierna", och dagen före "I morgon är det Härnösands dag". Den är bara text, utan symbol. Dagarna räknas som skillnaden i kalenderdagar i svensk tid, så skottår hanteras rätt.
+
+**Krockar.** Gäller flera teman samma dag vinner valdagen, därefter tabellens ordning. Ett tema går alltid före nedräkningen.
+
+**Dagar utan tema.** Dagar som står olika nära olika partier får inget tema, till exempel 1 maj, internationella kvinnodagen och Pride. Ett tema skulle ge plattformen en politisk avsändare (kravspec avsnitt 18). Allhelgona får inget tema, eftersom det är en sorgedag.
+
+**Stänga av och förhandsvisa.** Sidfoten har länken "Visa inte teman" (och "Visa teman" när den är vald). Valet sparas i webbläsaren, och går lagringen inte att nå visas teman som vanligt. `?tema=<namn>` förhandsvisar ett tema oavsett datum (`nyar`, `pask`, `nationaldagen`, `midsommar`, `valdagen`, `harnosandsdag`, `lucia`, `jul`, `nedrakning`), och `?tema=inget` stänger av det. `?datum=ÅÅÅÅ-MM-DD` räknar temat för en annan dag, till exempel `?tema=nedrakning&datum=2026-03-01`.
+
+Logiken ligger i `frontend/src/hogtider.ts` (`temaFor`), helt i frontend.

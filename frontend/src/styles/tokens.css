@@ -19,6 +19,14 @@
   --sidhuvud-ink: #ffffff;
   --logotyp-ljus: block;
   --logotyp-morkt: none;
+  /* Högtidsteman (design.md, Högtidsteman): bara platsvarumärkets blå, ljusrosa, ljusgröna och vita,
+     plus Sverigeflaggan på nationaldagen. Linjefärgen är accentens värde, så att den klarar 3:1 mot navigeringen. */
+  --hogtid-linje: #0070b3;
+  --hogtid-rosa: #fce8ec;
+  --hogtid-gron: #e6f1e0;
+  --hogtid-vit: #ffffff;
+  --flagga-bla: #006aa7;
+  --flagga-gul: #fecc02;
 
   --series-1: #2a78d6;
   --series-2: #eb6834;
@@ -74,6 +82,7 @@
     --sidhuvud-ink: #ffffff;
     --logotyp-ljus: none;
     --logotyp-morkt: block;
+    --hogtid-linje: #6cb6ea;
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
@@ -109,6 +118,7 @@
   --sidhuvud-ink: #ffffff;
   --logotyp-ljus: none;
   --logotyp-morkt: block;
+  --hogtid-linje: #6cb6ea;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;

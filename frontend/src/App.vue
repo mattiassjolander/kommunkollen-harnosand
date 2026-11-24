@@ -2,7 +2,10 @@
 import { computed, onMounted, provide, ref } from 'vue'
 import { hamtaInloggningsmetod, hamtaJag, loggaUt, type Inloggningsmetod, type Jag } from './api'
 import Statusindikator from './components/Statusindikator.vue'
+import Hogtidsrad from './components/Hogtidsrad.vue'
+import Hogtidssymbol from './components/Hogtidssymbol.vue'
 import Temavaljare from './components/Temavaljare.vue'
+import { useHogtidstema } from './hogtidstema'
 import LoggaIn from './views/LoggaIn.vue'
 
 const vyer = [
@@ -38,6 +41,9 @@ function utloggad() {
 provide('utloggad', utloggad)
 provide('jag', jag)
 
+// Högtidstemat ändrar bara ramen: en symbol vid logotypen och en rad i sidhuvudet (design.md, Högtidsteman).
+const { tema: hogtid, visaTeman, sattVisaTeman } = useHogtidstema()
+
 async function loggaUtOchStanna() {
   await loggaUt()
   jag.value = null
@@ -65,7 +71,10 @@ onMounted(kontrollera)
         <div class="ordmarke">
           <img class="platslogotyp ljus" src="/platsvarumarke/logotyp-bla.png" alt="Härnösand Höga Kusten" />
           <img class="platslogotyp morkt" src="/platsvarumarke/logotyp-vit.png" alt="Härnösand Höga Kusten" />
-          <span class="namn">Kommunkollen</span>
+          <span class="namnrad">
+            <span class="namn">Kommunkollen</span>
+            <Hogtidssymbol v-if="hogtid?.symbol" :symbol="hogtid.symbol" />
+          </span>
         </div>
         <nav aria-label="Huvudvyer">
           <RouterLink v-for="v in vyer" :key="v.till" :to="v.till" class="navlank">{{ v.namn }}</RouterLink>
@@ -86,11 +95,17 @@ onMounted(kontrollera)
       <div class="kolumn">
         <header class="sidhuvud">
           <Statusindikator />
+          <Hogtidsrad v-if="hogtid" :tema="hogtid" />
           <Temavaljare />
         </header>
         <main class="innehall">
           <RouterView />
         </main>
+        <footer class="sidfot">
+          <button type="button" class="lank" data-testid="visa-teman" @click="sattVisaTeman(!visaTeman)">
+            {{ visaTeman ? 'Visa inte teman' : 'Visa teman' }}
+          </button>
+        </footer>
       </div>
     </div>
   </template>
@@ -125,6 +140,11 @@ onMounted(kontrollera)
 }
 .platslogotyp.morkt {
   display: var(--logotyp-morkt);
+}
+.namnrad {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .namn {
   font-weight: 600;
@@ -209,6 +229,15 @@ onMounted(kontrollera)
   padding: 32px 48px;
   max-width: 1440px;
 }
+.sidfot {
+  padding: 16px 48px 24px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+.sidfot .lank {
+  margin-top: 0;
+}
 /* Mobilbredd: menyn läggs ovanför innehållet. */
 @media (max-width: 720px) {
   .ram {
@@ -257,6 +286,9 @@ onMounted(kontrollera)
   }
   .innehall {
     padding: 16px;
+  }
+  .sidfot {
+    padding: 12px 16px 16px;
   }
 }
 </style>
