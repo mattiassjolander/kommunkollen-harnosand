@@ -41,13 +41,17 @@ def las(
     organ: str | None = None,
     arende: int | None = None,
     rubrik: str | None = None,
+    sammantraden: list[int] | None = None,
 ) -> list[dict]:
     """Behandlingarna med publicerade rättelser.
 
     fran och till är år (båda inräknade) och utesluter sammanträden utan datum. organ är organets id,
-    arende ett ärendes id och rubrik ett reguljärt uttryck (skiftlägesokänsligt) för den tolkade rubriken.
+    arende ett ärendes id, rubrik ett reguljärt uttryck (skiftlägesokänsligt) för den tolkade rubriken
+    och sammantraden en lista med sammanträdens id.
     """
     villkor = []
+    if sammantraden is not None:
+        villkor.append("s.id = ANY(%(sammantraden)s)")
     if fran is not None:
         villkor.append("s.datum >= make_date(%(fran)s, 1, 1)")
     if till is not None:
@@ -69,7 +73,8 @@ def las(
         {where}
         ORDER BY b.sammantrade_id, b.paragraf, b.ordning
         """,
-        {"fran": fran, "till": till, "organ": organ, "arende": arende, "rubrik": rubrik},
+        {"fran": fran, "till": till, "organ": organ, "arende": arende, "rubrik": rubrik,
+         "sammantraden": sammantraden},
     ).fetchall()
     sammantraden = list({r["sammantrade_id"] for r in rader})
     pub, kn = Publicerade(conn, sammantraden), Kallelsenummer(conn, sammantraden)

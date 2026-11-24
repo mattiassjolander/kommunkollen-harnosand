@@ -181,6 +181,40 @@ def sidtexter(pdf: bytes) -> tuple[list[str], list[str]]:
     return lop, layout
 
 
+class EjLasbar(Exception):
+    """PDF:en gick inte att läsa. Meddelandet blir en avvikelse."""
+
+
+def las_sidtexter(pdf: bytes, layout: bool = True) -> tuple[list[str], list[str], bool]:
+    """(löptext, layouttext, ocr) per sida. Sidor som bara är bilder läses med OCR, om OCR finns.
+
+    Samma läsning används av tolkningen och av sökindexet (app.sokindex). Utan `layout` blir
+    layouttexten tom, vilket går fortare när bara löptexten behövs.
+    """
+    try:
+        if layout:
+            lop, lay = sidtexter(pdf)
+        else:
+            lop, lay = [p.extract_text() or "" for p in PdfReader(io.BytesIO(pdf)).pages], []
+    except Exception as e:  # trasig eller krypterad PDF
+        raise EjLasbar(f"PDF:en kunde inte läsas ({type(e).__name__})") from e
+    if lop and lop[0].strip():
+        return lop, lay, False
+    # Sidorna är bilder: inskannade, eller ett digitalt protokoll som plattats till bilder.
+    # Texten läses då med OCR, om OCR finns.
+    from . import ocr
+
+    if not ocr.tillganglig():
+        raise EjLasbar("PDF:en saknar text (inskannad?)")
+    try:
+        lop, lay = ocr.sidtexter(pdf)
+    except ocr.OcrSaknas as e:
+        raise EjLasbar(f"PDF:en saknar text och kunde inte läsas med OCR ({e})") from e
+    if not lop or not lop[0].strip():
+        raise EjLasbar("PDF:en saknar text (inskannad?)")
+    return lop, lay, True
+
+
 # Hjälpare
 
 _DATUM = re.compile(r"(\d{4})-\s*(\d{2})-\s*(\d{2})")
@@ -1883,27 +1917,11 @@ def tolka(pdf: bytes) -> Tolkning:
 def _tolka(pdf: bytes) -> Tolkning:
     t = Tolkning()
     try:
-        lop, layout = sidtexter(pdf)
-    except Exception as e:  # trasig eller krypterad PDF
-        t.avvikelser.append(f"PDF:en kunde inte läsas ({type(e).__name__})")
+        lop, layout, t.ocr = las_sidtexter(pdf)
+    except EjLasbar as e:
+        t.avvikelser.append(str(e))
         return t
-    if not lop or not lop[0].strip():
-        # Sidorna är bilder: inskannade, eller ett digitalt protokoll som plattats till bilder.
-        # Texten läses då med OCR, om OCR finns.
-        from . import ocr
-
-        if not ocr.tillganglig():
-            t.avvikelser.append("PDF:en saknar text (inskannad?)")
-            return t
-        try:
-            lop, layout = ocr.sidtexter(pdf)
-        except ocr.OcrSaknas as e:
-            t.avvikelser.append(f"PDF:en saknar text och kunde inte läsas med OCR ({e})")
-            return t
-        if not lop or not lop[0].strip():
-            t.avvikelser.append("PDF:en saknar text (inskannad?)")
-            return t
-        t.ocr = True
+    if t.ocr:
         t.avvikelser.append("PDF:en saknar text och har lästs med OCR")
     alla_sidor = len(lop)
     lop, layout = _protokollets_sidor(lop, layout)

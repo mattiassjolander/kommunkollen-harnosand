@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+import math
 import os
+import time
 from datetime import date, datetime, timezone
 import secrets
 from pathlib import Path
@@ -11,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, statistik, status, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -290,6 +293,41 @@ def create_app(
             raise HTTPException(422, "Söktexten behöver vara minst två tecken")
         with db.connect(database_url) as conn:
             return protokoll.sok_behandlingar(conn, q, organ, ar)
+
+    # Fulltextsökning (#142). Sökfrågorna loggas inte, bara antalet träffar och svarstiden.
+    sokgrans = sokindex.Fragegrans(int(os.environ.get("SOK_FRAGOR_PER_MINUT") or 30), 60.0)
+    soklogg = logging.getLogger("app.sok")
+    atkomstlogg = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, sokindex.UtanSokfragor) for f in atkomstlogg.filters):
+        atkomstlogg.addFilter(sokindex.UtanSokfragor())
+
+    @app.get("/api/sok", dependencies=[Depends(krav_roll("lasare"))])
+    def sok(
+        request: Request,
+        q: str,
+        organ: str | None = None,
+        ar: int | None = None,
+        typ: str | None = Query(None, pattern=f"^({'|'.join(sokindex.TYPER)})$"),
+        sortering: str = Query("relevans", pattern="^(relevans|datum)$"),
+        sida: int = Query(1, ge=1, le=50),
+    ) -> dict:
+        """Sök i behandlingar, protokollsidor, budgetförslag, ärenden, ledamöter och kallelsepunkter.
+
+        Högst 30 frågor per minut och IP-adress. Svaret är träffar i källorna, aldrig ett genererat svar (ADR-0002).
+        """
+        vanta = sokgrans.tillat(request.client.host if request.client else "")
+        if vanta is not None:
+            raise HTTPException(429, "För många sökningar på kort tid. Vänta en stund och försök igen.",
+                                headers={"Retry-After": str(max(1, math.ceil(vanta)))})
+        if len(q.strip()) < 2:
+            raise HTTPException(422, "Söktexten behöver vara minst två tecken")
+        if organ is not None and organ not in ORGAN:
+            raise HTTPException(422, f"Organet {organ} finns inte")
+        start = time.perf_counter()
+        with db.connect(database_url) as conn:
+            svar = sokindex.sok(conn, q, organ=organ, ar=ar, typ=typ, sortering=sortering, sida=sida)
+        soklogg.info("Sökning: %d träffar på %.0f ms", svar["antal"], (time.perf_counter() - start) * 1000)
+        return svar
 
     def intervall(conn, fran: int | None, till: int | None, organ: str | None) -> tuple[int, int]:
         """Åren fran–till, som standard alla år med protokoll."""

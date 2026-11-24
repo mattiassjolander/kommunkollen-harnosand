@@ -270,6 +270,7 @@ def sla_ihop(conn: psycopg.Connection, huvud_id: int, annan_id: int, redaktor: s
                VALUES ('sammanslagning', %s, %s, %s, %s)""",
             [(r["id"], huvud, annan if r["id"] != annan else None, redaktor) for r in flyttade],
         )
+    _uppdatera_sokindex(conn)
     return las(conn, huvud)
 
 
@@ -286,4 +287,11 @@ def dela_upp(conn: psycopg.Connection, namn_id: int, redaktor: str) -> dict:
            VALUES ('uppdelning', %s, NULL, %s, %s)""",
         (namn_id, rad["huvud_id"], redaktor),
     )
+    _uppdatera_sokindex(conn)
     return las(conn, namn_id)
+
+
+def _uppdatera_sokindex(conn: psycopg.Connection) -> None:
+    from . import sokindex  # sokindex läser behandlingarna, som läser ledamöterna
+
+    sokindex.uppdatera(conn, typer=("ledamot",))

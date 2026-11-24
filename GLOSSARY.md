@@ -395,3 +395,12 @@ _Avoid_: Revision (betyder kommunrevisionens granskning), uppdaterat värde
 
 **Avbruten körning**:
 En insamlingskörning som stoppades innan alla datakällor var kontrollerade, t.ex. vid en omstart. Nästa insamling återupptar den.
+
+## Sökning
+
+**Sökenhet**:
+Det som en träff på sidan Sök visar: en behandling, en sida i ett protokoll, en sida i ett budgetförslag, ett ärende, en ledamot eller en punkt i en kallelse. Den har en typ, en länk till sin sida på plattformen och, när den finns, en sida i källdokumentet. Den innehåller den gällande versionen, med publicerade rättelser.
+
+**Sökindex**:
+Alla sökenheter med deras text. Det uppdateras i insamlingen, efter omtolkning och när rättelser publiceras eller återkallas, och kan byggas om med `python -m app.sokindex --bygg-om`.
+_Avoid_: AI-sökning (sökningen hittar och länkar till källorna, den svarar inte själv)
