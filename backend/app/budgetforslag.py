@@ -710,8 +710,16 @@ def publicera(conn: psycopg.Connection, forslag_id: int, utgivare: str, nu: date
         # Versionen den ersätter, om den inte hann publiceras.
         conn.execute("UPDATE budgetforslag SET status = 'ersatt' WHERE id = %s AND status IN ('utkast', 'granskad')",
                      (r["ersatter_id"],))
+    _uppdatera_sokindex(conn)
     conn.commit()
     return las(conn, forslag_id)
+
+
+def _uppdatera_sokindex(conn: psycopg.Connection) -> None:
+    """Sökindexet har de publicerade förslagens text (#142)."""
+    from . import sokindex
+
+    sokindex.uppdatera(conn, typer=("budgetforslag",))
 
 
 def ny_version(conn: psycopg.Connection, forslag_id: int, data: dict, redaktor: str, nu: datetime) -> dict:
@@ -760,6 +768,7 @@ def aterkalla(conn: psycopg.Connection, forslag_id: int, data: dict, utgivare: s
         "UPDATE budgetforslag SET status = 'aterkallad', aterkallad_av = %s, aterkallad = %s, aterkallelse = %s "
         "WHERE id = %s", (utgivare, nu, motivering, forslag_id),
     )
+    _uppdatera_sokindex(conn)
     conn.commit()
     return las(conn, forslag_id)
 

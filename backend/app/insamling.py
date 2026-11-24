@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import kalender, kallelsepunkter, rankningar, sammansattning, sammantradesplan, skatteunderlag
+from . import kalender, kallelsepunkter, rankningar, sammansattning, sammantradesplan, skatteunderlag, sokindex
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -266,6 +266,11 @@ def _kor(
              res.fel, res.senaste_publicering, startad),
         )
         conn.commit()
+
+    # Sökindexet (#142): de nya protokollens text läses, och det som ändrats räknas om. Ett fel här
+    # påverkar inte insamlingens resultat.
+    sokindex.uppdatera(conn, extrahera=korning_id)
+    conn.commit()
 
     resultat = [
         Kallresultat(datakalla_id=r["datakalla_id"], status=r["status"], antal_nya=r["antal_nya"],

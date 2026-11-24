@@ -2039,3 +2039,64 @@ export async function taBortMetodbyte(rankning: string, ar: number): Promise<Met
     await fetch(`/api/rankningar/${encodeURIComponent(rankning)}/metodbyten/${ar}`, { method: 'DELETE' }),
   )
 }
+
+// Sökning (#142): fulltext i behandlingar, protokollsidor, budgetförslag, ärenden, ledamöter och kallelsepunkter.
+
+export type Soktyp = 'behandling' | 'protokollsida' | 'budgetforslag' | 'arende' | 'ledamot' | 'kallelsepunkt'
+export type Sokmarkering =
+  | 'automatiskt_tolkad'
+  | 'ocr'
+  | 'rattad'
+  | 'felaktigheter'
+  | 'diarienummer_ur_kallelsen'
+export type Soksortering = 'relevans' | 'datum'
+
+export interface Soktraff {
+  typ: Soktyp
+  rubrik: string
+  undertitel: string | null
+  organ: Organ | null
+  datum: string | null
+  ar: number | null
+  lank: string
+  dokument: string | null
+  sida: number | null
+  markeringar: Sokmarkering[]
+  utdrag: { text: string; markerad: boolean }[]
+  sammantrade_id: number | null
+  felaktigheter: number
+}
+
+export interface Soksvar {
+  antal: number
+  per_typ: { typ: Soktyp; namn: string; antal: number }[]
+  sida: number
+  sidstorlek: number
+  ar_i_index: number[]
+  traffar: Soktraff[]
+}
+
+export interface Sokfilter {
+  q: string
+  organ?: string
+  ar?: string
+  typ?: Soktyp
+  sortering?: Soksortering
+  sida?: number
+}
+
+export class ForManga extends Error {}
+
+export async function sok(f: Sokfilter): Promise<Soksvar> {
+  const p = new URLSearchParams({ q: f.q })
+  if (f.organ) p.set('organ', f.organ)
+  if (f.ar) p.set('ar', f.ar)
+  if (f.typ) p.set('typ', f.typ)
+  if (f.sortering && f.sortering !== 'relevans') p.set('sortering', f.sortering)
+  if (f.sida && f.sida > 1) p.set('sida', String(f.sida))
+  const svar = await fetch(`/api/sok?${p}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 429) throw new ForManga('För många sökningar på kort tid. Vänta en stund och försök igen.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}

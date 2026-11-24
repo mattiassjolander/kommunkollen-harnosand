@@ -14,6 +14,7 @@ import BudgetOchUtfallView from './views/BudgetOchUtfallView.vue'
 import FlodenView from './views/FlodenView.vue'
 import KommandeView from './views/KommandeView.vue'
 import OversiktView from './views/OversiktView.vue'
+import SokView from './views/SokView.vue'
 import ArendeView from './views/politik/ArendeView.vue'
 import AvvikelserView from './views/politik/AvvikelserView.vue'
 import BudgetforslagView from './views/politik/BudgetforslagView.vue'
@@ -76,6 +77,7 @@ const router = createRouter({
     { path: '/kalender', component: KalenderView, meta: { titel: 'Kalender' } },
     { path: '/kommande', component: KommandeView, meta: { titel: 'Kommande' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
+    { path: '/sok', component: SokView, meta: { titel: 'Sök' } },
   ],
 })
 

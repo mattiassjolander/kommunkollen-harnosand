@@ -313,6 +313,11 @@ def _rakna_om(conn: psycopg.Connection, r: dict) -> None:
         from . import kalender, sammantradesplan
 
         sammantradesplan.lagra_beslut(conn, kalender.idag())
+    # Sökindexet visar den gällande versionen (#142): behandlingen, ärendet och protokollets markering.
+    from . import sokindex
+
+    sokindex.uppdatera(conn, typer=("behandling", "arende", "protokollsida"), sammantraden=[r["sammantrade_id"]],
+                       extrahera=False)
 
 
 _LISTA = """

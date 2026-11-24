@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, provide, ref } from 'vue'
 import { hamtaInloggningsmetod, hamtaJag, loggaUt, type Inloggningsmetod, type Jag } from './api'
+import Sokruta from './components/Sokruta.vue'
 import Statusindikator from './components/Statusindikator.vue'
 import Hogtidsrad from './components/Hogtidsrad.vue'
 import Hogtidssymbol from './components/Hogtidssymbol.vue'
@@ -97,6 +98,7 @@ onMounted(kontrollera)
         <header class="sidhuvud">
           <Statusindikator />
           <Hogtidsrad v-if="hogtid" :tema="hogtid" />
+          <Sokruta />
           <Temavaljare />
         </header>
         <main class="innehall">

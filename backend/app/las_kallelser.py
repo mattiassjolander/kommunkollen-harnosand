@@ -21,7 +21,7 @@ from pathlib import Path
 
 import httpx
 
-from . import db, kallelsepunkter
+from . import db, kallelsepunkter, sokindex
 from .arenden import koppla
 from .sources import foredragningslista
 
@@ -80,6 +80,7 @@ def main() -> None:
             return
         andrade = kallelsepunkter.komplettera(conn)
         arenden = koppla(conn)
+        sokindex.indexera(conn, typer=("behandling", "arende", "kallelsepunkt"), extrahera=False)
         conn.commit()
     print(f"{andrade} behandlingar fick eller ändrade diarienummer ur kallelsen.")
     print(f"{arenden['arenden']} ärenden, varav {arenden['kopplade']} med flera behandlingar.")

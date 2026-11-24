@@ -454,5 +454,8 @@ def besluta(conn: psycopg.Connection, koppling_id: int, status: str, redaktor: s
     conn.execute("INSERT INTO kopplingsbeslut (koppling_id, status, redaktor, tid, motivering) "
                  "VALUES (%s, %s, %s, %s, %s)", (koppling_id, status, redaktor, nu, motivering))
     koppla(conn)
+    from . import sokindex  # sokindex läser behandlingarna, som läser härifrån
+
+    sokindex.uppdatera(conn, typer=("arende",))
     [k] = _kopplingar(conn, "WHERE k.id = %(id)s", {"id": koppling_id})
     return k
