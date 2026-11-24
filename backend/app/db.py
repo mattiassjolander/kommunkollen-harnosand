@@ -33,4 +33,8 @@ def migrate(url: str) -> None:
                 continue
             conn.execute(fil.read_text(encoding="utf-8"))
             conn.execute("INSERT INTO schema_migrering (namn) VALUES (%s)", (fil.name,))
+        # Vektorsökningen (#69) kräver pgvector, som inte alla databaser har. Därför ingen migreringsfil.
+        from . import sokvektorer
+
+        sokvektorer.forbered(conn)
         conn.commit()

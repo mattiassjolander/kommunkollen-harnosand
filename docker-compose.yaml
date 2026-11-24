@@ -50,14 +50,16 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Vektorsökningen (#69) kräver pgvector. Servern byter bild och volym i .env (DB_IMAGE och DB_VOLYM),
+  # med säkerhetskopia och återläsning enligt docs/drift.md. Utan pgvector är sökningen enbart fulltext.
   db:
-    image: postgres:17-alpine
+    image: ${DB_IMAGE:-postgres:17-alpine}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-kommunkollen}
       POSTGRES_USER: ${POSTGRES_USER:-kommunkollen}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Sätt POSTGRES_PASSWORD i .env}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - ${DB_VOLYM:-db-data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -67,3 +69,4 @@ services:
 
 volumes:
   db-data:
+  db-data-pgvector:

@@ -63,6 +63,13 @@ test('protokollens text, utdrag med markerade sökord och ett ledamotsnamn över
   await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+$/)
 })
 
+test('vyn Datakällor visar hur många sökbara enheter som har vektorer (#69)', async ({ page }) => {
+  await page.goto('/datakallor')
+  const s = page.getByTestId('sokvektorer')
+  await expect(s.getByRole('heading', { name: 'Sökningen' })).toBeVisible()
+  await expect(s).toContainText(/[\d\s]+ av [\d\s]+ sökbara enheter har vektorer för sökning på betydelse, och 0 väntar/)
+})
+
 test('sidan Sök i mobilbredd och mörkt läge', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
   await page.emulateMedia({ colorScheme: 'dark' })

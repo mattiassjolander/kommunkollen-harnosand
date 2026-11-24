@@ -110,6 +110,14 @@ export interface GlobalStatus {
   fullstandigt_uppdaterad: boolean
   /** null om schemat är avstängt. */
   nasta_korning: string | null
+  /** Vektorsökningen (#69): hur många sökenheter som har vektorer och hur många som väntar. */
+  sokvektorer?: {
+    aktiv: boolean
+    modell: string | null
+    enheter: number
+    med_vektorer: number
+    vantar: number
+  }
 }
 
 export interface Kallstatusrad {
@@ -2063,6 +2071,8 @@ export interface Soktraff {
   sida: number | null
   markeringar: Sokmarkering[]
   utdrag: { text: string; markerad: boolean }[]
+  /** Träffen kommer bara från vektorsökningen (#69): den innehåller inte sökorden. */
+  betydelse: boolean
   sammantrade_id: number | null
   felaktigheter: number
 }

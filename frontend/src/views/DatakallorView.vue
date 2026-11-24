@@ -4,7 +4,9 @@ import {
   EjInloggad,
   hamtaDatakallor,
   hamtaKorningslogg,
+  hamtaStatus,
   korOmKalla,
+  type GlobalStatus,
   type Jag,
   type Kallstatusrad,
   type Korningslogg,
@@ -14,6 +16,7 @@ import StatusMarkering from '../components/StatusMarkering.vue'
 
 const kallor = ref<Kallstatusrad[]>([])
 const logg = ref<Korningslogg[]>([])
+const status = ref<GlobalStatus | null>(null)
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -23,7 +26,11 @@ const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? fals
 
 async function ladda() {
   try {
-    ;[kallor.value, logg.value] = await Promise.all([hamtaDatakallor(), hamtaKorningslogg()])
+    ;[kallor.value, logg.value, status.value] = await Promise.all([
+      hamtaDatakallor(),
+      hamtaKorningslogg(),
+      hamtaStatus(),
+    ])
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
@@ -105,6 +112,19 @@ const UTLOSARE = { manuell: 'Manuell', schema: 'Schemalagd' }
         </tbody>
       </table>
       <p v-if="omkorningsfel" class="fel" role="alert">{{ omkorningsfel }}</p>
+    </section>
+
+    <section v-if="status?.sokvektorer" class="kort" data-testid="sokvektorer">
+      <h2>Sökningen</h2>
+      <p v-if="status.sokvektorer.aktiv" class="ingress">
+        {{ tal(status.sokvektorer.med_vektorer) }} av {{ tal(status.sokvektorer.enheter) }} sökbara enheter har
+        vektorer för sökning på betydelse, och {{ tal(status.sokvektorer.vantar) }} väntar. Modell:
+        {{ status.sokvektorer.modell }}, körs på plattformens egen server.
+      </p>
+      <p v-else class="ingress">
+        Sökning på betydelse är inte aktiverad. Sökningen hittar ord och böjningar i
+        {{ tal(status.sokvektorer.enheter) }} sökbara enheter.
+      </p>
     </section>
 
     <section class="kort">

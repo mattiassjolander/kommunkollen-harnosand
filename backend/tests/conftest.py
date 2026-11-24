@@ -43,6 +43,16 @@ def utan_anropsgrans(monkeypatch):
     monkeypatch.setenv("KALLELSE_MAX_STORLEK_FOR_LISTA", "2000000")
 
 
+@pytest.fixture(autouse=True)
+def testmodell_for_sokningen():
+    # Vektorsökningen (#69) med en deterministisk modell. test_sok_betydelse använder den riktiga.
+    from app import sokvektorer
+
+    sokvektorer.satt_modell(sokvektorer.Testmodell())
+    yield
+    sokvektorer.satt_modell(sokvektorer.Testmodell())
+
+
 @pytest.fixture(scope="session")
 def postgres_url() -> str:
     url = os.environ.get("TEST_DATABASE_URL")

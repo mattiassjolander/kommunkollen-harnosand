@@ -108,6 +108,66 @@ Starta om runnern:
 ssh kommunkollen "systemctl restart actions.runner.mattiassjolander-kommunkollen-harnosand.kommunkollen-lxc.service"
 ```
 
+## Sökningen
+
+Sökindexet uppdateras i insamlingen, efter omtolkning och när rättelser publiceras. Bygg ut det med det som saknas, eller bygg om allt (läser om protokollens text). Båda kan avbrytas och återupptas:
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.sokindex"
+ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.sokindex --bygg-om"
+```
+
+Kommandot räknar också vektorerna för sökning på betydelse (#69, ADR-0008) för alla enheter som väntar: nya, ändrade, eller räknade med en annan modell. Första gången tar det cirka en halvtimme på de två kärnorna. Vyn Datakällor visar hur många enheter som har vektorer och hur många som väntar.
+
+Sökmodellen är inbyggd i backend-bilden och laddas i minnet (cirka 0,5 GB) i den process som behöver den: backend vid första sökningen, insamlaren vid första insamlingen med nya protokoll och kommandot ovan. `SOKMODELL=av` i `.env` stänger av sökningen på betydelse. `SOK_FRAGOR_PER_MINUT` (standard 30) är gränsen per IP-adress.
+
+### Byte av databasbild till pgvector
+
+Sökning på betydelse kräver tillägget pgvector. Databasen körs med `postgres:17-alpine` tills bilden byts. **Bytet görs bara efter användarens godkännande, och databasen säkerhetskopieras först.**
+
+Den nya bilden bygger på Debian i stället för Alpine. Sorteringsreglerna för text (glibc i stället för musl) skiljer sig, så den gamla datakatalogen återanvänds inte. Databasen dumpas och läses in i en ny volym. Den gamla volymen `kommunkollen_db-data` lämnas orörd och är vägen tillbaka.
+
+1. Kontrollera att det finns diskutrymme för dumpen och den nya volymen (ungefär dubbla databasens storlek):
+
+   ```bash
+   ssh kommunkollen "df -h / && cd /opt/kommunkollen && docker compose exec db psql -U kommunkollen -d kommunkollen -Atc \"SELECT pg_size_pretty(pg_database_size('kommunkollen'))\""
+   ```
+
+2. Stoppa backend och insamlaren, så att inget skrivs under bytet, och ta en säkerhetskopia:
+
+   ```bash
+   ssh kommunkollen "cd /opt/kommunkollen && docker compose stop backend insamlare frontend"
+   ssh kommunkollen "cd /opt/kommunkollen && docker compose exec -T db pg_dump -U kommunkollen -d kommunkollen -Fc > /opt/kommunkollen/fore-pgvector-\$(date +%Y%m%d).dump && ls -lh /opt/kommunkollen/*.dump"
+   ```
+
+3. Byt bild och volym i `.env` och starta den nya databasen (tom):
+
+   ```bash
+   ssh kommunkollen "cd /opt/kommunkollen && printf 'DB_IMAGE=pgvector/pgvector:0.8.7-pg17\nDB_VOLYM=db-data-pgvector\n' >> .env && docker compose up -d db"
+   ```
+
+4. Läs in säkerhetskopian:
+
+   ```bash
+   ssh kommunkollen "cd /opt/kommunkollen && docker compose exec -T db pg_restore -U kommunkollen -d kommunkollen --no-owner < /opt/kommunkollen/fore-pgvector-<datum>.dump"
+   ```
+
+5. Starta allt. Backend skapar tillägget och tabellen `sokstycke` när den startar:
+
+   ```bash
+   ssh kommunkollen "cd /opt/kommunkollen && docker compose up -d && curl -s http://localhost/api/halsa"
+   ```
+
+6. Räkna vektorerna, i bakgrunden (cirka en halvtimme):
+
+   ```bash
+   ssh kommunkollen "cd /opt/kommunkollen && docker compose exec -d backend /app/.venv/bin/python -m app.sokindex"
+   ```
+
+7. Kontrollera antalen i vyn Datakällor och sök på till exempel "skolnedläggning".
+
+**Tillbaka till den gamla databasen:** ta bort raderna `DB_IMAGE` och `DB_VOLYM` ur `.env` och kör `docker compose up -d`. Det som ändrats efter bytet finns då bara i den nya volymen.
+
 ## Säkerhetskopiering
 
 Containern ingår **inte** i Proxmox nattliga backupjobb `nattlig-backup` än. Lägg till den på Proxmox-värden:

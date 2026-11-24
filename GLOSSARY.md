@@ -404,3 +404,10 @@ Det som en träff på sidan Sök visar: en behandling, en sida i ett protokoll, 
 **Sökindex**:
 Alla sökenheter med deras text. Det uppdateras i insamlingen, efter omtolkning och när rättelser publiceras eller återkallas, och kan byggas om med `python -m app.sokindex --bygg-om`.
 _Avoid_: AI-sökning (sökningen hittar och länkar till källorna, den svarar inte själv)
+
+**Stycke**:
+En del av en sökenhets text, cirka 300 ord som överlappar med nästa, med rubriken först. Varje stycke har en vektor från sökmodellen och enhetens sidnummer (ADR-0008).
+
+**Sökning på betydelse**:
+Den del av sökningen som jämför frågans vektor med styckenas, och hittar texter om samma sak som inte innehåller sökorden. Träffarna slås ihop med fulltextsökningens. En träff som bara kommer härifrån markeras *Liknande innehåll*.
+_Avoid_: semantisk sökning, AI-sökning

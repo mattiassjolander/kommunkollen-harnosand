@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, statistik, status, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -78,6 +78,7 @@ def create_app(
         transport = InspeladTransport(Path(os.environ["INSPELNINGAR"]))
 
     db.migrate(database_url)
+    sokvektorer.forvarm(database_url)
     app = FastAPI(title="Kommunkollen Härnösand")
     app.state.inloggning = inloggning or Inloggning.fran_miljo()
     app.add_middleware(
@@ -123,6 +124,8 @@ def create_app(
     def uppdateringsstatus() -> dict:
         with db.connect(database_url) as conn:
             resultat = status.global_status(conn, kallor)
+            # Vektorsökningen (#69): hur många sökenheter som har vektorer och hur många som väntar.
+            resultat["sokvektorer"] = sokvektorer.status(conn)
         resultat["nasta_korning"] = schema.nasta(datetime.now(SVERIGE)) if schema else None
         return resultat
 
