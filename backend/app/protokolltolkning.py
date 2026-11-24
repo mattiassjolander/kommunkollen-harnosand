@@ -120,6 +120,8 @@ class Behandling:
     # Paragrafens text efter rubriken när paragrafen saknar underrubriker och beslut, t.ex. "Inga frågor har
     # inkommit till dagens frågestund." Bara när rubriken har avgränsats med ärendelistan (#124).
     paragraftext: str | None = None
+    # Sidan där paragrafen börjar, som den numreras i protokollet (#47).
+    sida: int | None = None
 
 
 @dataclass
@@ -158,6 +160,8 @@ class Tolkning:
     # Sittningarna, bara när protokollet har fler än en. Sammanträdets plats och tid är den första sittningens.
     sittningar: list[Sittning] = field(default_factory=list)
     avvikelser: list[str] = field(default_factory=list)
+    # Uppgifter i protokollet som inte stämmer med varandra (#47), se `protokollkontroller`.
+    kontroller: list = field(default_factory=list)
     # Texten är läst med OCR ur sidbilder (#52) och kan innehålla läsfel.
     ocr: bool = False
 
@@ -973,6 +977,7 @@ def _behandlingar(t: Tolkning, lop: list[str], layout: list[str] | None = None) 
             if re.search(r"\bmotion", rubrik, re.I) else [],
             rubrik_ur_arendelistan=ur_listan,
             paragraftext=paragraftext,
+            sida=sidor[i],
         ))
 
 
@@ -1919,6 +1924,9 @@ def _tolka(pdf: bytes) -> Tolkning:
             t.avvikelser.append(f"PDF:en har {alla_sidor} av protokollets {angivna[1]} sidor")
     _kontrollera(t, lop, layout)
     _forkortningar(t)
+    from .protokollkontroller import kontrollera
+
+    t.kontroller = kontrollera(t, lop, paragrafintervall(layout))
     return t
 
 

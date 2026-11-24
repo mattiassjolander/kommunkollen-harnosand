@@ -19,7 +19,7 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import arenden, avvikelser, ledamoter, partier, sammantradesplan
+from . import arenden, avvikelser, ledamoter, partier, protokollavvikelser, sammantradesplan
 from .kallelsepunkter import Kallelsenummer, efter_rattelser
 from .partitillhorighet import Gallande
 from .rattelser import Publicerade
@@ -166,6 +166,7 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
     for i, b in enumerate(t.behandlingar):
         _lagra_behandling(conn, sammantrade_id, i, b)
     ledamoter.registrera(conn, (n.namn for n in t.narvaro if n.kategori != "ovrig"))
+    protokollavvikelser.lagra(conn, sammantrade_id, dokument_id, d.typ, t.kontroller, tolkad)
 
 
 def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: int, b: Behandling) -> None:

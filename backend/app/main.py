@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -315,6 +315,29 @@ def create_app(
         with db.connect(database_url) as conn:
             fran, till = intervall(conn, fran, till, organ)
             return avvikelser.lista(conn, fran, till, organ)
+
+    @app.get("/api/protokollavvikelser", dependencies=[Depends(krav_roll("lasare"))])
+    def lista_protokollavvikelser(
+        fran: int | None = None, till: int | None = None, organ: str | None = None,
+        typ: str | None = Query(None, pattern="^(rostsumma|parti_olika|ersattare|paragrafnummer|parti_saknas|stavning)$"),
+        status: str | None = Query(None, pattern="^(ny|anmald|rattad|inte_fel)$"),
+    ) -> dict:
+        """Uppgifter i protokollen som inte stämmer med varandra (#47), per protokoll och med status."""
+        with db.connect(database_url) as conn:
+            fran, till = intervall(conn, fran, till, organ)
+            return protokollavvikelser.lista(conn, fran, till, organ, typ, status)
+
+    @app.post("/api/protokollavvikelser/{avvikelse_id}/status")
+    def satt_protokollavvikelsens_status(avvikelse_id: int, data: dict,
+                                         anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Redaktören sätter status: {status: ny|anmald|rattad|inte_fel, datum, anteckning}."""
+        with db.connect(database_url) as conn:
+            try:
+                return protokollavvikelser.satt_status(conn, avvikelse_id, data, anv.epost)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except protokollavvikelser.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
 
     @app.get("/api/sammantraden/{sammantrade_id}", dependencies=[Depends(krav_roll("lasare"))])
     def sammantrade(sammantrade_id: int) -> dict:
