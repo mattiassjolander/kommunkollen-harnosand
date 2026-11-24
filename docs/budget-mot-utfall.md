@@ -42,7 +42,7 @@ Exemplet är *Delårsrapport augusti 2024* (52 sidor).
 
 Den antagna budgeten är årsplanen, som redan läses in med ramar per nämnd och budgeterat resultat, med sidhänvisning (`budget.json`). Behandlingen i kommunfullmäktige finns där som `behandling` (organ, datum, paragraf) och kopplas till behandlingen med yrkanden och voteringar. Planförutsättningarna ger ramarna före politiska prioriteringar. Varje budgetsiffra kan alltså redan länka till förslaget och till behandlingen.
 
-**Revideringar under året** beslutas av fullmäktige (t.ex. omorganisation och ändrade ramar) och finns i protokollen. Årsredovisningens budgetkolumn är summan av dem. Att länka varje revidering till sitt beslut kräver att besluten identifieras i protokollen, och det föreslås som ett senare steg.
+**Revideringar under året** beslutas av fullmäktige (t.ex. omorganisation och ändrade ramar) och finns i protokollen. Årsredovisningens budgetkolumn är summan av dem. Var de finns och hur de kopplas till besluten står under *Revideringarna och besluten* nedan (#134).
 
 ## Inläsning
 
@@ -69,3 +69,48 @@ Samma arbetssätt som budgetförslagen. Tabellerna i årsredovisningen och delå
 ```
 
 Den antagna budgeten hämtas ur årsplanen som redan finns i plattformen och läses inte in igen. Avvikelsen räknas fram i mnkr och procent: utfall eller prognos mot antagen och reviderad budget. När dokumentet anger en avvikelse kontrolleras den räknade mot den, på samma sätt som brodiagrammet kontrolleras mot SCB.
+
+## Revideringarna och besluten (#134)
+
+Utrett 2026-11-24 mot årsredovisningarna 2023–2025, delårsrapporterna 2024–2026 och fullmäktiges och kommunstyrelsens protokoll i plattformen. Frågan är var besluten som ändrar nämndernas budget under året finns, och om de förklarar hela skillnaden mellan antagen och reviderad budget.
+
+### Var revideringarna finns
+
+- **Inte i årsredovisningens eller delårsrapportens förteckning.** Ingen av årsredovisningarna 2023–2025 har en förteckning över tilläggsanslag eller ombudgeteringar. Driftredovisningen visar bara budgeten vid årets slut. Årsredovisningen 2024 skriver under driftredovisningen (s. 87) att inga anslagsförändringar har beslutats under året. Årsredovisningen 2025 skriver (s. 81) att arbetslivsnämndens budget är fördelad till de nämnder som tog över verksamheten. Delårsrapporterna redovisar nämndernas budget som 0,0 (i balans) i helårsprognosen och har ingen förteckning.
+- **I fullmäktiges protokoll, under varierande rubriker.** Inget ärende 2023–2025 har *tilläggsanslag* eller *ombudgetering* i rubriken. Sökningen på *budget* ger mest årsplanerna och koncernbudgetarna. Besluten om ändrade ramar finns i ärenden om ekonomiska åtgärder och om organisationen:
+
+| År | Antagen → reviderad budget | Beslut | Belopp i beslutet |
+|---|---|---|---|
+| 2023 | Socialnämnden 685,3 → 705,5 (+20,2), samhällsnämnden 190,5 → 202,9 (+12,4) | KF 2023-06-19 § 104 *Förändrat finansiellt mål och ekonomiska åtgärder för 2023* | Ja: 20,2 och 12,4 mnkr "extra skattemedel" |
+| 2024 | Ingen skillnad | – | Årsredovisningen s. 87: inga anslagsförändringar |
+| 2025 | Arbetslivsnämnden 60,3 → 0,0, socialnämnden 804,5 → 838,6 (+34,1), skolnämnden 645,4 → 664,6 (+19,2), kommunstyrelsen 184,3 → 191,3 (+7,0) | KF 2025-05-26 § 75 *Avveckling av arbetslivsnämnd* | Nej. Beslutet flyttar ansvarsområdena. Beloppen framgår av årsredovisningens budgetkolumn (s. 81), och de går jämnt upp: 34,1 + 19,2 + 7,0 = 60,3 |
+
+- **Kommunstyrelsens protokoll** ger inga egna beslut om ändrade ramar för åren vid sökning på *budget*, *ram* och *omfördelning*. Kommunstyrelsen bereder fullmäktiges beslut, t.ex. KS 2025-05-06 § 79 om arbetslivsnämnden. Andra beslut med *budget* i rubriken gäller resultatkrav eller investeringar. Ett exempel är KF 2025-09-29 § 112 *budgetändring kommunstyrelsen och nämnder*, där nämnderna ska nå ett överskott. Ramarna ändras inte, och årsredovisningens budgetkolumn påverkas inte.
+- **Årets resultat:** KF 2023-06-19 § 104 sänkte också det budgeterade resultatet från 38,3 till 1,9 mnkr. Årsredovisningen 2023 jämför ändå resultatet med 38,3 mnkr (s. 52). Uppföljningen följer årsredovisningen, och revideringarna gäller bara nämnderna.
+
+**Svar:** För 2023–2025 förklarar besluten hela skillnaden. Ingen rest blir okopplad. Beloppen för 2025 står inte i beslutet. De visas med sidan i årsredovisningen som anger dem. För 2026 finns ingen årsredovisning än. Delårsrapporten 2026 nämner att kommunstyrelsen tagit över verksamhet och budgetmedel från andra nämnder, men den reviderade budgeten per nämnd redovisas först i årsredovisningen.
+
+### Orsakerna till avvikelserna
+
+Årsredovisningens text under driftredovisningen förklarar avvikelserna per nämnd, ibland för två nämnder i samma mening (2023: skol- och socialnämnden). Delårsrapporten 2024 hänvisar till nämndernas egna rapporter. Delårsrapporterna 2025 och 2026 ger en kort förklaring i texten till driftredovisningen eller helårsprognosen. Texterna läses in ordagrant som citat med sida och visas vid nämnden. En mening om nämnderna i stort visas under tabellen.
+
+### Inläsning
+
+I `uppfoljning.json` (formatet står i `backend/app/uppfoljning.py`):
+
+```json
+"revideringar": [
+  {"beslut": {"organ": "KF", "datum": "2023-06-19", "paragraf": 104},
+   "andringar": [{"organ": "Socialnämnden", "mnkr": 20.2}, {"organ": "Samhällsnämnden", "mnkr": 12.4}]},
+  {"beslut": {"organ": "KF", "datum": "2025-05-26", "paragraf": 75}, "belopp_sida": 81,
+   "andringar": [{"organ": "Arbetslivsnämnden", "mnkr": -60.3}, {"organ": "Socialnämnden", "mnkr": 34.1}]}
+],
+"orsaker": [
+  {"dokument": "arsredovisning", "sida": 81, "organ": ["Socialnämnden"], "text": "Samtliga nämnder gör …"}
+]
+```
+
+- Beslutet länkar till behandlingen när protokollet finns i plattformen och visas annars som hänvisning.
+- Resten, reviderad minus antagen budget minus besluten, räknas fram per nämnd och visas som *ej kopplat till beslut*.
+- `revideringar: []` betyder att inga beslut hittades. Utan fältet är året inte utrett, och avsnittet visas inte.
+- Uppgifterna hör till uppföljningen och går utkast → granskad → publicerad med den. De behöver ingen egen tabell.

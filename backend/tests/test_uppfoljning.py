@@ -209,3 +209,97 @@ def test_fel_i_lagrat_dokument(tmp_path, dok, fel):
     d["delarsrapport"] = dok
     with pytest.raises(Ogiltig, match=fel):
         uppfoljning.uppgifter(d, tmp_path)
+
+
+# Revideringarna kopplade till beslut och orsakerna till avvikelserna (#134)
+
+ANTAGEN_2027 = {"ramar": {"Kommunstyrelsen": {"mnkr": 191.3, "sida": 4}, "Kommunfullmäktige": {"mnkr": 13.4, "sida": 4},
+                          "Samhällsnämnden": {"mnkr": 243.5, "sida": 4}, "Skolnämnden": {"mnkr": 664.4, "sida": 4},
+                          "Socialnämnden": {"mnkr": 893.1, "sida": 4}},
+                "resultat": None}
+
+
+def test_revideringarna_fordelas_och_resten_visas_som_ej_kopplad():
+    b = uppfoljning.berakning(uppfoljning.uppgifter(data()), ANTAGEN_2027)
+    n = {x["organ"]: x for x in b["namnder"]}
+    assert b["revideringar_utredda"] is True
+    # Socialnämnden 893,1 → 905,2: hela ändringen är beslutad i KF 2026-06-15 § 108.
+    [soc] = n["Socialnämnden"]["revideringar"]
+    assert soc["mnkr"] == 12.1 and soc["belopp_sida"] is None
+    assert (soc["beslut"]["organ"], soc["beslut"]["datum"], soc["beslut"]["paragraf"]) == ("KF", "2026-06-15", 108)
+    assert n["Socialnämnden"]["ej_kopplat"] is None
+    # Kommunstyrelsen: beloppet står inte i beslutet utan på sidan i årsredovisningen.
+    assert n["Kommunstyrelsen"]["revideringar"][0]["belopp_sida"] == 82
+    # Samhällsnämnden 243,5 → 245,1 har inget beslut: resten är ej kopplad.
+    assert n["Samhällsnämnden"]["revideringar"] == [] and n["Samhällsnämnden"]["ej_kopplat"] == 1.6
+    # Utan antagen ram (eller utan reviderad budget) går ingen rest att räkna.
+    assert n["Kommunövergripande verksamhet"]["ej_kopplat"] is None
+
+
+def test_utan_revideringar_ar_de_inte_utredda():
+    d = data()
+    d.pop("revideringar")
+    b = uppfoljning.berakning(uppfoljning.uppgifter(d), ANTAGEN_2027)
+    assert b["revideringar_utredda"] is False
+    assert all(n["ej_kopplat"] is None and n["revideringar"] == [] for n in b["namnder"])
+    # En tom lista: inga beslut hittade, och hela skillnaden är ej kopplad.
+    d["revideringar"] = []
+    b = uppfoljning.berakning(uppfoljning.uppgifter(d), ANTAGEN_2027)
+    assert next(n for n in b["namnder"] if n["organ"] == "Socialnämnden")["ej_kopplat"] == 12.1
+
+
+def test_orsakerna_visas_vid_namnden_som_citat():
+    b = uppfoljning.berakning(uppfoljning.uppgifter(data()), ANTAGEN_2027)
+    n = {x["organ"]: x for x in b["namnder"]}
+    assert n["Socialnämnden"]["orsaker"] == [
+        {"dokument": "arsredovisning", "sida": 81,
+         "text": "Socialnämndens underskott beror främst på högre kostnader för placeringar än budgeterat."},
+        {"dokument": "delarsrapport", "sida": 25, "text": "Socialnämnden prognostiserar ett underskott inom äldreomsorgen."},
+    ]
+    # Ett citat om flera nämnder visas vid var och en; ett utan nämnd gäller nämnderna i stort.
+    assert n["Skolnämnden"]["orsaker"] == n["Samhällsnämnden"]["orsaker"]
+    assert n["Kommunstyrelsen"]["orsaker"] == []
+    assert b["orsaker"] == [{"dokument": "arsredovisning", "sida": 81, "text":
+                             "Mer detaljerad information kring nämndernas utfall återfinns i respektive nämndsrapport."}]
+
+
+@pytest.mark.parametrize("andring, fel", [
+    (lambda d: d.update(revideringar={}), "revideringar ska vara en lista"),
+    (lambda d: d["revideringar"][0]["beslut"].update(datum="15 juni 2026"), "beslut: datum ska anges"),
+    (lambda d: d["revideringar"][0].update(andringar=[]), "andringar ska vara en lista"),
+    (lambda d: d["revideringar"][0]["andringar"].append({"organ": "Gatunämnden", "mnkr": 1}), "Gatunämnden finns inte"),
+    (lambda d: d["revideringar"][0]["andringar"][0].update(mnkr="12"), "mnkr ska vara ett tal"),
+    (lambda d: d["revideringar"][0]["andringar"].append({"organ": "Skolnämnden", "mnkr": 1}), "samma nämnd"),
+    (lambda d: (d.pop("arsredovisning"), d.pop("resultat"), d.update(namnder=[{"organ": "Kommunstyrelsen"}]),
+                d.update(orsaker=[]), d["revideringar"].pop(0)), "belopp_sida är sidan i årsredovisningen"),
+    (lambda d: d["orsaker"][0].update(dokument="protokoll"), "dokument ska vara"),
+    (lambda d: d["orsaker"][0].update(text=" "), "text saknas"),
+    (lambda d: d["orsaker"][0].pop("sida"), "sida ska vara sidnumret"),
+    (lambda d: d["orsaker"][0].update(organ="Socialnämnden"), "organ ska vara en lista"),
+])
+def test_fel_i_revideringar_och_orsaker(andring, fel):
+    d = data()
+    andring(d)
+    with pytest.raises(Ogiltig, match=fel):
+        uppfoljning.uppgifter(d)
+
+
+def test_revideringens_beslut_lankar_till_behandlingen(database_url, google, monkeypatch, capsys):
+    """Beslutet KF 2026-06-15 § 108 finns i protokollen och länkar dit; § 120 2027-09-27 visas som hänvisning."""
+    from conftest import skapa_app
+    from fastapi.testclient import TestClient
+    from test_protokoll import kf, kor
+
+    api = TestClient(skapa_app(database_url, google, kallor=kf(), anonym_lasning=True))
+    kor(api)
+    las_in(database_url, monkeypatch, capsys)
+    publicera_alla(api)
+    logga_in(api, "utgivare")
+    [u] = api.get("/api/uppfoljning?status=utkast").json()
+    soc = next(n for n in u["berakning"]["namnder"] if n["organ"] == "Socialnämnden")
+    b = soc["revideringar"][0]["beslut"]
+    assert (b["hittad"], b["rubrik"]) == (True, "Mål, budget och skattesats 2027")
+    assert api.get(f"/api/sammantraden/{b['sammantrade_id']}").json()["datum"] == "2026-06-15"
+    ks = next(n for n in u["berakning"]["namnder"] if n["organ"] == "Kommunstyrelsen")
+    assert ks["revideringar"][0]["beslut"] == {"organ": "KF", "datum": "2027-09-27", "paragraf": 120, "hittad": False,
+                                              "sammantrade_id": None, "rubrik": None}

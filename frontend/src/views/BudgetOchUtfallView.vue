@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Budget jämfört med utfall per budgetår (#83, kravspec 3.2). Antagen budget ur årsplanen, reviderad budget och
 // utfall ur årsredovisningen och helårsprognos ur delårsrapporten, för årets resultat och per nämnd. Varje siffra
-// länkar till sidan i dokumentet. Året står i URL:en (?ar=).
+// länkar till sidan i dokumentet. Året står i URL:en (?ar=). Ändringarna av budgeten under året visas med
+// beslutet de kommer från, och dokumentens förklaringar till avvikelserna som citat vid nämnden (#134).
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -9,7 +10,9 @@ import {
   Saknas,
   hamtaUppfoljning,
   hamtaUppfoljningsar,
+  type Avvikelseorsak,
   type Budgetavvikelse,
+  type Budgetbeslut,
   type Sidbelopp,
   type Uppfoljning,
 } from '../api'
@@ -77,7 +80,7 @@ const kontrollerade = computed(
 const mnkr = (v: number | null | undefined) => (v === null || v === undefined ? '–' : tal(v, 'mnkr'))
 const med = (a: Budgetavvikelse | null) => (a ? skillnad(a.mnkr, 'mnkr') : '–')
 const procent = (a: Budgetavvikelse | null) => (a && a.procent !== null ? skillnad(a.procent, '').replace(/$/, ' %') : '')
-const sidlank = (url: string | undefined, b: Sidbelopp | null) => (url && b?.sida ? `${url}#page=${b.sida}` : url)
+const sidlank = (url: string | undefined, b: { sida: number | null } | null) => (url && b?.sida ? `${url}#page=${b.sida}` : url)
 const antagenLank = (b: Sidbelopp | null) =>
   data.value?.antagen ? sidlank(data.value.antagen.original, b) : undefined
 const behandling = computed(() => data.value?.antagen?.behandling ?? null)
@@ -119,6 +122,30 @@ const avvikelserader = computed<Avvikelserad[]>(() =>
       ],
     })),
 )
+// Revideringarna grupperade per beslut, i den ordning de står i filen, och resten som inte är kopplad till beslut.
+interface Beslutsgrupp {
+  nyckel: string
+  beslut: Budgetbeslut
+  belopp_sida: number | null
+  andringar: { organ: string; mnkr: number }[]
+}
+const beslutsgrupper = computed<Beslutsgrupp[]>(() => {
+  const grupper = new Map<string, Beslutsgrupp>()
+  for (const n of namnder.value) {
+    for (const r of n.revideringar) {
+      const nyckel = `${r.beslut.organ} ${r.beslut.datum} ${r.beslut.paragraf}`
+      if (!grupper.has(nyckel)) grupper.set(nyckel, { nyckel, beslut: r.beslut, belopp_sida: r.belopp_sida, andringar: [] })
+      grupper.get(nyckel)!.andringar.push({ organ: n.organ, mnkr: r.mnkr })
+    }
+  }
+  return [...grupper.values()].sort((a, b) => a.beslut.datum.localeCompare(b.beslut.datum))
+})
+const ejKopplade = computed(() => namnder.value.filter((n) => n.ej_kopplat !== null))
+const beslutLank = (b: Budgetbeslut) =>
+  b.hittad && b.sammantrade_id ? `/politik/sammantraden/${b.sammantrade_id}/paragraf/${b.paragraf}` : null
+const orsakskalla = (o: Avvikelseorsak) => (o.dokument === 'arsredovisning' ? ars.value : delar.value)
+const kolumner = computed(() => 3 + (delar.value ? 1 : 0) + (ars.value ? 2 : 0))
+
 const namnlista = (n: string[]) => (n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} och ${n[n.length - 1]}`)
 
 function exportera() {
@@ -271,7 +298,8 @@ function exportera() {
         Belopp är nettokostnader i mnkr. Avvikelsen är budgeten minus nettokostnaden, som i årsredovisningen: plus
         betyder att nettokostnaden blev lägre än budgeten, minus att den blev högre. Den räknas mot den reviderade
         budgeten och, på raden under, mot den antagna. Prognosen är delårsrapportens helårsprognos räknad på samma
-        sätt. Procenten är av budgeten.
+        sätt. Procenten är av budgeten. Under en nämnd står dokumentets egen förklaring till avvikelsen, återgiven
+        som den står i källan.
       </p>
       <template v-if="avvikelserader.length">
         <Avvikelsediagram
@@ -299,7 +327,8 @@ function exportera() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="n in namnder" :key="n.organ" :data-organ="n.organ">
+            <template v-for="n in namnder" :key="n.organ">
+            <tr :data-organ="n.organ">
               <th scope="row">{{ n.organ }}</th>
               <td class="num">
                 <a v-if="n.antagen" :href="antagenLank(n.antagen)" target="_blank" rel="noopener">{{ mnkr(n.antagen.mnkr) }}</a>
@@ -327,6 +356,17 @@ function exportera() {
                 </span>
               </td>
             </tr>
+            <tr v-if="n.orsaker.length" class="orsakrad" :data-orsak="n.organ" data-testid="orsaker">
+              <td :colspan="kolumner">
+                <figure v-for="(o, i) in n.orsaker" :key="i" class="citat">
+                  <blockquote>{{ o.text }}</blockquote>
+                  <figcaption>
+                    <a :href="sidlank(orsakskalla(o)?.url, o)" target="_blank" rel="noopener">{{ orsakskalla(o)?.titel }}, s. {{ o.sida }}</a>
+                  </figcaption>
+                </figure>
+              </td>
+            </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -336,6 +376,15 @@ function exportera() {
           {{ i ? ', ' : '' }}{{ u.organ }} ({{ mnkr(u.antagen.mnkr) }})</template
         ><span>. Nämnder kan ha lagts samman eller bytt namn under året.</span>
       </p>
+      <div v-if="data.berakning.orsaker.length" class="allmanna" data-testid="allmanna-orsaker">
+        <p class="forklaring">Om nämnderna i stort:</p>
+        <figure v-for="(o, i) in data.berakning.orsaker" :key="i" class="citat">
+          <blockquote>{{ o.text }}</blockquote>
+          <figcaption>
+            <a :href="sidlank(orsakskalla(o)?.url, o)" target="_blank" rel="noopener">{{ orsakskalla(o)?.titel }}, s. {{ o.sida }}</a>
+          </figcaption>
+        </figure>
+      </div>
       <p v-if="avvikande.length" class="kontroll avviker" data-testid="uppfoljning-avviker">
         Avvikelsen som årsredovisningen anger stämmer inte med den räknade för
         <template v-for="(n, i) in avvikande" :key="n.organ">
@@ -346,6 +395,60 @@ function exportera() {
       <p v-else-if="kontrollerade" class="kontroll" data-testid="uppfoljning-kontroll">
         Kontroll: avvikelserna som årsredovisningen anger stämmer med de räknade, inom avrundningen.
       </p>
+    </section>
+
+    <section
+      v-if="data.berakning.revideringar_utredda"
+      class="kort"
+      aria-labelledby="revideringar-rubrik"
+      data-testid="revideringar"
+    >
+      <h2 id="revideringar-rubrik">Ändringar av budgeten under {{ data.budgetar }}</h2>
+      <p class="forklaring">
+        Den reviderade budgeten är den antagna budgeten med de ändringar som beslutats under året. Varje ändring är
+        kopplad till beslutet i protokollet. Det som skiljer mellan antagen och reviderad budget utan att ett beslut
+        förklarar det redovisas som ej kopplat till beslut. Plus betyder en högre budget.
+      </p>
+      <p v-if="!beslutsgrupper.length && !ejKopplade.length" class="saknas" data-testid="inga-revideringar">
+        Den reviderade budgeten är densamma som den antagna för varje nämnd, och inga beslut om ändrad budget är
+        kopplade till året.
+      </p>
+      <div v-else class="rulla">
+        <table class="tabell" data-testid="revideringstabell">
+          <thead>
+            <tr>
+              <th scope="col">Beslut</th>
+              <th scope="col">Nämnd</th>
+              <th scope="col" class="num">Ändring</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="g in beslutsgrupper" :key="g.nyckel">
+              <tr v-for="(a, i) in g.andringar" :key="a.organ" :data-beslut="g.nyckel" :data-organ="a.organ">
+                <th v-if="i === 0" scope="rowgroup" :rowspan="g.andringar.length">
+                  <RouterLink v-if="beslutLank(g.beslut)" :to="beslutLank(g.beslut)!" data-testid="beslut">
+                    {{ g.beslut.organ }} {{ datum(g.beslut.datum) }}, § {{ g.beslut.paragraf }}
+                  </RouterLink>
+                  <template v-else>{{ g.beslut.organ }} {{ datum(g.beslut.datum) }}, § {{ g.beslut.paragraf }}</template>
+                  <span v-if="g.beslut.rubrik" class="not">{{ g.beslut.rubrik }}</span>
+                  <span v-else-if="!g.beslut.hittad" class="not">Protokollet finns inte i Kommunkollen.</span>
+                  <span v-if="g.belopp_sida" class="not" data-testid="belopp-ur-dokument">
+                    Beloppen står inte i beslutet. De framgår av
+                    <a :href="sidlank(ars?.url, { sida: g.belopp_sida })" target="_blank" rel="noopener">{{ ars?.titel }}, s. {{ g.belopp_sida }}</a>.
+                  </span>
+                </th>
+                <td>{{ a.organ }}</td>
+                <td class="num">{{ skillnad(a.mnkr, 'mnkr') }}</td>
+              </tr>
+            </template>
+            <tr v-for="n in ejKopplade" :key="`rest-${n.organ}`" class="ejkopplad" data-rest="ja" :data-organ="n.organ">
+              <th scope="row">Ej kopplat till beslut</th>
+              <td>{{ n.organ }}</td>
+              <td class="num">{{ skillnad(n.ej_kopplat!, 'mnkr') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <p class="kallrad" data-testid="uppfoljning-kallor">
@@ -466,6 +569,37 @@ function exportera() {
 }
 .kontroll.avviker {
   color: var(--ink);
+}
+.orsakrad td {
+  border-bottom: 1px solid var(--line);
+  padding-top: 0;
+}
+.citat {
+  margin: 0 0 8px;
+  padding-left: 12px;
+  border-left: 3px solid var(--line-strong);
+  max-width: 80ch;
+}
+.citat blockquote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.citat figcaption {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+.citat a,
+.revideringar a {
+  color: inherit;
+}
+.allmanna {
+  margin-top: 12px;
+}
+.tabell thead th[scope='rowgroup'],
+.tabell tbody th[scope='rowgroup'] {
+  font-weight: 400;
 }
 .kallrad {
   font-size: 12px;

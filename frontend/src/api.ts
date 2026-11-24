@@ -1730,6 +1730,32 @@ export interface Uppfoljningsnamnd {
   avvikelse_reviderad: Budgetavvikelse | null
   avvikelse_antagen: Budgetavvikelse | null
   kontroll: Avvikelsekontroll | null
+  /** Besluten under året som ändrade nämndens budget, med beloppet (#134). */
+  revideringar: Budgetrevidering[]
+  /** Skillnaden mellan antagen och reviderad budget som besluten inte förklarar. Null när den är 0 eller inte utredd. */
+  ej_kopplat: number | null
+  /** Dokumentens förklaringar till avvikelsen, som citat. */
+  orsaker: Avvikelseorsak[]
+}
+/** Ett beslut om ändrad budget, hänvisat till behandlingen i protokollet. */
+export interface Budgetbeslut {
+  organ: string
+  datum: string
+  paragraf: number
+  hittad: boolean
+  sammantrade_id: number | null
+  rubrik: string | null
+}
+export interface Budgetrevidering {
+  beslut: Budgetbeslut
+  mnkr: number
+  /** Sidan i årsredovisningen när beloppet inte står i beslutet. */
+  belopp_sida: number | null
+}
+export interface Avvikelseorsak {
+  dokument: 'arsredovisning' | 'delarsrapport'
+  sida: number
+  text: string
 }
 export interface Uppfoljningsresultat {
   antagen: (Sidbelopp & { procent: number; beraknat: boolean }) | null
@@ -1765,6 +1791,10 @@ export interface Uppfoljning {
     namnder: Uppfoljningsnamnd[]
     utan_uppfoljning: { organ: string; antagen: Sidbelopp }[]
     resultat: Uppfoljningsresultat
+    /** Om revideringarna under året är utredda. Annars visas de inte. */
+    revideringar_utredda: boolean
+    /** Citat om nämnderna i stort. */
+    orsaker: Avvikelseorsak[]
   }
   publicerad: string | null
   andring: { motivering: string; tidigare: number; publicerad: string | null } | null

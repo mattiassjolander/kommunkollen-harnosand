@@ -297,6 +297,14 @@ _Avoid_: Bedömning, recension
 Budgeten vid årets slut, efter fullmäktiges ändringar under året, som årsredovisningen redovisar den per organ. Skiljer sig från den antagna budgeten när ramar flyttas, till exempel när en nämnd läggs ned.
 _Avoid_: Ändrad budget, slutlig budget
 
+**Revidering**:
+Ett beslut under året som ändrar ett organs budget, med beloppet per organ och hänvisning till sammanträdet och paragrafen. Summan av revideringarna förklarar skillnaden mellan antagen och reviderad budget. Det som inte förklaras redovisas som ej kopplat till beslut.
+_Avoid_: Tilläggsanslag, ombudgetering (som samlingsnamn; de är sorter av revideringar)
+
+**Avvikelseorsak**:
+Årsredovisningens eller delårsrapportens egen förklaring till ett organs avvikelse, återgiven som citat med sida. Plattformen tolkar den inte.
+_Avoid_: Förklaring (utan källa), analys
+
 **Delårsprognos**:
 Delårsrapportens helårsprognos: årets väntade resultat och varje organs väntade avvikelse mot budgeten.
 _Avoid_: Prognos (utan bestämning), resultatprognos (för organen)

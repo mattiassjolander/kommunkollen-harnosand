@@ -23,5 +23,21 @@
      "utfall": {"mnkr": 112.0, "sida": 81}, "avvikelse": {"mnkr": 8.4, "sida": 81}},
     {"organ": "Arbetslivsnämnden", "budget": {"mnkr": 0.0, "sida": 81}, "utfall": {"mnkr": 0.3, "sida": 81},
      "avvikelse": {"mnkr": -0.3, "sida": 81}}
+  ],
+  "revideringar": [
+    {"beslut": {"organ": "KF", "datum": "2026-06-15", "paragraf": 108},
+     "andringar": [{"organ": "Socialnämnden", "mnkr": 12.1}, {"organ": "Skolnämnden", "mnkr": 5.6}]},
+    {"beslut": {"organ": "KF", "datum": "2027-09-27", "paragraf": 120}, "belopp_sida": 82,
+     "andringar": [{"organ": "Kommunstyrelsen", "mnkr": 3.7}]}
+  ],
+  "orsaker": [
+    {"dokument": "arsredovisning", "sida": 81, "organ": ["Socialnämnden"],
+     "text": "Socialnämndens underskott beror främst på högre kostnader för placeringar än budgeterat."},
+    {"dokument": "arsredovisning", "sida": 81, "organ": ["Skolnämnden", "Samhällsnämnden"],
+     "text": "För skol- och samhällsnämnd beror avvikelsen till största delen på personalkostnaderna."},
+    {"dokument": "delarsrapport", "sida": 25, "organ": ["Socialnämnden"],
+     "text": "Socialnämnden prognostiserar ett underskott inom äldreomsorgen."},
+    {"dokument": "arsredovisning", "sida": 81,
+     "text": "Mer detaljerad information kring nämndernas utfall återfinns i respektive nämndsrapport."}
   ]
 }

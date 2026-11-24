@@ -10,7 +10,6 @@ import {
   hamtaUppfoljningsutkast,
   publiceraUppfoljning,
   type Jag,
-  type Sidbelopp,
   type Uppfoljningsutkast,
 } from '../api'
 import { datumTid } from '../format'
@@ -42,7 +41,11 @@ onMounted(ladda)
 
 const egen = (u: Uppfoljningsutkast) => !!jag.value && u.redaktorer.includes(jag.value.epost)
 const nr = (v: number | null | undefined) => (v === null || v === undefined ? '–' : String(v).replace('.', ','))
-const lank = (url: string | undefined, b: Sidbelopp | null) => (url && b?.sida ? `${url}#page=${b.sida}` : undefined)
+const orsaker = (u: Uppfoljningsutkast) => [
+  ...u.berakning.namnder.flatMap((n) => n.orsaker.map((o) => ({ ...o, organ: n.organ }))),
+  ...u.berakning.orsaker.map((o) => ({ ...o, organ: 'Nämnderna i stort' })),
+]
+const lank = (url: string | undefined, b: { sida: number | null } | null) => (url && b?.sida ? `${url}#page=${b.sida}` : undefined)
 
 async function steg(u: Uppfoljningsutkast, gor: () => Promise<Uppfoljningsutkast>, klart: string) {
   meddelande[u.id] = ''
@@ -126,6 +129,28 @@ async function steg(u: Uppfoljningsutkast, gor: () => Promise<Uppfoljningsutkast
             I årsplanen men inte i filen: {{ u.berakning.utan_uppfoljning.map((x) => x.organ).join(', ') }}.
           </template>
         </p>
+        <details v-if="u.berakning.revideringar_utredda || orsaker(u).length" class="detaljer" data-testid="revideringar-utkast">
+          <summary>Revideringar och orsaker</summary>
+          <ul v-if="u.berakning.revideringar_utredda" class="punkter">
+            <template v-for="n in u.berakning.namnder" :key="n.organ">
+              <li v-for="r in n.revideringar" :key="`${n.organ}-${r.beslut.datum}-${r.beslut.paragraf}`">
+                {{ n.organ }} {{ nr(r.mnkr) }}: {{ r.beslut.organ }} {{ r.beslut.datum }} § {{ r.beslut.paragraf }}
+                <template v-if="r.beslut.hittad">({{ r.beslut.rubrik }})</template>
+                <strong v-else>(finns inte i protokollen)</strong>
+                <template v-if="r.belopp_sida">, beloppet ur årsredovisningen s. {{ r.belopp_sida }}</template>
+              </li>
+              <li v-if="n.ej_kopplat !== null" data-testid="ej-kopplat-utkast">{{ n.organ }} {{ nr(n.ej_kopplat) }}: ej kopplat till beslut</li>
+            </template>
+          </ul>
+          <p v-else class="meta">Revideringarna är inte utredda för året.</p>
+          <ul class="punkter">
+            <li v-for="(o, i) in orsaker(u)" :key="i">
+              {{ o.organ }}:
+              <a :href="lank(o.dokument === 'arsredovisning' ? u.dokument.arsredovisning?.url : u.dokument.delarsrapport?.url, o)" target="_blank" rel="noopener">s. {{ o.sida }}</a>
+              ”{{ o.text }}”
+            </li>
+          </ul>
+        </details>
         <div class="knappar">
           <button v-if="arUtgivare && u.status === 'utkast'" type="button" :disabled="egen(u)" :title="egen(u) ? 'Du har läst in uppföljningen' : ''" data-testid="granska-uppfoljning" @click="steg(u, () => granskaUppfoljning(u.id), 'Granskat.')">Granska</button>
           <button v-if="arUtgivare && u.status === 'granskad'" type="button" :disabled="egen(u)" data-testid="publicera-uppfoljning" @click="steg(u, () => publiceraUppfoljning(u.id), 'Publicerat.')">Publicera</button>
@@ -188,6 +213,14 @@ async function steg(u: Uppfoljningsutkast, gor: () => Promise<Uppfoljningsutkast
 }
 .rulla {
   overflow-x: auto;
+}
+.detaljer {
+  font-size: 13px;
+  margin: 8px 0;
+}
+.punkter {
+  margin: 4px 0;
+  padding-left: 20px;
 }
 .tabell {
   border-collapse: collapse;
