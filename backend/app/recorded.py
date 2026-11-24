@@ -15,7 +15,8 @@ import httpx
 
 
 TYPER = {".pdf": "application/pdf", ".html": "text/html; charset=utf-8",
-         ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12"}
+         ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+         ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
 
 
 class InspeladTransport(httpx.BaseTransport):

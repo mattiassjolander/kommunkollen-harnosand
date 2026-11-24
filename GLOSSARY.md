@@ -187,6 +187,21 @@ SKR:s undersökning av hur företag som haft ett ärende hos kommunen bedömer s
 **Anmälda brott**:
 Brås statistik över brott som anmälts i kommunen, per 100 000 invånare. Visar inte hur många brott som begås.
 
+## Rankningar
+
+**Rankning**:
+En återkommande jämförelse där en extern aktör placerar Sveriges kommuner efter en egen metod, t.ex. Svenskt Näringslivs lokala företagsklimat och Aktuell Hållbarhets Sveriges miljöbästa kommun. Varje rankning har en avsändare, en beskrivning av vilken sorts organisation avsändaren är, en länk till metoden och eventuella metodbyten. Uppgifterna är avsändarens egna och publiceras direkt med källhänvisning, utan granskningsflödet. Plattformen värderar inte placeringarna. Visas på sidan Rankningar.
+_Avoid_: Ranking, topplista
+
+**Placering**:
+Kommunens plats i en rankning ett visst år, av ett visst antal kommuner. Plats 1 står överst i diagrammen.
+
+**Delmått**:
+En del av en rankning med ett eget värde, t.ex. en enkätfråga, en statistikfaktor eller en indikator med poäng. Visas med riksvärdet när avsändaren anger det.
+
+**Metodbyte**:
+Ett år då en rankning har ändrat sin metod så att placeringarna före och efter inte går att jämföra. Registreras av en redaktör och bryter linjen i diagrammet.
+
 ## Ekonomiska konsekvenser
 
 **Kostnadshändelse**:

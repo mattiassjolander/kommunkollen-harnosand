@@ -8,6 +8,8 @@ import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
 import SkatteunderlagView from './views/SkatteunderlagView.vue'
 import UndersokningarView from './views/UndersokningarView.vue'
+import RankningarView from './views/RankningarView.vue'
+import RankningView from './views/RankningView.vue'
 import BudgetOchUtfallView from './views/BudgetOchUtfallView.vue'
 import FlodenView from './views/FlodenView.vue'
 import KommandeView from './views/KommandeView.vue'
@@ -40,6 +42,8 @@ const router = createRouter({
     { path: '/ekonomi/budget-och-utfall', component: BudgetOchUtfallView, meta: { titel: 'Budget och utfall' } },
     { path: '/floden', component: FlodenView, meta: { titel: 'Ekonomiska flöden' } },
     { path: '/undersokningar', component: UndersokningarView, meta: { titel: 'Undersökningar' } },
+    { path: '/rankningar', component: RankningarView, meta: { titel: 'Rankningar' } },
+    { path: '/rankningar/:id', component: RankningView, meta: { titel: 'Rankning' } },
     { path: '/politik', component: PolitikView, meta: { titel: 'Politik och beslut' } },
     { path: '/politik/sammantraden/:id', component: SammantradeView, meta: { titel: 'Sammanträde' } },
     {

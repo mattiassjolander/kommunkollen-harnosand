@@ -1930,3 +1930,82 @@ export const granskaPersonuppgift = (id: number) =>
   skrivSammansattning<Personuppgift>(`/api/sammansattning/uppgifter/${id}/granskning`)
 export const publiceraPersonuppgift = (id: number) =>
   skrivSammansattning<Personuppgift>(`/api/sammansattning/uppgifter/${id}/publicering`)
+
+// Rankningar (#66): externa aktörers jämförelser av kommunerna, t.ex. företagsklimat och miljöbästa kommun.
+
+export interface Rankningssammanfattning {
+  ar: number
+  placering: number
+  antal: number | null
+  poang: number | null
+  max_poang: number | null
+  foregaende: { ar: number; placering: number } | null
+  /** Skillnaden i placeringens nummer mot året före (negativ = närmare plats 1). */
+  andring: number | null
+}
+
+export interface Rankningsinfo {
+  id: string
+  titel: string
+  avsandare: string
+  avsandartyp: string
+  beskrivning: string
+  url: string
+  metod_url: string
+  villkor: string
+  senaste: Rankningssammanfattning | null
+}
+
+export interface Metodbyte {
+  ar: number
+  beskrivning: string
+}
+
+export interface Rankningsdelmatt {
+  id: string
+  namn: string
+  grupp: string
+  enhet: string
+  ar: number
+  varde: number | null
+  svar: string | null
+  riksvarde: number | null
+  placering: number | null
+  foregaende: { ar: number; varde: number | null; svar: string | null; placering: number | null } | null
+}
+
+export interface Rankningssida extends Rankningsinfo {
+  datakalla: { id: string; titel: string; url: string }
+  metodbyten: Metodbyte[]
+  kommuner: { kommun: string; punkter: { ar: number; placering: number; antal: number | null; poang: number | null }[] }[]
+  delmatt: Rankningsdelmatt[]
+  hamtad: string | null
+  kallor: string[]
+}
+
+export const hamtaRankningar = () => hamta<Rankningsinfo[]>('/api/rankningar')
+export const hamtaRankning = (id: string) => hamtaEllerSaknas<Rankningssida>(`/api/rankningar/${encodeURIComponent(id)}`)
+
+async function metodbytessvar(svar: Response): Promise<Metodbyte[]> {
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
+
+/** Redaktören registrerar ett metodbyte (år och vad som ändrades). Linjen i diagrammet bryts där. */
+export async function registreraMetodbyte(rankning: string, ar: number, beskrivning: string): Promise<Metodbyte[]> {
+  return metodbytessvar(
+    await fetch(`/api/rankningar/${encodeURIComponent(rankning)}/metodbyten`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ar, beskrivning }),
+    }),
+  )
+}
+
+export async function taBortMetodbyte(rankning: string, ar: number): Promise<Metodbyte[]> {
+  return metodbytessvar(
+    await fetch(`/api/rankningar/${encodeURIComponent(rankning)}/metodbyten/${ar}`, { method: 'DELETE' }),
+  )
+}
