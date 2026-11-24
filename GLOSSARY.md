@@ -319,6 +319,45 @@ _Avoid_: Överskott, underskott (som värderande ord)
 **Uppföljning**:
 Budget jämfört med utfall för ett budgetår: reviderad budget, delårsprognos och utfall avlästa ur årsredovisningen och delårsrapporten med sida, bredvid den antagna budgeten. Den granskas och publiceras som budgetförslagen.
 
+## Styrande dokument
+
+**Styrande dokument**:
+Ett dokument som kommunen publicerar på sidan Kommunens styrande dokument, till exempel ett reglemente, en delegationsordning, en policy eller en bilaga till en plan. Plattformen följer kommunens lista och bedömer inte själv om ett dokument är styrande.
+_Avoid_: Styrdokument, policydokument
+
+**Kategori**:
+Gruppen som ett styrande dokument ligger i på kommunens sida, till exempel Delegationer eller Riktlinjer – rutiner. Ett dokument som ligger i två grupper har två kategorier.
+_Avoid_: Dokumenttyp (som står i dokumentet själv och visas som den står där)
+
+**Dokumentinformation**:
+Rutan på första sidan i många styrande dokument med dokumentnamn, dokumenttyp, vem som har fastställt eller upprättat dokumentet, datum, diarienummer, dokumentansvarig, version, senast reviderad, giltig till och med och vilka dokumentet gäller för. Uppgifterna återges som de står, och ett fält som saknas visas som saknat.
+
+**Version av ett styrande dokument**:
+En fil som kommunen har publicerat för dokumentet. När kommunen byter ut filen blir den nya filen en ny version, och de tidigare finns kvar hos plattformen märkta "Ersatt" med datum. Skilt från versionsnumret i dokumentinformationen.
+_Avoid_: Revidering (som är ett budgetbeslut)
+
+**Giltighet**:
+Om ett styrande dokument är *gällande*, *utgånget* eller *borttaget*. Utgånget är det när datumet i "giltig t o m" har passerats medan dokumentet ligger kvar på kommunens sida. Saknas datumet gäller perioden i titeln, till exempel 2017–2020, till och med 31 december det sista året. Dokumentet anger varifrån giltigheten kommer. Borttaget är det när kommunen har tagit bort det från sidan. Giltigheten läses av och visas med källa direkt, utan granskningsflödet.
+_Avoid_: Status, aktualitet
+
+**Motstridighet**:
+Något i eller mellan styrande dokument som inte går ihop: en motsägelse, en felaktig hänvisning eller flera gällande versioner. Den är redaktionens analys och märks Analys. Den går från utkast via granskad till publicerad, och en utgivare som inte skrev den godkänner den. En publicerad motstridighet har status *ny*, *anmäld till kommunen* eller *åtgärdad av kommunen*, med datum. När ett berört dokument får en ny version märks den "Dokumentet har ändrats" tills en redaktör har tagit ställning. Förklaringen återger vad dokumenten säger och nämner inga personer. En utgången giltighet är ingen motstridighet.
+_Avoid_: Avvikelse (som gäller protokollen), fel, brist
+
+**Motsägelse**:
+En motstridighet där två bestämmelser, i samma dokument eller i olika, säger olika saker om samma sak, till exempel två tidsfrister för samma steg. Båda ställena citeras med dokument, version, sida och paragraf.
+
+**Felaktig hänvisning**:
+En motstridighet där ett styrande dokument hänvisar till ett kapitel, en paragraf, ett organ eller ett dokument som inte finns. Hänvisningen citeras tillsammans med en kontrollerbar uppgift med källa om det som finns, till exempel "Reglementet har kapitel 1–8".
+
+**Flera gällande versioner**:
+En motstridighet där samma dokument, eller samma sak, ligger ute flera gånger på kommunens sida som gällande, till exempel ett utkast och en antagen version med samma diarienummer. Båda dokumenten anges.
+_Avoid_: Dubblett (om dokument med olika innehåll)
+
+**Process**:
+En arbetsgång som redaktionen har valt att beskriva ur de styrande dokumenten, till exempel kallelse till sammanträde eller justering av protokoll. Den består av steg: vem som gör något, vad som görs, när eller inom vilken tidsfrist, och var det står. Stegen kan hämtas ur flera dokument. Den är redaktionens analys och går igenom samma flöde som en motstridighet.
+_Avoid_: Rutin (som begrepp), flöde
+
 ## Redaktionellt arbete
 
 **Redaktör**:
