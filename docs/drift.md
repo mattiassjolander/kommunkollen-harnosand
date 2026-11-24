@@ -36,12 +36,14 @@ ssh -N -L 8080:127.0.0.1:80 kommunkollen
 Ändringar i `.env` (till exempel tillåtelselistan) börjar gälla när backend startas om:
 
 ```bash
-ssh kommunkollen "cd /opt/kommunkollen && docker compose up -d backend"
+ssh kommunkollen "cd /opt/kommunkollen && TAG=\$(docker inspect kommunkollen-backend-1 --format '{{.Config.Image}}' | cut -d: -f2) docker compose up -d --no-build backend"
 ```
+
+`TAG` måste anges när tjänsterna skapas på nytt med `docker compose up`. Utan den letar compose efter taggen `latest`, som inte finns på servern, och försöker bygga från källkod som inte heller finns där. Kommandot ovan hämtar taggen från den backend som körs. `docker compose restart` och `stop` behöver ingen tagg.
 
 ## Schemalagd insamling
 
-Tjänsten `insamlare` (samma image som backend) startar insamlingen den 1:a och 15:e varje månad kl 03:00 svensk tid. Schemat ändras med `INSAMLING_DAGAR` och `INSAMLING_KLOCKAN` i `.env`, följt av `docker compose up -d`. Tomt `INSAMLING_DAGAR` stänger av schemat.
+Tjänsten `insamlare` (samma image som backend) startar insamlingen den 1:a och 15:e varje månad kl 03:00 svensk tid. Schemat ändras med `INSAMLING_DAGAR` och `INSAMLING_KLOCKAN` i `.env`, följt av `docker compose up -d` med `TAG` (se ovan). Tomt `INSAMLING_DAGAR` stänger av schemat.
 
 - Var tjänsten nere vid en planerad tidpunkt körs insamlingen när den startar igen, en gång.
 - Två insamlingar körs aldrig samtidigt. En manuell insamling under en schemalagd körning (eller tvärtom) får beskedet att en insamling pågår.
@@ -117,7 +119,7 @@ ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv
 ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.sokindex --bygg-om"
 ```
 
-Kommandot räknar också vektorerna för sökning på betydelse (#69, ADR-0008) för alla enheter som väntar: nya, ändrade, eller räknade med en annan modell. Första gången tar det cirka en halvtimme på de två kärnorna. Vyn Datakällor visar hur många enheter som har vektorer och hur många som väntar.
+Kommandot räknar också vektorerna för sökning på betydelse (#69, ADR-0008) för alla enheter som väntar: nya, ändrade, eller räknade med en annan modell. Första gången tar det cirka 80 minuter på de två kärnorna (cirka 200 enheter i minuten). Vyn Datakällor visar hur många enheter som har vektorer och hur många som väntar.
 
 Sökmodellen är inbyggd i backend-bilden och laddas i minnet (cirka 0,5 GB) i den process som behöver den: backend vid första sökningen, insamlaren vid första insamlingen med nya protokoll och kommandot ovan. `SOKMODELL=av` i `.env` stänger av sökningen på betydelse. `SOK_FRAGOR_PER_MINUT` (standard 30) är gränsen per IP-adress.
 
@@ -133,9 +135,10 @@ Den nya bilden bygger på Debian i stället för Alpine. Sorteringsreglerna för
    ssh kommunkollen "df -h / && cd /opt/kommunkollen && docker compose exec db psql -U kommunkollen -d kommunkollen -Atc \"SELECT pg_size_pretty(pg_database_size('kommunkollen'))\""
    ```
 
-2. Stoppa backend och insamlaren, så att inget skrivs under bytet, och ta en säkerhetskopia:
+2. Notera taggen för den version som körs. Stoppa sedan backend och insamlaren, så att inget skrivs under bytet, och ta en säkerhetskopia:
 
    ```bash
+   ssh kommunkollen "docker inspect kommunkollen-backend-1 --format '{{.Config.Image}}' | cut -d: -f2"
    ssh kommunkollen "cd /opt/kommunkollen && docker compose stop backend insamlare frontend"
    ssh kommunkollen "cd /opt/kommunkollen && docker compose exec -T db pg_dump -U kommunkollen -d kommunkollen -Fc > /opt/kommunkollen/fore-pgvector-\$(date +%Y%m%d).dump && ls -lh /opt/kommunkollen/*.dump"
    ```
@@ -155,18 +158,20 @@ Den nya bilden bygger på Debian i stället för Alpine. Sorteringsreglerna för
 5. Starta allt. Backend skapar tillägget och tabellen `sokstycke` när den startar:
 
    ```bash
-   ssh kommunkollen "cd /opt/kommunkollen && docker compose up -d && curl -s http://localhost/api/halsa"
+   ssh kommunkollen "cd /opt/kommunkollen && TAG=<taggen från steg 2> docker compose up -d --no-build && curl -s http://localhost/api/halsa"
    ```
 
-6. Räkna vektorerna, i bakgrunden (cirka en halvtimme):
+6. Räkna vektorerna, i bakgrunden (cirka 80 minuter). Loggen skrivs till `/tmp/sokindex.log` i backend-containern:
 
    ```bash
-   ssh kommunkollen "cd /opt/kommunkollen && docker compose exec -d backend /app/.venv/bin/python -m app.sokindex"
+   ssh kommunkollen "cd /opt/kommunkollen && docker compose exec -d backend sh -c '/app/.venv/bin/python -m app.sokindex > /tmp/sokindex.log 2>&1'"
    ```
+
+   En driftsättning under tiden startar om backend och avbryter beräkningen. Kör då kommandot igen. Det fortsätter med de enheter som återstår.
 
 7. Kontrollera antalen i vyn Datakällor och sök på till exempel "skolnedläggning".
 
-**Tillbaka till den gamla databasen:** ta bort raderna `DB_IMAGE` och `DB_VOLYM` ur `.env` och kör `docker compose up -d`. Det som ändrats efter bytet finns då bara i den nya volymen.
+**Tillbaka till den gamla databasen:** ta bort raderna `DB_IMAGE` och `DB_VOLYM` ur `.env` och kör `docker compose up -d --no-build` med `TAG`. Det som ändrats efter bytet finns då bara i den nya volymen.
 
 ## Säkerhetskopiering
 

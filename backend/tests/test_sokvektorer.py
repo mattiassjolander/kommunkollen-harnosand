@@ -190,6 +190,21 @@ def test_stycken_om_300_ord_med_50_ords_overlapp():
     assert sokvektorer.stycken("", "", "") == []
 
 
+def test_utdragen_raknar_hogst_taket_av_meningar(monkeypatch):
+    # Varje mening kostar ett modellanrop när sidan visas. 20 träffar med 12 meningar var tog 30 s på servern.
+    raknade: list[int] = []
+    m = sokvektorer.Testmodell()
+    passager = m.passager
+    monkeypatch.setattr(m, "passager", lambda t: raknade.append(len(t)) or passager(t))
+    sokvektorer.satt_modell(m)
+    text = "Rubrik\n" + " ".join(f"Mening nummer {i} handlar om skolan." for i in range(12))
+    stycken = {i: text for i in range(20)} | {99: "Rubrik\nBara en mening om skolan här."}
+    ut = sokvektorer.basta_meningar(m.fraga("skolan"), stycken, hogst=48)
+    assert sum(raknade) == 20 * 2  # två meningar var, och ingen för stycket med en mening
+    assert set(ut) == set(stycken)
+    assert ut[99] == "Bara en mening om skolan här."
+
+
 def test_stycket_har_enhetens_sida(conn, monkeypatch):
     enheter(monkeypatch, behandling("a", "Skolan", "Text.", sida=14))
     sokindex.indexera(conn, typer=["behandling"])

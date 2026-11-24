@@ -62,7 +62,8 @@ class E5Small:
 
     def __init__(self, katalog: str | None = None, tradar: int | None = None) -> None:
         self.katalog = katalog or os.environ.get("MODELL_KATALOG")
-        self.tradar = tradar
+        # onnxruntime räknar värdens alla kärnor, inte de som containern får använda (två på LXC 107).
+        self.tradar = tradar or (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None)
         self._modell = None
         self._las = Lock()
 
@@ -318,23 +319,34 @@ def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | No
 _MENING = re.compile(r"(?<=[.!?:])\s+(?=[A-ZÅÄÖ0-9§•–-])")
 
 
-def basta_meningar(fraga_vektor: Sequence[float], stycken_: dict[int, str], per_stycke: int = 12) -> dict[int, str]:
-    """Den mening i varje stycke som ligger närmast frågan, för utdraget till en träff på betydelse."""
+def basta_meningar(
+    fraga_vektor: Sequence[float], stycken_: dict[int, str], per_stycke: int = 12, hogst: int = 48
+) -> dict[int, str]:
+    """Den mening i varje stycke som ligger närmast frågan, för utdraget till en träff på betydelse.
+
+    Varje mening kostar ett anrop till modellen när sidan visas, cirka 20 ms på serverns två kärnor. Sidan
+    räknar därför högst `hogst` meningar, fördelade jämnt över träffarna. Ett stycke som bara får en mening
+    behöver ingen jämförelse."""
     m = modell()
-    meningar: list[tuple[int, str]] = []
+    kandidater: dict[int, list[str]] = {}
     for nyckel, text in stycken_.items():
         _, _, brodtext = text.partition("\n")
         delar = [" ".join(d.split()[:40]) for d in _MENING.split(brodtext or text) if len(d.split()) >= 3]
-        meningar += [(nyckel, d) for d in (delar or [" ".join((brodtext or text).split()[:40])])[:per_stycke]]
-    if m is None or not meningar:
+        kandidater[nyckel] = (delar or [" ".join((brodtext or text).split()[:40])])[:per_stycke]
+    if m is None or not kandidater:
         return {}
-    vektorer = m.passager([t for _, t in meningar])
-    ut: dict[int, tuple[float, str]] = {}
-    for (nyckel, t), v in zip(meningar, vektorer):
+    # Lika många meningar per stycke, så långt taket räcker.
+    kvot = max(1, hogst // len(kandidater))
+    ut = {k: d[0] for k, d in kandidater.items()}
+    meningar = [(k, t) for k, d in kandidater.items() if len(d) > 1 for t in d[:kvot]]
+    if not meningar:
+        return ut
+    basta: dict[int, float] = {}
+    for (nyckel, t), v in zip(meningar, m.passager([t for _, t in meningar])):
         likhet = sum(a * b for a, b in zip(fraga_vektor, v))
-        if nyckel not in ut or likhet > ut[nyckel][0]:
-            ut[nyckel] = (likhet, t)
-    return {k: t for k, (_, t) in ut.items()}
+        if nyckel not in basta or likhet > basta[nyckel]:
+            basta[nyckel], ut[nyckel] = likhet, t
+    return ut
 
 
 if __name__ == "__main__":
