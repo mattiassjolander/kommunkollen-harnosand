@@ -38,7 +38,7 @@ test('översikten visar datainsamlingens status: senaste och nästa uppdatering 
 
 test('genvägarna leder till rätt vyer', async ({ page }) => {
   for (const [namn, url, rubrik] of [
-    ['Ekonomi', '/ekonomi', 'Ekonomi'],
+    ['Ekonomi', '/ekonomi', 'Nyckeltal'],
     ['Ekonomiska flöden – Sankey', '/floden', 'Ekonomiska flöden'],
     ['Datakällor', '/datakallor', 'Datakällor och uppdateringsstatus'],
   ]) {

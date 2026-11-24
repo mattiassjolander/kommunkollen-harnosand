@@ -13,7 +13,7 @@ test.beforeAll(async ({ request }) => {
 test('kön och ålder för kandidater, valda och tjänstgörande, med filter i URL:en', async ({ page }) => {
   await page.request.post('/api/auth/logga-ut')
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Sammansättning' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Sammansättning' }).click()
   await expect(page).toHaveURL(/\/politik\/sammansattning$/)
   await expect(page.getByTestId('konstext')).toContainText('Kön enligt folkbokföringen (Valmyndigheten)')
 

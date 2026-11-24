@@ -36,7 +36,6 @@ import {
 } from '../../api'
 import { datumTid } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const utloggad = inject<() => void>('utloggad', () => {})
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
@@ -335,14 +334,13 @@ const kontroller = (p: Planutkast, t: Plantabell) => p.kontroller.filter((k) => 
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Budgetutkast</h1>
     <p class="ingress">
       Planförutsättningar och budgetförslag som lästs in och väntar på publicering. Kontrollera varje siffra mot sidan i
       originalet. En utgivare som inte läst in eller ändrat uppgifterna granskar och publicerar dem. En utgivare kan
       återkalla det som är publicerat när det innehåller fel.
     </p>
   </header>
-  <PolitikFlikar />
 
   <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
   <p v-else-if="laddar">Hämtar utkast…</p>

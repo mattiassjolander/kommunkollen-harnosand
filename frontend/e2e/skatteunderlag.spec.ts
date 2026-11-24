@@ -12,7 +12,7 @@ test.beforeAll(async ({ request }) => {
 
 test('skatteunderlagsprognosen är öppen och visar senaste cirkuläret i mnkr med källa', async ({ page }) => {
   await page.goto('/ekonomi')
-  await page.getByRole('link', { name: 'Skatteunderlagsprognos' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Skatteunderlagsprognos' }).click()
   await expect(page).toHaveURL(/\/ekonomi\/skatteunderlag$/)
 
   // Ingen inloggning krävs för att läsa.

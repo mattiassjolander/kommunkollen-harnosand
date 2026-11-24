@@ -6,7 +6,6 @@ import { computed, inject, onMounted, ref } from 'vue'
 import { EjInloggad, hamtaSkatteunderlagsprognoser, type Skatteunderlagsprognoser } from '../api'
 import { datum, tal } from '../format'
 import { laddaNer } from '../analys'
-import EkonomiFlikar from '../components/EkonomiFlikar.vue'
 import Linjediagram from '../components/Linjediagram.vue'
 
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -63,14 +62,13 @@ function exportera() {
 
 <template>
   <header class="vyhuvud">
-    <h1>Ekonomi</h1>
+    <h1>Skatteunderlagsprognos</h1>
     <p class="ingress">
       SKR:s skatteunderlagsprognos för Härnösand: skatteintäkter och generella bidrag och utjämning per år. SKR
       publicerar prognosen fem gånger per år med ett cirkulär, och budgetarbetet utgår från den. Varje cirkulär
       sparas, så att det syns hur prognosen har ändrats.
     </p>
   </header>
-  <EkonomiFlikar />
 
   <p v-if="laddar">Hämtar prognoser…</p>
   <p v-else-if="fel" class="fel" role="alert">Kunde inte hämta prognoserna: {{ fel }}</p>

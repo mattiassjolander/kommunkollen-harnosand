@@ -1,6 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, provide, ref } from 'vue'
-import { hamtaInloggningsmetod, hamtaJag, loggaUt, type Inloggningsmetod, type Jag } from './api'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  hamtaInloggningsmetod,
+  hamtaJag,
+  hamtaKopplingar,
+  hamtaRattelser,
+  loggaUt,
+  type Inloggningsmetod,
+  type Jag,
+} from './api'
+import Brodsmula from './components/Brodsmula.vue'
+import Huvudnavigering from './components/Huvudnavigering.vue'
 import Sokruta from './components/Sokruta.vue'
 import Statusindikator from './components/Statusindikator.vue'
 import Hogtidsrad from './components/Hogtidsrad.vue'
@@ -8,18 +19,6 @@ import Hogtidssymbol from './components/Hogtidssymbol.vue'
 import Temavaljare from './components/Temavaljare.vue'
 import { useHogtidstema } from './hogtidstema'
 import LoggaIn from './views/LoggaIn.vue'
-
-const vyer = [
-  { till: '/', namn: 'Översikt' },
-  { till: '/ekonomi', namn: 'Ekonomi' },
-  { till: '/floden', namn: 'Ekonomiska flöden' },
-  { till: '/undersokningar', namn: 'Undersökningar' },
-  { till: '/rankningar', namn: 'Rankningar' },
-  { till: '/politik', namn: 'Politik och beslut' },
-  { till: '/kalender', namn: 'Kalender' },
-  { till: '/kommande', namn: 'Kommande' },
-  { till: '/datakallor', namn: 'Datakällor' },
-]
 
 const jag = ref<Jag | null>(null)
 const metod = ref<Inloggningsmetod | null>(null)
@@ -56,7 +55,63 @@ function avbrytInloggning() {
   history.replaceState(null, '', window.location.pathname)
 }
 
-onMounted(kontrollera)
+// Antal som väntar i Redaktion: rättelser som inte är publicerade och kopplingsförslag.
+const roller = computed(() => jag.value?.roller ?? [])
+const vantar = ref<Partial<Record<'rattelser' | 'kopplingar', number>>>({})
+async function raknaVantande() {
+  const r = roller.value
+  const ut: typeof vantar.value = {}
+  const jobb: Promise<void>[] = []
+  if (r.includes('redaktor') || r.includes('utgivare'))
+    jobb.push(
+      Promise.all([hamtaRattelser('utkast'), hamtaRattelser('granskad')]).then(([a, b]) => {
+        ut.rattelser = a.length + b.length
+      }),
+    )
+  if (r.includes('redaktor'))
+    jobb.push(
+      hamtaKopplingar('forslag').then((k) => {
+        ut.kopplingar = k.length
+      }),
+    )
+  await Promise.allSettled(jobb)
+  vantar.value = ut
+}
+
+// Smal skärm (design.md *Navigering*): navigeringen fälls ihop till en menyknapp i sidhuvudet.
+const route = useRoute()
+const menyOppen = ref(false)
+const menyknapp = ref<HTMLButtonElement | null>(null)
+const meny = ref<HTMLElement | null>(null)
+async function oppnaMeny() {
+  menyOppen.value = true
+  await nextTick()
+  meny.value?.querySelector<HTMLElement>('a, button')?.focus()
+}
+function stangMeny(aterstall = true) {
+  if (!menyOppen.value) return
+  menyOppen.value = false
+  if (aterstall) menyknapp.value?.focus()
+}
+function tangent(e: KeyboardEvent) {
+  if (e.key === 'Escape') stangMeny()
+}
+
+watch(
+  () => route.path,
+  () => {
+    stangMeny(false)
+    // Räknas om när man går till redaktionens vyer, där siffrorna ändras.
+    if (roller.value.length && route.path.startsWith('/redaktion')) void raknaVantande()
+  },
+)
+watch(roller, () => void raknaVantande())
+
+onMounted(() => {
+  void kontrollera()
+  window.addEventListener('keydown', tangent)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', tangent))
 </script>
 
 <template>
@@ -68,8 +123,8 @@ onMounted(kontrollera)
       @inloggad="kontrollera"
       @avbryt="avbrytInloggning"
     />
-    <div v-else class="ram">
-      <aside class="nav">
+    <div v-else class="ram" :class="{ 'meny-oppen': menyOppen }">
+      <aside id="navigering" ref="meny" class="nav" aria-label="Navigering">
         <div class="ordmarke">
           <img class="platslogotyp ljus" src="/platsvarumarke/logotyp-bla.png" alt="Härnösand Höga Kusten" />
           <img class="platslogotyp morkt" src="/platsvarumarke/logotyp-vit.png" alt="Härnösand Höga Kusten" />
@@ -77,31 +132,47 @@ onMounted(kontrollera)
             <span class="namn">Kommunkollen</span>
             <Hogtidssymbol v-if="hogtid?.symbol" :symbol="hogtid.symbol" />
           </span>
+          <button type="button" class="stang" aria-label="Stäng menyn" @click="stangMeny()">✕</button>
         </div>
-        <nav aria-label="Huvudvyer">
-          <RouterLink v-for="v in vyer" :key="v.till" :to="v.till" class="navlank">{{ v.namn }}</RouterLink>
-        </nav>
-        <div class="avsandare">
-          <img class="rundlogotyp" src="/platsvarumarke/logotyp-rund-bla.png" alt="" />
-          <p>Oberoende granskning. Inte en kanal för Härnösands kommun.</p>
+        <div class="lista">
+          <Huvudnavigering :roller="roller" :vantar="vantar" @valt="stangMeny(false)" />
         </div>
-        <div class="anvandare" data-testid="anvandare">
-          <template v-if="jag">
-            <span class="anvnamn">{{ jag.namn }}</span>
-            <span class="roller">{{ jag.roller.join(', ') }}</span>
-            <button type="button" class="lank" @click="loggaUtOchStanna">Logga ut</button>
-          </template>
-          <button v-else type="button" class="lank" @click="visaInloggning = true">Logga in</button>
+        <div class="fot">
+          <div class="avsandare">
+            <img class="rundlogotyp" src="/platsvarumarke/logotyp-rund-bla.png" alt="" />
+            <p>Oberoende granskning. Inte en kanal för Härnösands kommun.</p>
+          </div>
+          <div class="anvandare" data-testid="anvandare">
+            <template v-if="jag">
+              <span class="anvnamn">{{ jag.namn }}</span>
+              <span class="roller">{{ jag.roller.join(', ') }}</span>
+              <button type="button" class="lank" @click="loggaUtOchStanna">Logga ut</button>
+            </template>
+            <button v-else type="button" class="lank" @click="visaInloggning = true">Logga in</button>
+          </div>
         </div>
       </aside>
+      <div v-if="menyOppen" class="skugga" aria-hidden="true" @click="stangMeny()"></div>
       <div class="kolumn">
         <header class="sidhuvud">
+          <button
+            ref="menyknapp"
+            type="button"
+            class="menyknapp"
+            aria-controls="navigering"
+            :aria-expanded="menyOppen"
+            data-testid="menyknapp"
+            @click="menyOppen ? stangMeny() : oppnaMeny()"
+          >
+            <span aria-hidden="true">☰</span> Meny
+          </button>
           <Statusindikator />
           <Hogtidsrad v-if="hogtid" :tema="hogtid" />
           <Sokruta />
           <Temavaljare />
         </header>
         <main class="innehall">
+          <Brodsmula />
           <RouterView />
         </main>
         <footer class="sidfot">
@@ -120,18 +191,25 @@ onMounted(kontrollera)
   grid-template-columns: 220px 1fr;
   min-height: 100vh;
 }
+/* Navigeringen står still när sidan skrollar. Logotypen och användarrutan syns alltid längst ner,
+   och bara länklistan skrollar om den inte får plats (design.md *Navigering*). */
 .nav {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
   border-right: 1px solid var(--line);
-  padding: 24px 16px;
+  padding: 24px 16px 16px;
   background: var(--nav);
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 .ordmarke {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
   padding: 0 4px;
 }
 .platslogotyp {
@@ -153,35 +231,32 @@ onMounted(kontrollera)
   font-weight: 600;
   font-size: 16px;
 }
+.lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.fot {
+  flex-shrink: 0;
+  padding-top: 12px;
+}
 .avsandare {
-  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 0 4px 12px;
   font-size: 12px;
   color: var(--ink-secondary);
 }
 .avsandare p {
-  margin: 8px 0 0;
+  margin: 0;
 }
 .rundlogotyp {
-  width: 72px;
+  width: 44px;
   height: auto;
-  display: block;
-}
-.navlank {
-  display: block;
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  color: var(--ink-secondary);
-  text-decoration: none;
-}
-.navlank:hover {
-  background: var(--accent-wash);
-  color: var(--ink);
-}
-.navlank.router-link-active {
-  background: var(--accent-wash);
-  color: var(--accent);
-  font-weight: 600;
+  flex-shrink: 0;
 }
 .anvandare {
   border-top: 1px solid var(--line);
@@ -209,6 +284,11 @@ onMounted(kontrollera)
   font: inherit;
   cursor: pointer;
   text-decoration: underline;
+}
+.stang,
+.menyknapp,
+.skugga {
+  display: none;
 }
 .kolumn {
   min-width: 0;
@@ -241,48 +321,67 @@ onMounted(kontrollera)
 .sidfot .lank {
   margin-top: 0;
 }
-/* Mobilbredd: menyn läggs ovanför innehållet. */
-@media (max-width: 720px) {
+/* Smal skärm: navigeringen blir en meny som öppnas med en knapp i sidhuvudet. */
+@media (max-width: 900px) {
   .ram {
     grid-template-columns: 1fr;
   }
   .nav {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    padding: 12px 16px;
+    position: fixed;
+    z-index: 20;
+    inset: 0 auto 0 0;
+    width: min(300px, 85vw);
+    border-right: 1px solid var(--line);
+    visibility: hidden;
+    transform: translateX(-100%);
+  }
+  .meny-oppen .nav {
+    visibility: visible;
+    transform: none;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.2);
   }
   .ordmarke {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    margin-bottom: 8px;
+    position: relative;
+    padding-right: 36px;
   }
   .platslogotyp {
-    width: 112px;
+    width: 120px;
   }
-  nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px 4px;
+  .stang {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+    color: var(--ink);
+    cursor: pointer;
   }
-  .navlank {
-    padding: 4px 8px;
+  .skugga {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.35);
   }
-  .avsandare {
-    margin-top: 8px;
-    padding-bottom: 8px;
-  }
-  .rundlogotyp {
-    display: none;
-  }
-  .anvandare {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px 8px;
-    padding-top: 8px;
-  }
-  .lank {
-    margin-top: 0;
+  .menyknapp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--sidhuvud-ink);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--sidhuvud-ink);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
   }
   .sidhuvud {
     padding: 12px 16px;

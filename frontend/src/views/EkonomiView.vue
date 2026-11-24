@@ -17,7 +17,6 @@ import { STOR_FORANDRING, csv, laddaNer } from '../analys'
 import Nyckeltalskort, { type Enhet } from '../components/Nyckeltalskort.vue'
 import Statkort from '../components/Statkort.vue'
 import Resultatbrokort from '../components/Resultatbrokort.vue'
-import EkonomiFlikar from '../components/EkonomiFlikar.vue'
 
 const STANDARD_FRAN = 2022 // standardvisning enligt kravspec avsnitt 18
 
@@ -162,13 +161,12 @@ function exportera() {
 
 <template>
   <header class="vyhuvud">
-    <h1>Ekonomi</h1>
+    <h1>Nyckeltal</h1>
     <p class="ingress">
       Härnösands kommuns ekonomiska utveckling över tid. Belopp i löpande priser, alltså inte justerade för
       inflation. Kronor per invånare gör åren lättare att jämföra.
     </p>
   </header>
-  <EkonomiFlikar />
 
   <p v-if="laddar">Hämtar uppgifter…</p>
   <p v-else-if="fel" class="fel">Kunde inte hämta uppgifter: {{ fel }}</p>

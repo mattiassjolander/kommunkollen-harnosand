@@ -18,7 +18,6 @@ import {
 } from '../api'
 import { datum, tal } from '../format'
 import { laddaNer, skillnad } from '../analys'
-import EkonomiFlikar from '../components/EkonomiFlikar.vue'
 import Resultatstaplar, { type Resultatstapel } from '../components/Resultatstaplar.vue'
 import Avvikelsediagram, { type Avvikelserad } from '../components/Avvikelsediagram.vue'
 
@@ -174,14 +173,13 @@ function exportera() {
 
 <template>
   <header class="vyhuvud">
-    <h1>Ekonomi</h1>
+    <h1>Budget och utfall</h1>
     <p class="ingress">
       Budgeten som fullmäktige antog, budgeten efter ändringarna under året, helårsprognosen i delårsrapporten och
       utfallet i årsredovisningen, för årets resultat och för varje nämnd. Varje siffra länkar till sidan i
       dokumentet den står i.
     </p>
   </header>
-  <EkonomiFlikar />
 
   <div v-if="arlista.length" class="filter">
     <label for="uppfoljning-ar">Budgetår</label>

@@ -25,7 +25,6 @@ import {
 } from '../../api'
 import { datum, tal, talforandring } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -152,14 +151,13 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Budgetförslag</h1>
     <p class="ingress">
       Partiernas budgetförslag till kommunfullmäktige för budgetåret. Alla förslag utgår från samma planförutsättningar:
       förslaget anger sin ram per nämnd, en ändrad skattesats och sitt budgeterade resultat, och förändringen och det
       beräknade resultatet räknas fram. Siffrorna är de som står i förslagen, med länk till sidan i originalet.
     </p>
   </header>
-  <PolitikFlikar />
 
   <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
   <p v-else-if="!laddar && !ar.length" class="saknas" data-testid="inga-budgetar">Inga budgetförslag är publicerade än.</p>

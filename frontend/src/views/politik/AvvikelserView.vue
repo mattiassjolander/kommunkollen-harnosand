@@ -15,7 +15,6 @@ import {
   type Organ,
 } from '../../api'
 import { rattelseuppgift, rattelsevarde, sammantradesdatum, tal } from '../../format'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 import Avvikelsetext from '../../components/Avvikelsetext.vue'
 
 const route = useRoute()
@@ -110,7 +109,7 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Avvikelser</h1>
     <p class="ingress">
       Protokoll där tolkningen hittade något som inte stämmer, eller där redaktionen har publicerat rättelser. En del
       avvikelser finns i själva protokollet och kan lämnas till kommunen. Andra beror på att plattformen inte kunde läsa
@@ -119,7 +118,6 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
       <RouterLink to="/politik/protokollavvikelser">Att anmäla</RouterLink>.
     </p>
   </header>
-  <PolitikFlikar />
 
   <div class="filter" role="group" aria-label="Filter">
     <label>
@@ -211,7 +209,7 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
               <span class="motivering">{{ x.motivering }}</span>
               <RouterLink
                 v-if="arRedaktor && !x.felet_i"
-                :to="`/politik/rattelser#rattelse-${x.id}`"
+                :to="`/redaktion/rattelser#rattelse-${x.id}`"
                 class="komplettera"
                 data-testid="komplettera"
               >Ange var felet finns</RouterLink>

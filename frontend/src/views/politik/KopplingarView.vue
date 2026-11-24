@@ -18,7 +18,6 @@ import {
 } from '../../api'
 import { datumTid, sammantradesdatum } from '../../format'
 import Kopplingsmarkering from '../../components/Kopplingsmarkering.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 type Flik = 'forslag' | 'bekraftad' | 'avvisad'
 type Beslut = Kopplingsbeslut['status']
@@ -147,14 +146,13 @@ const antalText = computed(() => {
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Kopplingar</h1>
     <p class="ingress">
       Kopplingar mellan behandlingar som plattformen inte kunnat göra säkert, till exempel när ett beslutsunderlag
       hänvisar till ett senare organ eller inte anger organet. En bekräftad koppling för ihop behandlingarna till ett
       ärende. Ett beslut kan ändras i efterhand med motivering, och alla beslut sparas.
     </p>
   </header>
-  <PolitikFlikar />
 
   <p v-if="!arRedaktor" class="saknas">Kopplingarna visas bara för redaktörer.</p>
   <template v-else>

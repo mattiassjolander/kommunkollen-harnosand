@@ -22,7 +22,6 @@ import Krocklista from '../../components/Krocklista.vue'
 import Periodforslag from '../../components/Periodforslag.vue'
 import Periodpersoner from '../../components/Periodpersoner.vue'
 import Periodformular from '../../components/Periodformular.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const utloggad = inject<() => void>('utloggad', () => {})
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
@@ -116,14 +115,13 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Partitillhörighet</h1>
     <p class="ingress">
       Partitillhörighet som redaktionen fastställer för en person under en period. En redaktör registrerar perioden
       på personens sida, och en utgivare som inte är samma person granskar och publicerar den. Perioden gäller före
       protokollens uppgift, och läsaren ser vad protokollet anger.
     </p>
   </header>
-  <PolitikFlikar />
 
   <p v-if="!behorig" class="saknas">Partitillhörigheterna visas bara för redaktörer och utgivare.</p>
   <p v-else-if="laddar">Hämtar partitillhörigheter…</p>
