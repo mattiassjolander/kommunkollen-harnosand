@@ -387,7 +387,7 @@ Resultatet när en kontroll gick bra men källan inte hade något nytt eller än
 En datakälla där en del av uppgifterna gick att hämta men inte allt.
 
 **Fullständigt uppdaterad / delvis inaktuell**:
-Plattformen är fullständigt uppdaterad när den senaste insamlingskörningen kontrollerade alla datakällor utan fel. Annars är informationen delvis inaktuell.
+Plattformen är fullständigt uppdaterad när varje datakälla har kontrollerats och den senaste kontrollen av den var utan fel, oavsett om den gjordes i en körning av alla källor eller i en omkörning av källan. Annars är informationen delvis inaktuell.
 
 **Reviderad uppgift**:
 En uppgift som källan har publicerat på nytt med ett annat värde för samma period. Det nya värdet blir en ny version, och de tidigare versionerna finns kvar.

@@ -123,6 +123,35 @@ def test_global_status_nar_en_kalla_har_fel(database_url, google):
     assert kalla(api, "kolada")["status"] == "lyckad"
 
 
+def test_omkorning_av_en_enskild_kalla_gor_inte_de_andra_inaktuella(api):
+    kor(api)
+    assert api.post("/api/auth/test/redaktor").status_code == 200
+    assert api.post("/api/insamlingar", params={"kalla": "kolada"}).status_code == 200
+
+    status = api.get("/api/status").json()
+    assert status["kallor_kontrollerade"] == 12
+    assert status["kallor_utan_fel"] == 12
+    assert status["fullstandigt_uppdaterad"] is True
+
+
+def test_en_ny_kontroll_med_fel_gor_informationen_delvis_inaktuell(database_url, google):
+    kallor = [Kolada(["N03007"]), TrasigKalla()]
+    api = TestClient(skapa_app(database_url, google, kallor=kallor, anonym_lasning=True))
+    assert api.post("/api/auth/test/redaktor").status_code == 200
+    api.post("/api/insamlingar", params={"kalla": "kolada"})
+
+    # Den trasiga källan är aldrig kontrollerad.
+    status = api.get("/api/status").json()
+    assert (status["kallor_kontrollerade"], status["fullstandigt_uppdaterad"]) == (1, False)
+
+    # Källans senaste kontroll avgör, även om en tidigare körning gick bra.
+    api.post("/api/insamlingar", params={"kalla": "trasig"})
+    api.post("/api/insamlingar", params={"kalla": "kolada"})
+    status = api.get("/api/status").json()
+    assert (status["kallor_kontrollerade"], status["kallor_utan_fel"]) == (2, 1)
+    assert status["fullstandigt_uppdaterad"] is False
+
+
 def test_en_kalla_dar_bara_en_del_misslyckas_far_delvis_fel(database_url, google):
     # N99999 saknas i inspelningen, så det nyckeltalet går inte att hämta.
     api = TestClient(skapa_app(database_url, google, kallor=[Kolada(["N03007", "N99999"])], anonym_lasning=True))
