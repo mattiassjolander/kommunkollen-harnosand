@@ -325,7 +325,8 @@ def las_riket(conn, matt_id: str) -> dict | None:
     if not matt_id.startswith("kolada:"):
         return None
     serie = serier.las_serie(conn, matt_id, RIKET)
-    return serie if serie and serie["punkter"] else None
+    # Kolada kan ange riket med enbart saknade värden (t.ex. Insikts nya totalindex). Det är inget genomsnitt.
+    return serie if serie and any(p["varde"] is not None for p in serie["punkter"]) else None
 
 
 def las_nyckeltal(conn, matt_id: str, omrade: str) -> dict | None:

@@ -7,6 +7,7 @@ import App from './App.vue'
 import DatakallorView from './views/DatakallorView.vue'
 import EkonomiView from './views/EkonomiView.vue'
 import SkatteunderlagView from './views/SkatteunderlagView.vue'
+import UndersokningarView from './views/UndersokningarView.vue'
 import BudgetOchUtfallView from './views/BudgetOchUtfallView.vue'
 import FlodenView from './views/FlodenView.vue'
 import KommandeView from './views/KommandeView.vue'
@@ -36,6 +37,7 @@ const router = createRouter({
     { path: '/ekonomi/skatteunderlag', component: SkatteunderlagView, meta: { titel: 'Skatteunderlagsprognos' } },
     { path: '/ekonomi/budget-och-utfall', component: BudgetOchUtfallView, meta: { titel: 'Budget och utfall' } },
     { path: '/floden', component: FlodenView, meta: { titel: 'Ekonomiska flöden' } },
+    { path: '/undersokningar', component: UndersokningarView, meta: { titel: 'Undersökningar' } },
     { path: '/politik', component: PolitikView, meta: { titel: 'Politik och beslut' } },
     { path: '/politik/sammantraden/:id', component: SammantradeView, meta: { titel: 'Sammanträde' } },
     {

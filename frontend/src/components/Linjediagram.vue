@@ -6,7 +6,8 @@ import { computed, ref } from 'vue'
 import { axeltal, tal } from '../format'
 
 const props = defineProps<{
-  serier: { namn: string; punkter: { ar: number; varde: number }[] }[]
+  /** Ett saknat värde (null) bryter linjen. Det ritas aldrig som noll. */
+  serier: { namn: string; punkter: { ar: number; varde: number | null }[] }[]
   enhet: string
   kalla: string
   /** Beskrivning för skärmläsare. */
@@ -28,7 +29,7 @@ function snyggtSteg(spann: number): number {
 
 const ar = computed(() => [...new Set(props.serier.flatMap((s) => s.punkter.map((p) => p.ar)))].sort((a, b) => a - b))
 const skala = computed(() => {
-  const v = props.serier.flatMap((s) => s.punkter.map((p) => p.varde))
+  const v = props.serier.flatMap((s) => s.punkter.flatMap((p) => (p.varde === null ? [] : [p.varde])))
   const lag = Math.min(...v)
   const hog = Math.max(...v)
   const steg = snyggtSteg(hog - lag)
@@ -44,8 +45,18 @@ const x = (a: number) => {
   return M.left + (lista.length > 1 ? ((a - lista[0]) / (lista[lista.length - 1] - lista[0])) * inreB : inreB / 2)
 }
 const farg = (i: number) => `var(--series-${(i % 8) + 1})`
-const linje = (punkter: { ar: number; varde: number }[]) =>
-  punkter.map((p, i) => `${i ? 'L' : 'M'}${x(p.ar).toFixed(1)},${skala.value.y(p.varde).toFixed(1)}`).join(' ')
+const linje = (punkter: { ar: number; varde: number | null }[]) =>
+  punkter
+    .map((p, i) =>
+      p.varde === null
+        ? ''
+        : `${i && punkter[i - 1].varde !== null ? 'L' : 'M'}${x(p.ar).toFixed(1)},${skala.value.y(p.varde).toFixed(1)}`,
+    )
+    .filter(Boolean)
+    .join(' ')
+// Ett värde utan grannar syns inte som linje, så det ritas som en punkt.
+const ensamma = (punkter: { ar: number; varde: number | null }[]) =>
+  punkter.filter((p, i) => p.varde !== null && punkter[i - 1]?.varde == null && punkter[i + 1]?.varde == null)
 
 const aktivt = ref<number | null>(null)
 function hover(e: MouseEvent) {
@@ -58,7 +69,7 @@ const tooltip = computed(() =>
     ? null
     : props.serier
         .map((s, i) => ({ namn: s.namn, i, varde: s.punkter.find((p) => p.ar === aktivt.value)?.varde }))
-        .filter((r) => r.varde !== undefined),
+        .filter((r) => r.varde !== undefined && r.varde !== null),
 )
 </script>
 
@@ -80,10 +91,18 @@ const tooltip = computed(() =>
         <g v-for="(s, i) in serier" :key="s.namn">
           <path :d="linje(s.punkter)" :stroke="farg(i)" class="linje" />
           <circle
-            v-for="p in s.punkter.filter((p) => p.ar === aktivt)"
+            v-for="p in ensamma(s.punkter)"
+            :key="`ensam-${p.ar}`"
+            :cx="x(p.ar)"
+            :cy="skala.y(p.varde!)"
+            r="2.5"
+            :fill="farg(i)"
+          />
+          <circle
+            v-for="p in s.punkter.filter((p) => p.ar === aktivt && p.varde !== null)"
             :key="p.ar"
             :cx="x(p.ar)"
-            :cy="skala.y(p.varde)"
+            :cy="skala.y(p.varde!)"
             r="3.5"
             :fill="farg(i)"
           />

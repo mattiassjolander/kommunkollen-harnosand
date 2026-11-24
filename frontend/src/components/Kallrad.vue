@@ -3,7 +3,13 @@ import { computed } from 'vue'
 import type { Serie } from '../api'
 import { datum } from '../format'
 
-const props = defineProps<{ serie: Serie; perioder: string[]; prisniva?: string | null }>()
+const props = defineProps<{
+  serie: Serie
+  perioder: string[]
+  prisniva?: string | null
+  /** Vem som tar fram uppgifterna, när det inte är datakällan själv, t.ex. "SCB" för SCB/Kolada. */
+  producent?: string
+}>()
 
 // "kolada:N03007" → "N03007", "scb:BalansKnN:065" → "BalansKnN, post 065". Beräknade mått har ingen beteckning.
 const beteckning = computed(() => {
@@ -23,7 +29,7 @@ const senastHamtad = computed(() => {
 <template>
   <p class="kallrad" data-testid="kallrad">
     Källa:
-    <a :href="serie.matt.datakalla.url" target="_blank" rel="noopener">{{ serie.matt.datakalla.titel }}</a>
+    <template v-if="producent">{{ producent }}/</template><a :href="serie.matt.datakalla.url" target="_blank" rel="noopener">{{ serie.matt.datakalla.titel }}</a>
     {{ beteckning ? ` (${beteckning})` : "" }} · Avser {{ avser }}
     <template v-if="prisniva"> · {{ prisniva[0].toUpperCase() + prisniva.slice(1) }}</template> · Publicerad
     {{ datum(serie.matt.kallans_publicering) }} · Hämtad {{ datum(senastHamtad) }}

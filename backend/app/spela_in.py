@@ -30,7 +30,12 @@ class InspelandeTransport(httpx.BaseTransport):
         innehall = svar.read()
         nyckel = f"{request.url.host}{request.url.path}"
         if svar.status_code == 200:
-            delar = [d for d in request.url.path.split("/") if d]
+            # En kommaseparerad lista (Koladas samlade nyckeltal) blir "första-sista" i filnamnet, så att det
+            # inte blir för långt för Windows.
+            delar = [
+                f"{d.split(',')[0]}-{d.split(',')[-1]}" if "," in d else d
+                for d in request.url.path.split("/") if d
+            ]
             # Filändelsen behålls för annat än JSON (HTML-sidor, PDF:er, SKR:s Excelfiler), så att svarets typ
             # går att återskapa.
             andelse = Path(delar[-1]).suffix.lower() if delar else ""

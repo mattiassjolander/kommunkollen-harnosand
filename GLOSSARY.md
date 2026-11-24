@@ -159,6 +159,26 @@ _Avoid_: Indikator, KPI
 **Huvudtal**:
 Ett av de nyckeltal som sammanfattar kommunens ekonomi i översikten på ekonomisidan: årets resultat i procent av skatter och generella statsbidrag, nettokostnadsandel, självfinansieringsgrad, soliditet inklusive pensionsåtaganden och låneskuld per invånare.
 
+**Riket**:
+Genomsnittet för alla kommuner enligt Kolada (kommun-id 0000). Visas som referens bredvid Härnösand.
+
+**Metodbyte**:
+När källan ändrar hur ett nyckeltal räknas, t.ex. Insikts totalindex 2024. Serierna före och efter visas separat och slås aldrig ihop.
+
+## Undersökningar
+
+**Undersökning**:
+En återkommande undersökning eller statistikserie från en annan myndighet, hämtad från Kolada: SCB:s medborgarundersökning, SKR:s Insikt och Brås anmälda brott. Visas på sidan Undersökningar. Skilt från *granskning*, som bara används om revisionens arbete.
+
+**Medborgarundersökningen**:
+SCB:s årliga enkät till ett urval av kommunens invånare som är 18 år eller äldre.
+
+**Insikt**:
+SKR:s undersökning av hur företag som haft ett ärende hos kommunen bedömer servicen i myndighetsutövningen, som ett index 0–100.
+
+**Anmälda brott**:
+Brås statistik över brott som anmälts i kommunen, per 100 000 invånare. Visar inte hur många brott som begås.
+
 ## Ekonomiska konsekvenser
 
 **Kostnadshändelse**:
