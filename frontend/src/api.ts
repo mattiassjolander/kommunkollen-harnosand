@@ -239,6 +239,44 @@ export function varianter(kort: Nyckeltalskort): Nyckeltal[] {
 /** Elementets id för ett kort, så att länkar som /ekonomi#kort-kolada-N03102 hoppar dit. */
 export const kortankare = (id: string) => `kort-${id.replace(/[^\w]+/g, '-')}`
 
+// Undersökningar (#67): medborgarundersökningen, Insikt och anmälda brott från Kolada
+
+/** Källan har ändrat hur nyckeltalet räknas. Serierna visas separat och slås aldrig ihop. */
+export interface Metodbyte {
+  ar: number
+  text: string
+  /** Den gamla definitionen först. */
+  serier: { id: string; namn: string }[]
+}
+
+export interface Undersokningsgrupp {
+  titel: string
+  nyckeltal: Nyckeltal[]
+  metodbyte: Metodbyte | null
+}
+
+export interface Undersokningsavsnitt {
+  id: string
+  titel: string
+  /** Vem som tar fram uppgifterna och att de hämtas från Kolada, t.ex. "SCB/Kolada". */
+  kalla: string
+  ingress: string
+  /** Fast text om vad uppgifterna mäter. */
+  om_matningen: string | null
+  grupper: Undersokningsgrupp[]
+}
+
+export interface Undersokningar {
+  omrade: string
+  avsnitt: Undersokningsavsnitt[]
+  /** Alla frågor i medborgarundersökningen, för analysverktyget. */
+  medborgarundersokningen: { id: string; titel: string }[]
+}
+
+export const hamtaUndersokningar = () => hamta<Undersokningar>('/api/undersokningar')
+export const hamtaUndersokningsnyckeltal = (id: string) =>
+  hamta<Nyckeltal>(`/api/undersokningar/nyckeltal/${encodeURIComponent(id)}`)
+
 // Ekonomiska flöden – Sankey (kravspec 4)
 
 export interface Kallhanvisning {

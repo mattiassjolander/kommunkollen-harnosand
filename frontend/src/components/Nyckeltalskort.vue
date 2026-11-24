@@ -23,6 +23,10 @@ const props = defineProps<{
   riket?: boolean
   /** "Hänger ihop med": länkar till andra kort med en mening om sambandet. */
   samband?: { till: string; titel: string; text: string; lank: RouteLocationRaw }[]
+  /** Kortare rubrik än källans titel, t.ex. utan "Medborgarundersökningen - ". */
+  titel?: string
+  /** Vem som tar fram uppgifterna, t.ex. "SCB" i "SCB/Kolada". */
+  producent?: string
 }>()
 const emit = defineEmits<{ vy: ['diagram' | 'tabell']; enhet: [Enhet] }>()
 
@@ -101,7 +105,9 @@ function exportera() {
   )
 }
 
-const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datakalla.titel}` : ''))
+const kallnamn = computed(() =>
+  serie.value ? `Källa: ${props.producent ? `${props.producent}/` : ''}${serie.value.matt.datakalla.titel}` : '',
+)
 </script>
 
 <template>
@@ -114,7 +120,7 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
     :data-visad="visad.id"
   >
     <div class="huvud">
-      <h3>{{ nyckeltal.serie?.matt.titel ?? serie?.matt.titel ?? nyckeltal.id }}</h3>
+      <h3>{{ titel ?? nyckeltal.serie?.matt.titel ?? serie?.matt.titel ?? nyckeltal.id }}</h3>
       <div class="vaxlar">
         <div
           v-if="nyckeltal.per_invanare"
@@ -201,6 +207,9 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
         Riket finns per invånare.
         <button type="button" class="lankknapp" @click="emit('enhet', 'inv')">Visa per invånare</button>
       </p>
+      <p v-else-if="riketSaknas && serie.matt.datakalla.id === 'kolada'" class="riketsaknas" data-testid="riket-saknas">
+        Kolada har inget genomsnitt för riket för det här nyckeltalet.
+      </p>
       <p v-else-if="riketSaknas" class="riketsaknas" data-testid="riket-saknas">
         Riket visas för Kolada-måtten. För det här måttet finns inget genomsnitt för riket.
       </p>
@@ -214,7 +223,12 @@ const kallnamn = computed(() => (serie.value ? `Källa: ${serie.value.matt.datak
         </ul>
       </div>
       <div class="fot">
-        <Kallrad :serie="serie" :perioder="punkter.map((p) => p.period)" :prisniva="visad.prisniva" />
+        <Kallrad
+          :serie="serie"
+          :perioder="punkter.map((p) => p.period)"
+          :prisniva="visad.prisniva"
+          :producent="producent"
+        />
         <button type="button" class="csv" data-testid="csv" @click="exportera">CSV</button>
       </div>
     </template>

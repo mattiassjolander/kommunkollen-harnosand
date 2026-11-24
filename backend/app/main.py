@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, uppfoljning
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -43,7 +43,7 @@ def _anropsgrans(namn: str, standard: float) -> float | None:
 def standardkallor() -> list[Datakalla]:
     return [
         Kolada(nyckeltal=[*ekonomi.KOLADA, floden.INVANARE.split(":")[1]], kommun=KOMMUN, riket=ekonomi.KOLADA,
-               anrop_per_sekund=_anropsgrans("KOLADA", 5)),
+               samlade=undersokningar.KOLADA, anrop_per_sekund=_anropsgrans("KOLADA", 5)),
         Scb(matt=_unika([*ekonomi.SCB, *floden.SCB_MATT]), differenser=[ekonomi.RORELSEKAPITAL], kommun=KOMMUN,
             anrop_per_sekund=_anropsgrans("SCB", 2)),
         SkrSkatteunderlag(anrop_per_sekund=_anropsgrans("SKR", 1)),
@@ -173,6 +173,21 @@ def create_app(
             ]
         huvudtal = [{"id": h.matt, "kort": h.kort, "titel": h.titel, "forklaring": h.forklaring} for h in ekonomi.HUVUDTAL]
         return {"omrade": omrade, "grupper": grupper, "huvudtal": huvudtal}
+
+    @app.get("/api/undersokningar", dependencies=[Depends(krav_roll("lasare"))])
+    def undersokningssidan(omrade: str = KOMMUN) -> dict:
+        """Medborgarundersökningen, Insikt och anmälda brott (#67): urvalet per avsnitt med genomsnittet för
+        riket, och alla frågor i medborgarundersökningen för analysverktyget."""
+        with db.connect(database_url) as conn:
+            return undersokningar.las(conn, omrade)
+
+    @app.get("/api/undersokningar/nyckeltal/{matt_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def undersokningsnyckeltal(matt_id: str, omrade: str = KOMMUN) -> dict:
+        """Ett nyckeltal ur undersökningarna, t.ex. en fråga i medborgarundersökningen som inte är i urvalet."""
+        if not undersokningar.i_katalogen(matt_id):
+            raise HTTPException(404, f"Nyckeltalet {matt_id} finns inte bland undersökningarna")
+        with db.connect(database_url) as conn:
+            return undersokningar.nyckeltal(conn, matt_id, omrade)
 
     @app.get("/api/ekonomi/resultatbro", dependencies=[Depends(krav_roll("lasare"))])
     def ekonomisk_resultatbro(omrade: str = KOMMUN) -> dict:
