@@ -44,7 +44,7 @@ from xml.etree import ElementTree
 
 import psycopg
 
-from . import behandlingar, protokolltolkning
+from . import behandlingar, protokolltolkning, sokvektorer
 from .sources.harnosand import ORGAN
 
 logger = logging.getLogger(__name__)
@@ -399,14 +399,18 @@ _KOLUMNER = ("sammantrade_id", "rubrik", "undertitel", "organ", "datum", "ar", "
 
 
 def indexera(conn: psycopg.Connection, typer: Iterable[str] | None = None, sammantraden: list[int] | None = None,
-             extrahera: bool | int = True, ombyggnad: datetime | None = None, commit: bool = False) -> dict[str, int]:
+             extrahera: bool | int = True, ombyggnad: datetime | None = None, commit: bool = False,
+             vektorer: bool = True) -> dict[str, int]:
     """Uppdaterar indexet för typerna (standard alla). Ger antal nya, ändrade, oförändrade och borttagna.
+
+    Med `vektorer` räknas också vektorerna (#69) för de enheter som skrevs om.
 
     Med `sammantraden` uppdateras bara de sammanträdena, för typer som kan avgränsas, och övriga typer helt.
     Med `commit` sparas arbetet efter varje grupp, så att en avbruten körning inte behöver göra om det.
     """
     antal = {"nya": 0, "andrade": 0, "oforandrade": 0, "borttagna": 0}
     valda = set(typer or TYPER)
+    skrivna: list[int] = []
     for typ in (t for t in _INDEXERINGSORDNING if t in valda):
         kalla = KALLOR[typ]
         omf = Omfang(sammantraden=sammantraden if kalla.avgransad else None, extrahera=extrahera,
@@ -424,7 +428,10 @@ def indexera(conn: psycopg.Connection, typer: Iterable[str] | None = None, samma
             else:
                 for e in grupp.enheter:
                     sedda.add(e.nyckel)
-                    antal[_skriv(conn, e, befintliga.get(e.nyckel), ombyggnad)] += 1
+                    utfall, enhet_id = _skriv(conn, e, befintliga.get(e.nyckel), ombyggnad)
+                    antal[utfall] += 1
+                    if enhet_id is not None:
+                        skrivna.append(enhet_id)
             if commit:
                 conn.commit()
         borttagna = [n for n in befintliga if n not in sedda and not any(n.startswith(p) for p in behallna)]
@@ -433,17 +440,20 @@ def indexera(conn: psycopg.Connection, typer: Iterable[str] | None = None, samma
             antal["borttagna"] += len(borttagna)
         if commit:
             conn.commit()
+    if vektorer:
+        sokvektorer.vektorisera(conn, skrivna, commit=commit)
     return antal
 
 
-def _skriv(conn: psycopg.Connection, e: Enhet, befintlig: dict | None, ombyggnad: datetime | None) -> str:
+def _skriv(conn: psycopg.Connection, e: Enhet, befintlig: dict | None,
+           ombyggnad: datetime | None) -> tuple[str, int | None]:
     sha = e.sha256
     if befintlig is not None:
         gammal = tuple(befintlig[k] for k in _KOLUMNER)
         if (befintlig["sha256"] == sha and gammal == e.visning()
                 and (ombyggnad is None or befintlig["andrad"] >= ombyggnad)):
-            return "oforandrade"
-    conn.execute(
+            return "oforandrade", None
+    rad = conn.execute(
         f"""
         INSERT INTO sokenhet (typ, nyckel, {', '.join(_KOLUMNER)}, text_a, text_b, text_c, sha256)
         VALUES (%(typ)s, %(nyckel)s, {', '.join(f'%({k})s' for k in _KOLUMNER)}, %(text_a)s, %(text_b)s, %(text_c)s,
@@ -453,11 +463,12 @@ def _skriv(conn: psycopg.Connection, e: Enhet, befintlig: dict | None, ombyggnad
             text_a = EXCLUDED.text_a, text_b = EXCLUDED.text_b, text_c = EXCLUDED.text_c,
             text_andrad = CASE WHEN sokenhet.sha256 = EXCLUDED.sha256 THEN sokenhet.text_andrad ELSE now() END,
             sha256 = EXCLUDED.sha256, andrad = now()
+        RETURNING id
         """,
         {"typ": e.typ, "nyckel": e.nyckel, **{k: getattr(e, k) for k in _KOLUMNER},
          "text_a": _rensa(e.text_a), "text_b": _rensa(e.text_b), "text_c": _rensa(e.text_c), "sha256": sha},
-    )
-    return "nya" if befintlig is None else "andrade"
+    ).fetchone()
+    return ("nya" if befintlig is None else "andrade"), rad["id"]
 
 
 def uppdatera(conn: psycopg.Connection, **kw) -> dict[str, int] | None:
@@ -544,35 +555,55 @@ _TYPNAMN = {"behandling": "Behandling", "protokollsida": "Protokollsida", "budge
 
 def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | None = None, typ: str | None = None,
         sortering: str = "relevans", sida: int = 1) -> dict:
-    """Träffarna för frågan, en sida i taget, och antalet per typ (utan typfiltret)."""
+    """Träffarna för frågan, en sida i taget, och antalet per typ (utan typfiltret).
+
+    Hybridsök (#69): fulltextlistan och vektorlistan slås ihop med reciprocal rank fusion, där en enhet får
+    1 / (60 + placeringen) från varje lista den finns i. Exakta träffar på diarienummer och namn ligger först.
+    En fråga som är ett diarienummer söks bara exakt och i fulltext.
+    """
     tsq = fraga(conn, q)
     exakt = exakt_fraga(q) or None
+    fragevektor, vektortraffar = (None, []) if _DNR.fullmatch(q.strip()) else sokvektorer.sok(conn, q, organ, ar)
     param = {"q": tsq, "exakt": exakt, "organ": organ, "ar": ar, "typ": typ,
+             "vid": [v["id"] for v in vektortraffar],
              "grans": SIDSTORLEK, "fran": (max(sida, 1) - 1) * SIDSTORLEK}
     villkor = """
-        (e.sokvektor @@ %(q)s::tsquery OR e.exakt @> ARRAY[%(exakt)s::text])
+        (e.sokvektor @@ %(q)s::tsquery OR e.exakt @> ARRAY[%(exakt)s::text] OR e.id = ANY(%(vid)s::bigint[]))
         AND (%(organ)s::text IS NULL OR e.organ = %(organ)s)
         AND (%(ar)s::int IS NULL OR e.ar = %(ar)s)
     """
     per_typ = {r["typ"]: r["antal"] for r in conn.execute(
         f"SELECT e.typ, count(*) AS antal FROM sokenhet e WHERE {villkor} GROUP BY e.typ", param)}
-    ordning = ("niva DESC, rang DESC, e.datum DESC NULLS LAST, e.id" if sortering == "relevans"
-               else "e.datum DESC NULLS LAST, e.ar DESC NULLS LAST, niva DESC, rang DESC, e.id")
+    ordning = ("niva DESC, rrf DESC, datum DESC NULLS LAST, id" if sortering == "relevans"
+               else "datum DESC NULLS LAST, ar DESC NULLS LAST, niva DESC, rrf DESC, id")
     rader = conn.execute(
         f"""
-        WITH traffar AS (
+        WITH kandidater AS (
             SELECT e.*,
                    CASE WHEN e.exakt @> ARRAY[%(exakt)s::text]
                         THEN CASE e.typ WHEN 'arende' THEN 3 WHEN 'ledamot' THEN 3 WHEN 'behandling' THEN 2 ELSE 1 END
                         ELSE 0 END AS niva,
-                   coalesce(ts_rank(e.sokvektor, %(q)s::tsquery), 0) AS rang
+                   coalesce(e.sokvektor @@ %(q)s::tsquery, false) AS i_text,
+                   coalesce(ts_rank(e.sokvektor, %(q)s::tsquery), 0) AS rang,
+                   v.nr AS vnr
             FROM sokenhet e
+            LEFT JOIN unnest(%(vid)s::bigint[]) WITH ORDINALITY v(id, nr) ON v.id = e.id
             WHERE {villkor} AND (%(typ)s::text IS NULL OR e.typ = %(typ)s)
-            ORDER BY {ordning}
-            LIMIT %(grans)s OFFSET %(fran)s
+        ),
+        rangordnade AS (
+            -- Placeringen i varje lista räknas efter filtren.
+            SELECT k.*,
+                   CASE WHEN k.i_text THEN 1.0 / (60 + rank() OVER (PARTITION BY k.i_text ORDER BY k.rang DESC))
+                        ELSE 0 END
+                   + CASE WHEN k.vnr IS NOT NULL
+                          THEN 1.0 / (60 + rank() OVER (PARTITION BY k.vnr IS NULL ORDER BY k.vnr)) ELSE 0 END AS rrf
+            FROM kandidater k
+        ),
+        traffar AS (
+            SELECT * FROM rangordnade ORDER BY {ordning} LIMIT %(grans)s OFFSET %(fran)s
         )
-        SELECT t.typ, t.nyckel, t.rubrik, t.undertitel, t.organ, t.datum, t.ar, t.lank, t.dokument, t.sida,
-               t.markeringar, t.sammantrade_id,
+        SELECT t.id, t.typ, t.nyckel, t.rubrik, t.undertitel, t.organ, t.datum, t.ar, t.lank, t.dokument, t.sida,
+               t.markeringar, t.sammantrade_id, t.niva = 0 AND NOT t.i_text AS bara_betydelse,
                CASE WHEN %(q)s::tsquery IS NULL THEN left(u.text, 200)
                     ELSE ts_headline('swedish', u.text, %(q)s::tsquery,
                                      'MaxFragments=2, MaxWords=24, MinWords=8, ShortWord=2, '
@@ -581,9 +612,16 @@ def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | No
         FROM traffar t
         -- Rubriken visas redan. Utdraget är ur beslutet, yrkandena och löptexten.
         CROSS JOIN LATERAL (SELECT nullif(concat_ws(E'\n', nullif(t.text_b, ''), nullif(t.text_c, '')), '') AS text) u
+        ORDER BY {ordning}
         """,
         param,
     ).fetchall()
+    # En träff som bara kommer från vektorsökningen har inga sökord att markera. Utdraget är den mening i
+    # det närmaste stycket som ligger närmast frågan.
+    stycken = {v["id"]: v["stycke"] for v in vektortraffar}
+    meningar = sokvektorer.basta_meningar(
+        fragevektor, {r["id"]: stycken[r["id"]] for r in rader if r["bara_betydelse"] and r["id"] in stycken}
+    ) if fragevektor is not None else {}
     sammantraden = {r["sammantrade_id"] for r in rader if r["sammantrade_id"]}
     felaktigheter = {}
     if sammantraden:
@@ -603,7 +641,10 @@ def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | No
                 "typ": r["typ"], "rubrik": r["rubrik"], "undertitel": r["undertitel"],
                 "organ": {"id": r["organ"], "namn": _organnamn(r["organ"])} if r["organ"] else None,
                 "datum": r["datum"], "ar": r["ar"], "lank": r["lank"], "dokument": r["dokument"], "sida": r["sida"],
-                "markeringar": r["markeringar"], "utdrag": _utdrag(r["utdrag"]),
+                "markeringar": r["markeringar"],
+                "utdrag": ([{"text": meningar[r["id"]], "markerad": False}] if r["id"] in meningar
+                           else _utdrag(r["utdrag"])),
+                "betydelse": r["bara_betydelse"],
                 "sammantrade_id": r["sammantrade_id"],
                 "felaktigheter": felaktigheter.get(r["sammantrade_id"], 0) if r["sammantrade_id"] else 0,
             }
@@ -658,7 +699,9 @@ def bygg(conn: psycopg.Connection, bygg_om: bool = False) -> dict[str, int]:
         else:
             logger.info("Återupptar ombyggnaden som startade %s", rad["startad"])
         startad = rad["startad"]
-    antal = indexera(conn, extrahera=True, ombyggnad=startad, commit=True)
+    antal = indexera(conn, extrahera=True, ombyggnad=startad, commit=True, vektorer=False)
+    # Vektorerna för alla enheter som väntar: ändrade, nya, eller räknade med en annan modell.
+    antal["vektorer"] = sokvektorer.vektorisera(conn, commit=True)
     if bygg_om:
         conn.execute("UPDATE sokindex_ombyggnad SET klar = now() WHERE klar IS NULL")
         conn.commit()
@@ -678,7 +721,7 @@ def main(argv: list[str] | None = None) -> None:
     with db.connect(url) as conn:
         antal = bygg(conn, a.bygg_om)
     print(f"Sökindexet: {antal['nya']} nya, {antal['andrade']} ändrade, {antal['oforandrade']} oförändrade och "
-          f"{antal['borttagna']} borttagna enheter. {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC.")
+          f"{antal['borttagna']} borttagna enheter. Vektorer för {antal['vektorer']} enheter. {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC.")
 
 
 if __name__ == "__main__":

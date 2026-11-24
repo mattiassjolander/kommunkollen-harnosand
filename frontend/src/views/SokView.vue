@@ -226,6 +226,14 @@ const sammantrade = (t: Soktraff) => ({
               >
                 <span aria-hidden="true">↗</span> Diarienummer ur kallelsen
               </span>
+              <span
+                v-if="t.betydelse"
+                class="kallelse"
+                data-testid="betydelse"
+                title="Texten innehåller inte sökorden men handlar om samma sak. Utdraget är den mening som ligger närmast frågan."
+              >
+                <span aria-hidden="true">≈</span> Liknande innehåll
+              </span>
               <Felaktighetsmarkering v-if="t.felaktigheter && t.sammantrade_id" :sammantrade="sammantrade(t)" />
               <a
                 v-if="t.dokument"

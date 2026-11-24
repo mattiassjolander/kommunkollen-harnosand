@@ -18,6 +18,13 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
+
+# Sökmodellen (#69), cirka 0,5 GB, byggs in i bilden och laddas aldrig ner vid start. Den laddas i
+# minnet först när en process behöver den.
+ENV MODELL_KATALOG=/opt/modell
+COPY app/sokvektorer.py /tmp/sokvektorer.py
+RUN /app/.venv/bin/python /tmp/sokvektorer.py --ladda-ner && rm /tmp/sokvektorer.py
+ENV HF_HUB_OFFLINE=1
 COPY app ./app
 RUN uv sync --locked --no-dev
 
