@@ -30,6 +30,8 @@ Partiet visas alltid med förkortning. Partiets färg är bara en prick bredvid 
 
 Namn på sammanträdets och behandlingens sidor länkar till ledamotens sida.
 
+Kön och ålder visas inte på ledamotens sida. De används bara i den sammanställda statistiken under Sammansättning (docs/sammansattning.md).
+
 ## API
 
 - `GET /api/ledamoter?q=&parti=&organ=`: registret.

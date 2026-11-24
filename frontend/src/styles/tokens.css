@@ -31,6 +31,11 @@
   /* Divergerande (design.md): högre/tillskott blått, lägre/avdrag rött. Rött betyder inte "dåligt". */
   --diverg-hogre: #2a78d6;
   --diverg-lagre: #e34948;
+  /* Sekventiell (design.md): storlek eller ordnade grupper, t.ex. åldersgrupper. Ljust till mörkt. */
+  --seq-1: #cde2fb;
+  --seq-2: #7fb2ee;
+  --seq-3: #2f6fc0;
+  --seq-4: #0d366b;
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;
@@ -79,6 +84,10 @@
     --series-8: #e66767;
     --diverg-hogre: #3987e5;
     --diverg-lagre: #e66767;
+    --seq-1: #1e3f66;
+    --seq-2: #2f68a8;
+    --seq-3: #5a9be0;
+    --seq-4: #a9cdf5;
     --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.5);
   }
 }
@@ -110,6 +119,10 @@
   --series-8: #e66767;
   --diverg-hogre: #3987e5;
   --diverg-lagre: #e66767;
+  --seq-1: #1e3f66;
+  --seq-2: #2f68a8;
+  --seq-3: #5a9be0;
+  --seq-4: #a9cdf5;
   --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
