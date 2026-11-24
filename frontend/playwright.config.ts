@@ -2,8 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 // Söm 2: frontend mot en riktig backend som hämtar från inspelade källsvar.
 // Backend använder DATABASE_URL om den är satt (CI), annars en inbäddad Postgres.
-const API_PORT = '8010'
-const WEB_PORT = '5180'
+// Portarna kan ändras med E2E_API_PORT och E2E_WEB_PORT, t.ex. när flera arbetskopior kör testerna samtidigt.
+const API_PORT = process.env.E2E_API_PORT || '8010'
+const WEB_PORT = process.env.E2E_WEB_PORT || '5180'
 
 export default defineConfig({
   testDir: 'e2e',

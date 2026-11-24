@@ -156,5 +156,12 @@
   "api.kolada.se/v3/data/kpi/N03103/municipality/0000": "kolada/kpi_N03103_municipality_0000.json",
   "api.kolada.se/v3/data/kpi/N03105/municipality/0000": "kolada/kpi_N03105_municipality_0000.json",
   "api.kolada.se/v3/data/kpi/N03106/municipality/0000": "kolada/kpi_N03106_municipality_0000.json",
-  "api.kolada.se/v3/data/kpi/N03132/municipality/0000": "kolada/kpi_N03132_municipality_0000.json"
+  "api.kolada.se/v3/data/kpi/N03132/municipality/0000": "kolada/kpi_N03132_municipality_0000.json",
+  "resultat.val.se/filer/val2022/info/ledamoter_med_historik.csv": "valmyndigheten/ledamoter_med_historik_2022.csv",
+  "resultat.val.se/filer/val2022/info/ledamoter_och_ersattare_utokad.csv": "valmyndigheten/ledamoter_och_ersattare_utokad_2022.csv",
+  "data.val.se/filer/val2022/parti/kandidaturer.zip": "valmyndigheten/kandidaturer_2022.zip",
+  "resultat.val.se/filer/val2026/info/ledamoter_med_historik.csv": "valmyndigheten/ledamoter_med_historik_2026.csv",
+  "resultat.val.se/filer/val2026/info/ledamoter_och_ersattare_utokad.csv": "valmyndigheten/ledamoter_och_ersattare_utokad_2026.csv",
+  "data.val.se/filer/val2026/parti/kandidaturer.zip": "valmyndigheten/kandidaturer_2026.zip",
+  "www.val.se/download/18.7faaad3f1a0b0c300e4180/1789746961123/antal-rostberattigade-per-valdistrikt-uppdelat-pa-kon-och-alder-valdagen-13-september-2026-val-till-kommunfullmaktige.xlsx": "valmyndigheten/rostberattigade_2026.xlsx"
 }

@@ -11,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammantradesplan, serier, skatteunderlag, statistik, status, uppfoljning
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, budgetforslag, db, planforutsattningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, statistik, status, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -24,6 +24,7 @@ from .sources.harnosand import ORGAN, Protokollkalla
 from .sources.sammantradesplaner import Sammantradesplaner
 from .sources.scb import Scb
 from .sources.skr import SkrSkatteunderlag
+from .sources.valmyndigheten import Valmyndigheten
 
 KOMMUN = "2280"  # Härnösand
 FRAN_MILJO = object()  # create_app läser schemat från miljön om inget anges
@@ -49,6 +50,7 @@ def standardkallor() -> list[Datakalla]:
         *(Protokollkalla(organ, urval=int(os.environ.get("PROTOKOLL_URVAL") or 0),
                          anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)) for organ in ORGAN),
         Sammantradesplaner(anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)),
+        Valmyndigheten(anrop_per_sekund=_anropsgrans("VALMYNDIGHETEN", 1)),
     ]
 
 
@@ -752,6 +754,74 @@ def create_app(
                 raise HTTPException(404, str(e)) from e
             except ledamoter.Konflikt as e:
                 raise HTTPException(409, str(e)) from e
+
+    # Sammansättning: kön och ålder bland kandidater, valda och tjänstgörande (#65). Statistiken är öppen. Kön och
+    # ålder per person, kopplingarna och redaktionens uppgifter är bara för redaktionen.
+
+    def _sammansattning(steg, *args):
+        with db.connect(database_url) as conn:
+            try:
+                return steg(conn, *args)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except sammansattning.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
+            except sammansattning.EjTillatet as e:
+                raise HTTPException(403, str(e)) from e
+            except sammansattning.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/sammansattning", dependencies=[Depends(krav_roll("lasare"))])
+    def sammansattning_statistik(period: int = max(sammansattning.PERIODER), organ: str = "KF") -> dict:
+        """Kön och ålder för kandidater, valda och tjänstgörande i ett organ under en mandatperiod."""
+        return _sammansattning(sammansattning.statistik, period, organ)
+
+    @app.get("/api/sammansattning/kopplingar", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def sammansattning_kopplingar(
+        status: str | None = Query(None, pattern="^(automatisk|forslag|bekraftad|avvisad)$"),
+    ) -> list[dict]:
+        return _sammansattning(sammansattning.kopplingar, status)
+
+    @app.post("/api/sammansattning/kopplingar/{koppling_id}/bekraftelse")
+    def bekrafta_valkoppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _sammansattning(sammansattning.besluta, koppling_id, "bekraftad", anv.epost)
+
+    @app.post("/api/sammansattning/kopplingar/{koppling_id}/avvisning")
+    def avvisa_valkoppling(koppling_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _sammansattning(sammansattning.besluta, koppling_id, "avvisad", anv.epost)
+
+    @app.get("/api/sammansattning/personer", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def sammansattning_personer() -> list[dict]:
+        """Kön och ålder per person, med källa och kopplingar. Bara för redaktionen."""
+        return _sammansattning(sammansattning.personer)
+
+    @app.get("/api/sammansattning/uppgifter", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def sammansattning_uppgifter(
+        status: str | None = Query(None, pattern="^(utkast|granskad|publicerad|aterkallad)$"),
+    ) -> list[dict]:
+        return _sammansattning(sammansattning.uppgifter, status)
+
+    @app.post("/api/sammansattning/uppgifter", status_code=201)
+    def skapa_personuppgift(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Kön och födelseår med källa för en person utan uppgift: {ledamot_id, kon, fodelsear, kalla}."""
+        return _sammansattning(sammansattning.skapa_uppgift, data, anv.epost)
+
+    @app.delete("/api/sammansattning/uppgifter/{uppgift_id}", status_code=204)
+    def ta_bort_personuppgift(uppgift_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> Response:
+        _sammansattning(sammansattning.ta_bort_uppgift, uppgift_id, anv.epost)
+        return Response(status_code=204)
+
+    @app.post("/api/sammansattning/uppgifter/{uppgift_id}/granskning")
+    def granska_personuppgift(uppgift_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _sammansattning(sammansattning.granska_uppgift, uppgift_id, anv.epost)
+
+    @app.post("/api/sammansattning/uppgifter/{uppgift_id}/publicering")
+    def publicera_personuppgift(uppgift_id: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _sammansattning(sammansattning.publicera_uppgift, uppgift_id, anv.epost)
+
+    @app.post("/api/sammansattning/uppgifter/{uppgift_id}/aterkallelse")
+    def aterkalla_personuppgift(uppgift_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _sammansattning(sammansattning.aterkalla_uppgift, uppgift_id, data, anv.epost)
 
     @app.get("/api/dokument/{dokument_id}", dependencies=[Depends(krav_roll("lasare"))])
     def dokument(dokument_id: int) -> Response:
