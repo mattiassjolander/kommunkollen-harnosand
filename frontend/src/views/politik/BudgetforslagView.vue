@@ -212,7 +212,7 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
                   <span class="partier">
                     <Partimarkering v-for="p in f.partier" :key="p" :parti="p" />
                   </span>
-                  <span class="titel">{{ f.titel }}</span>
+                  <RouterLink :to="`/politik/budget/${j.budgetar}/${f.nyckel}`" class="titel lank" data-testid="forslagslank">{{ f.titel }}</RouterLink>
                   <span v-if="f.antagen" class="antagen" data-testid="antagen">Antagen budget</span>
                   <span v-if="f.typ === 'tillagg'" class="antagen">Tilläggsbudget</span>
                   <span v-if="f.andring" class="andrad" data-testid="andrad-efter-publicering">Ändrad efter publicering</span>
@@ -591,6 +591,9 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
   font-weight: 400;
   color: var(--ink-secondary);
   white-space: normal;
+}
+.titel.lank {
+  color: var(--accent);
 }
 .antagen {
   font-size: 12px;
