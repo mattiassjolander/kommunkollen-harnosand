@@ -13,7 +13,7 @@ test.beforeAll(async ({ request }) => {
 test('från sammanträdeslistan till ett sammanträde och en behandling, med källa och markering', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Politik och beslut' }).click()
-  await expect(page.getByRole('heading', { name: 'Politik och beslut', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sammanträden', level: 1 })).toBeVisible()
 
   // Läsning är öppen utan inloggning.
   await expect(page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' })).toBeVisible()

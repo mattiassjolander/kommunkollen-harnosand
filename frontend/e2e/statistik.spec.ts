@@ -11,7 +11,7 @@ test.beforeAll(async ({ request }) => {
 test('statistik över behandlingar per år, organ och typ, med filter i URL:en', async ({ page }) => {
   await page.request.post('/api/auth/logga-ut')
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Statistik' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Statistik' }).click()
   await expect(page).toHaveURL(/\/politik\/statistik$/)
   await expect(page.getByTestId('automatiskt-tolkad')).toBeVisible()
   await expect(page.getByTestId('nyckeltal')).toContainText('Motion')
@@ -87,7 +87,7 @@ test('motioner med väckt, motionär och länk till protokollet', async ({ page 
 test('avvikelser i protokollen samlas på en sida', async ({ page }) => {
   await page.request.post('/api/auth/logga-ut')
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Avvikelser' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Avvikelser' }).click()
   await expect(page).toHaveURL(/\/politik\/avvikelser$/)
   await expect(page.getByTestId('avvikelse-sammantrade').or(page.getByTestId('inga')).first()).toBeVisible()
   if (await page.getByTestId('avvikelse-sammantrade').count()) {
@@ -141,7 +141,7 @@ test('redaktören rättar en motion utan motionär, utgivaren publicerar och lä
 
   // Utgivaren granskar och publicerar.
   await page.request.post('/api/auth/test/utgivare')
-  await page.goto('/politik/rattelser')
+  await page.goto('/redaktion/rattelser')
   const utkast = page.getByTestId('rattelser-utkast').getByTestId('rattelse').filter({ hasText: 'Motionärer' })
   await expect(utkast.getByTestId('nytt')).toHaveText('Olle Löfgren (L)')
   await utkast.getByTestId('granska').click()

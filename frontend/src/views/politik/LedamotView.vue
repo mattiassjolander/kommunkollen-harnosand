@@ -18,7 +18,6 @@ import Periodmarkering from '../../components/Periodmarkering.vue'
 import Partimarkering from '../../components/Partimarkering.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Periodformular from '../../components/Periodformular.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 
 const route = useRoute()
@@ -143,7 +142,6 @@ const delaUpp = (namn: { id: number; namn: string }) =>
       </p>
       <p class="markering"><Tolkningsmarkering :ej-tolkad="false" /></p>
     </header>
-    <PolitikFlikar />
 
     <section
       v-if="l.partitillhorighet.length || arRedaktor"
@@ -178,7 +176,7 @@ const delaUpp = (namn: { id: number; namn: string }) =>
         <p class="anteckning">
           Perioden sparas som utkast. Den gäller först när en annan person med rollen utgivare har granskat och
           publicerat den under
-          <RouterLink to="/politik/partitillhorighet">Partitillhörighet</RouterLink>.
+          <RouterLink to="/redaktion/partitillhorighet">Partitillhörighet</RouterLink>.
         </p>
         <p v-if="periodSparad" class="meddelande" role="status" data-testid="period-sparad">{{ periodSparad }}</p>
         <Periodformular :ledamot-id="l.id" @sparad="sparadPeriod" @utloggad="utloggad" />

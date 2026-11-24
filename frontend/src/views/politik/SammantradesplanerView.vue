@@ -6,7 +6,6 @@ import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { EjInloggad, hamtaSammantradesplaner, type Jag, type Planskillnad, type Sammantradesplan } from '../../api'
 import { datumTid, sammantradesdatum } from '../../format'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const STATUS = { planerat: 'Planerat', installt: 'Inställt', borttaget: 'Borttaget ur planen' } as const
 const SKILLNAD: Record<Planskillnad['typ'], string> = {
@@ -58,14 +57,13 @@ function tid(t: string | null): string {
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Sammanträdesplaner</h1>
     <p class="ingress">
       Sammanträdesplanerna så som de står på kommunens webbsidor för organen. Ändringar i en plan sparas som
       versioner. Planen jämförs med organets beslut om sammanträdesplanen i protokollen, och skillnaderna visas här
       för redaktionen.
     </p>
   </header>
-  <PolitikFlikar />
   <p v-if="!arRedaktor" class="saknas">Sammanträdesplanerna visas bara för redaktörer.</p>
   <template v-else>
     <p v-if="laddar">Hämtar sammanträdesplaner…</p>

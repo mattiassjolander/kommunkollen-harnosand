@@ -130,6 +130,15 @@ Paletten klarar alltså inte kontrollerna, och det går inte att rätta utan att
 ## Layout
 
 - Desktop-first. Innehållets maxbredd är 1440 px, och en vänsterställd navigering listar huvudvyerna (kravspec avsnitt 14).
+
+### Navigering
+
+- Vänsternavigeringen listar huvudvyerna. Den står still när sidan skrollar. Logotypen, avsändartexten och användarrutan (inloggning, namn, roller) syns alltid längst ner i fönstret, och bara länklistan skrollar om den inte får plats.
+- En huvudvy med undervyer (Ekonomi, Politik och beslut, Redaktion) fälls ut i navigeringen när man är i den, med indragna länkar. Den valda undervyn markeras med `--accent-wash` och `--accent`. Det finns inga flikrader. Huvudvyns länk leder till dess första undervy.
+- **Redaktion** är en egen huvudvy för redaktör och utgivare. Den står sist i navigeringen, avskild med en linje, och samlar redaktionens verktyg i grupperna *Granska* (Rättelser, Kopplingar, Partitillhörighet, med antal som väntar) och *Registrera* (Sammanträdesplaner, Budgetutkast). Varje verktyg visas bara för de roller som har tillgång till det.
+- Vyns rubrik (`h1`) är undervyns namn. Ovanför står en brödsmula med huvudvyn, och på en detaljsida också undervyn: *Politik och beslut › Ledamöter ›*. Dokumentets titel följer samma ordning: *Statistik · Politik och beslut · Kommunkollen Härnösand*.
+- Katalogen över huvudvyer och undervyer finns på ett ställe (`frontend/src/navigering.ts`). En ny undervy läggs till där, inte som en egen flikrad.
+- Under 900 px bredd fälls navigeringen ihop till knappen *Meny* i sidhuvudet. Menyn öppnas från vänster med samma innehåll, med logotypen och användarrutan i nederkant. Den stängs med Esc, med knappen ✕, vid klick utanför och när man väljer en vy, och fokus går tillbaka till knappen.
 - Statusindikatorn för datainsamlingen ligger alltid synlig i sidhuvudet.
 - Under högtider står en kort rad i sidhuvudet och en liten symbol vid ordmärket (se *Högtidsteman*). Sidfoten har länken "Visa inte teman".
 - Till höger i sidhuvudet finns en knapp som byter mellan ljust och mörkt läge. Utan eget val följer sidan systemets inställning. Valet sparas i webbläsaren.

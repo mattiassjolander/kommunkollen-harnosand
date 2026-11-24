@@ -12,7 +12,7 @@ import { API_PORT } from '../playwright.config'
 test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ page }) => {
   // Redaktören lägger till en åtgärd för en ram som förslaget ändrar utan att ange åtgärder.
   await page.request.post('/api/auth/test/redaktor')
-  await page.goto('/politik/budgetutkast')
+  await page.goto('/redaktion/budgetutkast')
   await expect(page.getByTestId('budgetutkast').or(page.getByTestId('inga-utkast')).first()).toBeVisible()
   const mUtkast = page.locator('[data-testid="budgetutkast"][data-nyckel="M"]')
   const rattad = (await mUtkast.count()) > 0
@@ -63,7 +63,8 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
   // Utgivaren granskar och publicerar utkasten (de som inte redan publicerats i en tidigare körning).
   await page.request.post('/api/auth/test/utgivare')
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Budgetutkast' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Redaktion' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Budgetutkast' }).click()
   await expect(page.getByTestId('budgetutkast').or(page.getByTestId('inga-utkast')).first()).toBeVisible()
 
   // Planförutsättningarna granskas med källa, sidlänk och kontrollsummor.
@@ -94,7 +95,7 @@ test('läsaren jämför budgetförslagen mot planförutsättningarna', async ({ 
   // Läsaren, utan inloggning.
   await page.request.post('/api/auth/logga-ut')
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Budgetförslag' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Budgetförslag' }).click()
   await expect(page).toHaveURL(/\/politik\/budget/)
   await expect(page.getByTestId('filter-budgetar')).toHaveValue('2027')
 
@@ -233,12 +234,12 @@ test('utgivaren återkallar planförutsättningarna och ett förslag (#76)', asy
 
   // En redaktör kan inte återkalla.
   await page.request.post('/api/auth/test/redaktor')
-  await page.goto('/politik/budgetutkast')
+  await page.goto('/redaktion/budgetutkast')
   await laddad()
   await expect(page.getByTestId('aterkalla')).toHaveCount(0)
 
   await page.request.post('/api/auth/test/utgivare')
-  await page.goto('/politik/budgetutkast')
+  await page.goto('/redaktion/budgetutkast')
   await laddad()
   for (const publ of [planPubl, sdPubl]) {
     if ((await publ.count()) === 0) continue // återkallad i en tidigare körning
@@ -280,7 +281,7 @@ test('återkallade uppgifter rättas i en ny version och publiceras igen (#76)',
   const andring = 'Anmärkningen om finansieringen saknades. Påpekat av en läsare 2026-11-21.'
   const planandring = 'Källan för Kommunstyrelsen var fel angiven.'
   await page.request.post('/api/auth/test/redaktor')
-  await page.goto('/politik/budgetutkast')
+  await page.goto('/redaktion/budgetutkast')
   await expect(page.getByTestId('aterkallad').first()).toBeVisible()
 
   // Förslaget: en ny version från den återkallade, med motivering. Utkastet öppnas för rättning.
@@ -309,7 +310,7 @@ test('återkallade uppgifter rättas i en ny version och publiceras igen (#76)',
 
   // Utgivaren granskar och publicerar.
   await page.request.post('/api/auth/test/utgivare')
-  await page.goto('/politik/budgetutkast')
+  await page.goto('/redaktion/budgetutkast')
   await expect(page.getByTestId('budgetutkast').first()).toBeVisible()
   for (const steg of ['granska', 'publicera'] as const) {
     while ((await page.getByTestId(steg).count()) > 0) {
@@ -348,7 +349,7 @@ test('återkallade uppgifter rättas i en ny version och publiceras igen (#76)',
 // budget, prognos och utfall per nämnd under Ekonomi, med sidlänkar och den antagna budgeten ur årsplanen.
 test('läsaren jämför budget och utfall per nämnd (#83)', async ({ page }) => {
   await page.request.post('/api/auth/test/utgivare')
-  await page.goto('/politik/budgetutkast')
+  await page.goto('/redaktion/budgetutkast')
   await expect(page.getByTestId('budgetutkast').or(page.getByTestId('inga-utkast')).first()).toBeVisible()
   const utkast = page.locator('[data-testid="uppfoljningsutkast"][data-budgetar="2027"]')
   if ((await utkast.count()) > 0) {
@@ -363,7 +364,7 @@ test('läsaren jämför budget och utfall per nämnd (#83)', async ({ page }) =>
   // Läsaren hittar fliken under Ekonomi. Brodiagrammets länk prövas i ekonomi.spec.ts.
   await page.request.post('/api/auth/logga-ut')
   await page.goto('/ekonomi')
-  await page.getByRole('navigation', { name: 'Ekonomi' }).getByRole('link', { name: 'Budget och utfall' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Budget och utfall' }).click()
   await expect(page).toHaveURL(/\/ekonomi\/budget-och-utfall/)
   await expect(page.getByTestId('uppfoljning-ar')).toHaveValue('2027')
 

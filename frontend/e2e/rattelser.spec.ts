@@ -39,7 +39,8 @@ test('en rättelse från utkast till publicerad, sedd som läsare', async ({ pag
   // Utgivaren granskar och publicerar.
   await page.request.post('/api/auth/test/utgivare')
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Rättelser' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Redaktion' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Rättelser' }).click()
   const utkast = page.getByTestId('rattelser-utkast').getByTestId('rattelse').first()
   await expect(utkast.getByTestId('nytt')).toHaveText('Kommunfullmäktige godkänner dagordningen med ändringar.')
   await expect(utkast.getByTestId('felet-i')).toHaveText('I protokollet')
@@ -77,7 +78,7 @@ test('en rättelse från utkast till publicerad, sedd som läsare', async ({ pag
 
   // Söm 3 (#74): redaktören ändrar den publicerade rättelsen till fel i inläsningen genom en ny version.
   await page.request.post('/api/auth/test/redaktor')
-  await page.goto('/politik/rattelser')
+  await page.goto('/redaktion/rattelser')
   const publicerad = page.getByTestId('rattelser-publicerad').getByTestId('rattelse').first()
   await publicerad.getByTestId('ny-version').click()
   const version = publicerad.getByTestId('ny-version-formular')

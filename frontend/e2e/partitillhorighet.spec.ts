@@ -42,7 +42,8 @@ test('en fastställd partitillhörighet från personsidan till sammanträdet', a
   // Utgivaren granskar och publicerar under fliken Partitillhörighet.
   await page.request.post('/api/auth/test/utgivare')
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Partitillhörighet' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Redaktion' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Partitillhörighet' }).click()
   const utkast = page.getByTestId('perioder-utkast').getByTestId('period').first()
   await expect(utkast).toContainText(person.namn)
   await utkast.getByTestId('granska').click()
@@ -65,7 +66,7 @@ test('en fastställd partitillhörighet från personsidan till sammanträdet', a
 
   // Utgivaren återkallar perioden, och protokollets uppgift gäller igen.
   await page.request.post('/api/auth/test/utgivare')
-  await page.goto('/politik/partitillhorighet')
+  await page.goto('/redaktion/partitillhorighet')
   const publicerad = page.getByTestId('perioder-publicerad').getByTestId('period').first()
   await publicerad.getByTestId('aterkalla').click()
   await publicerad.getByTestId('aterkalla-motivering').fill('Perioden var fel.')
@@ -89,7 +90,7 @@ test('förslag bekräftas i en batch och publiceras tillsammans', async ({ page,
   expect(person).toBeTruthy()
 
   await page.request.post('/api/auth/test/redaktor')
-  await page.goto('/politik/partitillhorighet')
+  await page.goto('/redaktion/partitillhorighet')
   const sektion = page.getByTestId('periodforslag')
   await sektion.getByTestId('forslag-sok').fill(person.ledamot.namn)
   const rad = sektion.locator(`[data-testid="forslag"][data-ledamot="${person.ledamot.id}"]`)
@@ -103,7 +104,7 @@ test('förslag bekräftas i en batch och publiceras tillsammans', async ({ page,
   await expect(sektion.locator(`[data-testid="forslag"][data-ledamot="${person.ledamot.id}"]`)).toHaveCount(0)
 
   await page.request.post('/api/auth/test/utgivare')
-  await page.goto('/politik/partitillhorighet')
+  await page.goto('/redaktion/partitillhorighet')
   await page.getByTestId('perioder-utkast').locator('..').getByTestId('granska-batch').first().click()
   await page.getByTestId('publicera-batch').first().click()
   await expect(page.getByTestId('perioder-publicerad').getByTestId('period')).toHaveCount(1)
@@ -146,7 +147,7 @@ test('en krock bekräftas som fel i protokollet', async ({ page, request }) => {
   await request.post(`${api}/api/partitillhorighet/${period.id}/publicering`)
 
   await page.request.post('/api/auth/test/redaktor')
-  await page.goto('/politik/partitillhorighet')
+  await page.goto('/redaktion/partitillhorighet')
   await page.getByTestId('filter-krockar').click()
   await expect(page.locator(`[data-testid="periodperson"][data-ledamot="${person.ledamot_id}"] [data-testid="antal-krockar"]`)).toHaveText('1')
   const krock = page.locator(`[data-testid="krockperson"][data-ledamot="${person.ledamot_id}"] [data-testid="krock"]`)

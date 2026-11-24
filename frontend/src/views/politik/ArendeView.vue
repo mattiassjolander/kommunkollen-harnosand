@@ -16,7 +16,7 @@ const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? fals
 
 /** Redaktörens väg till beslutet om en koppling, för att se historiken eller ändra det (#77). */
 function beslutslank(k: Koppling) {
-  return { path: '/politik/kopplingar', query: { ...(k.status === 'forslag' ? {} : { status: k.status }), koppling: String(k.id) } }
+  return { path: '/redaktion/kopplingar', query: { ...(k.status === 'forslag' ? {} : { status: k.status }), koppling: String(k.id) } }
 }
 
 const a = ref<Arende | null>(null)

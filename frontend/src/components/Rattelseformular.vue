@@ -157,7 +157,7 @@ async function spara() {
       <button type="submit" class="knapp" :disabled="sparar" data-testid="spara-rattelse">Spara som utkast</button>
       <p v-if="sparat" class="klart" role="status" data-testid="rattelse-sparad">
         Utkastet är sparat. Det publiceras när en utgivare har granskat det.
-        <RouterLink to="/politik/rattelser">Till rättelserna</RouterLink>
+        <RouterLink to="/redaktion/rattelser">Till rättelserna</RouterLink>
       </p>
       <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
     </div>

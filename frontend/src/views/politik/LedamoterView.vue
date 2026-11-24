@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { EjInloggad, hamtaLedamoter, hamtaOrgan, type Ledamotsrad, type Organ } from '../../api'
 import { parti as partitext } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,13 +55,12 @@ const urval = computed(() => {
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Ledamöter</h1>
     <p class="ingress">
       Ledamöter och ersättare som förekommer i protokollens närvarolistor. Partiet är det som protokollet anger vid
       varje sammanträde, så ett partibyte syns. Uppgifterna är automatiskt lästa ur protokollen.
     </p>
   </header>
-  <PolitikFlikar />
 
   <div class="filter">
     <label>

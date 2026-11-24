@@ -14,14 +14,15 @@ test.beforeAll(async ({ request }) => {
 
 test('redaktören ser sammanträdesplanerna med inställda möten, ändrade tider och protokoll (#68)', async ({ page }) => {
   await page.goto('/politik')
-  const flikar = page.getByRole('navigation', { name: 'Politik och beslut' })
+  const flikar = page.getByRole('navigation', { name: 'Huvudvyer' })
   // Planerna och skillnaderna mot besluten visas inte publikt.
-  await expect(flikar.getByRole('link', { name: 'Planer', exact: true })).toHaveCount(0)
+  await expect(flikar.getByRole('link', { name: 'Redaktion' })).toHaveCount(0)
 
   await page.request.post('/api/auth/test/redaktor')
   await page.reload()
-  await flikar.getByRole('link', { name: 'Planer', exact: true }).click()
-  await expect(page).toHaveURL(/\/politik\/sammantradesplaner$/)
+  await flikar.getByRole('link', { name: 'Redaktion' }).click()
+  await flikar.getByRole('link', { name: 'Sammanträdesplaner', exact: true }).click()
+  await expect(page).toHaveURL(/\/redaktion\/sammantradesplaner$/)
 
   const planer = page.getByTestId('sammantradesplan')
   await expect(planer).toHaveCount(6) // KF, KS 2026 och 2027, och de tre nämnderna
@@ -45,7 +46,7 @@ test('redaktören ser sammanträdesplanerna med inställda möten, ändrade tide
   await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+$/)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Kommunfullmäktige')
 
-  await page.goto('/politik/sammantradesplaner?organ=SOC')
+  await page.goto('/redaktion/sammantradesplaner?organ=SOC')
   const soc = page.locator('[data-testid="sammantradesplan"][data-organ="SOC"]')
   await expect(soc.locator('[data-nyckel="2026-06"]')).toContainText('juni 2026')
   await expect(soc.locator('[data-nyckel="2026-06"]')).toHaveAttribute('data-status', 'installt')

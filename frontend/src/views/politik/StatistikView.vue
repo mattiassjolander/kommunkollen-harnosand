@@ -19,7 +19,6 @@ import {
 import { sammantradesdatum, tal } from '../../format'
 import AterkommandeArenden from '../../components/AterkommandeArenden.vue'
 import MotionerOchForslag from '../../components/MotionerOchForslag.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -164,13 +163,12 @@ const ofullstandigt = computed(
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Statistik</h1>
     <p class="ingress">
       Hur många behandlingar protokollen innehåller, per år, organ och typ. Typen läses ut automatiskt ur rubriken och
       beslutet, och redaktionen kan rätta den.
     </p>
   </header>
-  <PolitikFlikar />
 
   <div class="filter" role="group" aria-label="Filter">
     <label>

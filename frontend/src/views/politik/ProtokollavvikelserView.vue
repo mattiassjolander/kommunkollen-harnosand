@@ -16,7 +16,6 @@ import {
   type Protokollavvikelsestatus,
 } from '../../api'
 import { datum, sammantradesdatum, tal } from '../../format'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -115,7 +114,7 @@ async function kopiera(id: number, text: string) {
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Att anmäla</h1>
     <p class="ingress">
       Uppgifter i protokollen som inte stämmer med varandra: röster som inte går ihop med antalet beslutande, olika
       parti för samma person, en ersättare för någon som själv är beslutande, paragrafer som saknas eller upprepas, parti
@@ -123,7 +122,6 @@ async function kopiera(id: number, text: string) {
       inte kunde läsa finns under <RouterLink to="/politik/avvikelser">Avvikelser</RouterLink>.
     </p>
   </header>
-  <PolitikFlikar />
 
   <div class="filter" role="group" aria-label="Filter">
     <label>

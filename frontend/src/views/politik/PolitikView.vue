@@ -13,7 +13,6 @@ import {
 import { sammantradesdatum } from '../../format'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,14 +93,13 @@ const paragrafer = (s: Sammantradesrad) =>
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Sammanträden</h1>
     <p class="ingress">
       Sammanträden i kommunens beslutande organ, med närvaro och de ärenden som behandlades. Uppgifterna är automatiskt
       lästa ur de justerade protokollen på harnosand.se och inte granskade av redaktionen. Varje uppgift länkar till
       protokollet.
     </p>
   </header>
-  <PolitikFlikar />
 
   <div class="filter">
     <label>

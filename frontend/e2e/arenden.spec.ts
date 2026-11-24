@@ -41,13 +41,16 @@ test('från behandling till ärende till ärendets väg genom organen', async ({
 
 test('redaktören bekräftar ett förslag i kön', async ({ page }) => {
   await page.goto('/politik')
-  const flikar = page.getByRole('navigation', { name: 'Politik och beslut' })
-  await expect(flikar.getByRole('link', { name: 'Kopplingar', exact: true })).toHaveCount(0)
+  const flikar = page.getByRole('navigation', { name: 'Huvudvyer' })
+  await expect(flikar.getByRole('link', { name: 'Redaktion' })).toHaveCount(0)
 
   await page.request.post('/api/auth/test/redaktor')
   await page.reload()
-  await flikar.getByRole('link', { name: 'Kopplingar', exact: true }).click()
-  await expect(page).toHaveURL(/\/politik\/kopplingar$/)
+  await flikar.getByRole('link', { name: 'Redaktion' }).click()
+  await flikar.getByRole('link', { name: /^Kopplingar/ }).click()
+  await expect(page).toHaveURL(/\/redaktion\/kopplingar$/)
+  await expect(page.getByRole('heading', { name: 'Kopplingar', level: 1 })).toBeVisible()
+  await expect(page.getByTestId('brodsmula')).toHaveText('Redaktion ›')
 
   const forslag = page.getByTestId('kopplingsforslag')
   await expect(forslag.first()).toBeVisible()
@@ -64,7 +67,7 @@ test('redaktören bekräftar ett förslag i kön', async ({ page }) => {
 
 test('redaktören ser sitt avvisade förslag, ändrar beslutet och ser historiken (#77)', async ({ page }) => {
   await page.request.post('/api/auth/test/redaktor')
-  await page.goto('/politik/kopplingar')
+  await page.goto('/redaktion/kopplingar')
   const forslag = page.getByTestId('kopplingsforslag').first()
   await expect(forslag).toBeVisible()
   const id = await forslag.getAttribute('data-koppling')
@@ -101,7 +104,7 @@ test('redaktören ser sitt avvisade förslag, ändrar beslutet och ser historike
   await expect(page).toHaveURL(/\/paragraf\/\d+$/)
   await page.getByTestId('arendelank').click()
   await page.locator(`[data-testid="till-beslut"][href$="koppling=${id}"]`).click()
-  await expect(page).toHaveURL((u) => u.pathname === '/politik/kopplingar' && u.search === `?status=bekraftad&koppling=${id}`)
+  await expect(page).toHaveURL((u) => u.pathname === '/redaktion/kopplingar' && u.search === `?status=bekraftad&koppling=${id}`)
   await expect(page.locator(`#koppling-${id}`)).toHaveClass(/vald/)
   await page.request.post('/api/auth/logga-ut')
 })

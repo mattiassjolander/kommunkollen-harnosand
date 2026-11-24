@@ -5,7 +5,6 @@ import { computed, inject, ref, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { EjInloggad, hamtaSammansattning, type Jag, type Sammansattning } from '../../api'
 import { datum } from '../../format'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 import Sammansattningsled from '../../components/Sammansattningsled.vue'
 import SammansattningRedaktion from '../../components/SammansattningRedaktion.vue'
 
@@ -56,13 +55,12 @@ const rubrik = computed(() => (s.value ? `${s.value.organ.namn}, ${s.value.perio
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Sammansättning</h1>
     <p class="ingress">
       Hur kandidater, valda och tjänstgörande ledamöter fördelar sig på kön och ålder, per parti, organ och
       mandatperiod. De röstberättigade i Härnösand visas som jämförelse.
     </p>
   </header>
-  <PolitikFlikar />
 
   <div class="filter" role="group" aria-label="Filter">
     <label>

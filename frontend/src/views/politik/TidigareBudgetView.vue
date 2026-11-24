@@ -16,7 +16,6 @@ import {
 } from '../../api'
 import { datum, tal } from '../../format'
 import Partimarkering from '../../components/Partimarkering.vue'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -61,9 +60,8 @@ const TABELLER: { nyckel: Plantabell; rubrik: string }[] = [
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Förra versionen</h1>
   </header>
-  <PolitikFlikar />
 
   <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
   <p v-else-if="laddar">Hämtar den förra versionen…</p>

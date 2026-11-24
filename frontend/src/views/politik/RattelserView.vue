@@ -16,7 +16,6 @@ import {
 } from '../../api'
 import { FELET_I } from '../../api'
 import { datum, rattelseuppgift, rattelsevarde } from '../../format'
-import PolitikFlikar from '../../components/PolitikFlikar.vue'
 import Rattelseandring from '../../components/Rattelseandring.vue'
 
 const route = useRoute()
@@ -84,13 +83,12 @@ function lank(r: Rattelse): string {
 
 <template>
   <header class="vyhuvud">
-    <h1>Politik och beslut</h1>
+    <h1>Rättelser</h1>
     <p class="ingress">
       Rättelser av automatiskt tolkade uppgifter. En redaktör skriver rättelsen, och en utgivare som inte är samma
       person granskar och publicerar den. Läsaren ser den rättade uppgiften med markering och vad tolkningen sa.
     </p>
   </header>
-  <PolitikFlikar />
 
   <p v-if="!behorig" class="saknas">Rättelserna visas bara för redaktörer och utgivare.</p>
   <p v-else-if="laddar">Hämtar rättelser…</p>

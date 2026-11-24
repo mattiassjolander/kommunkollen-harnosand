@@ -34,7 +34,7 @@ test('från behandling till ledamot till ledamotens sammanträden', async ({ pag
 
 test('registret visar parti enligt protokollen och ett partibyte', async ({ page }) => {
   await page.goto('/politik')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Ledamöter' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Ledamöter' }).click()
   await expect(page).toHaveURL(/\/politik\/ledamoter$/)
 
   await page.getByTestId('sok-ledamot').fill('Carl-Fredrik')

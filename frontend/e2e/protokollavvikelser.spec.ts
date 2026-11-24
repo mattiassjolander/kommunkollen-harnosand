@@ -13,7 +13,7 @@ test.beforeAll(async ({ request }) => {
 test('redaktören anmäler en protokollavvikelse och läsaren ser statusen', async ({ page }) => {
   await page.request.post('/api/auth/test/redaktor')
   await page.goto('/politik/avvikelser?organ=KF&fran=2026&till=2026')
-  await page.getByRole('navigation', { name: 'Politik och beslut' }).getByRole('link', { name: 'Att anmäla' }).click()
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Att anmäla' }).click()
   await expect(page).toHaveURL(/\/politik\/protokollavvikelser/)
   await page.getByTestId('filter-organ').selectOption('KF')
   await page.getByTestId('filter-fran').selectOption('2024')
