@@ -95,3 +95,100 @@ Förklaringen återger vad dokumenten säger och nämner inga personer, inte hel
 - Dokumentsidan har avsnittet *Motstridigheter* med de publicerade, märkta Analys.
 - Listan över styrande dokument visar antalet publicerade motstridigheter per dokument.
 - Den samlade listan *Motstridigheter* under Styrande dokument kan filtreras på typ och status och används för att anmäla dem till kommunen.
+
+## Processer
+
+En process är en arbetsgång som redaktionen har valt att beskriva ur reglementena och delegationsordningarna (#152), till exempel att kallelsen ska skickas senast fem dagar före sammanträdet. Den består av steg som kan hämtas ur flera dokument. Den är redaktionens analys och märks **Analys** (`docs/design.md`). Hur det faktiskt går till enligt protokollen jämförs inte här. Processer ur policyer, planer, program, riktlinjer och föreskrifter ingår inte.
+
+### Listan
+
+AI hittar och grupperar inte processer på egen hand, eftersom det blir subjektivt. Redaktionen bestämmer listan, och skillen fyller i stegen. Den första listan:
+
+1. Kallelse till sammanträde
+2. Justering av protokoll
+3. Motion
+4. Medborgarförslag
+5. Anmälan av delegationsbeslut
+6. Budgetprocessen
+
+En redaktör lägger till en ny process under Redaktion → Processer. Den blir ett utkast utan steg.
+
+### Stegen
+
+Varje steg anger:
+
+- **vem** som gör något: ett organ, ordföranden, förvaltningen eller en ledamot,
+- **vad** som görs,
+- **när**, eller inom vilken tidsfrist, om dokumentet anger det,
+- **källan**: ett ordagrant citat med dokument, version, sida och paragraf.
+
+Skillen `harnosandskollen-styrande-dokument` läser de 25 dokumenten i omfånget (se *Motstridigheter*) för varje process på listan och skriver stegen. Backend anropar ingen AI (ADR-0009).
+
+### Filen från skillen
+
+Skillen skriver `data/styrande-dokument/processer.json` i huvudmappen för repot:
+
+```json
+{
+  "processer": [
+    {
+      "process": "Kallelse till sammanträde",
+      "steg": [
+        {
+          "vem": "Ordföranden",
+          "vad": "Kallelsen skickas digitalt till varje ledamot och ersättare.",
+          "nar": "Senast fem dagar före sammanträdesdagen",
+          "kalla": {"dokument": "18.580e43d7163221b2781b73fe", "sida": 4, "paragraf": "§ 13",
+                    "text": "Kallelsen ska digitalt tillsändas varje ledamot och ersättare senast fem dagar före sammanträdesdagen."}
+        }
+      ]
+    },
+    {
+      "process": "Justering av protokoll",
+      "steg": [
+        {
+          "vem": "Ordföranden och en ledamot",
+          "vad": "Justerar protokollet.",
+          "nar": "Senast 14 dagar efter sammanträdet",
+          "kalla": {"dokument": "18.580e43d7163221b2781b73fe", "sida": 5, "paragraf": "§ 26",
+                    "text": "Protokoll justeras senast 14 dagar efter sammanträdet av ordförande och en ledamot."}
+        }
+      ]
+    }
+  ]
+}
+```
+
+| Fält | Innehåll |
+|---|---|
+| `process` | Namnet på processen som det står på redaktionens lista. |
+| `steg` | Stegen i ordning. Minst ett. |
+| `vem` | Vem som gör något, som dokumentet anger det. |
+| `vad` | Vad som görs, kort och utan värdering. |
+| `nar` | När eller inom vilken tidsfrist, om dokumentet anger det. Utelämnas annars. |
+| `kalla` | `dokument` (`18.…`), `sida` i PDF:en räknat från 1, `paragraf` och `text`, ett ordagrant citat från sidan. Saknar dokumentet paragrafer anges punkten eller avsnittets rubrik, till exempel `"Registrering och anmälan av delegationsbeslut"`. |
+
+Citatet hör till dokumentets senaste version när filen läses in, och versionen sparas med steget. Filen kan ha en eller flera processer. Stegen för en process ersätter de tidigare stegen, och processen blir ett utkast som granskas på nytt. Samma steg som redan finns läses inte in igen.
+
+### Kontrollerna vid inläsningen
+
+Hela filen läses in i en transaktion. Avvisas något läses inget in, och felet anger processens och stegets nummer, till exempel "Process 2 (Justering av protokoll), steg 1, källan: citatet står inte ordagrant på sidan 5":
+
+- Processen finns på redaktionens lista och står bara en gång i filen. Den har minst ett steg.
+- Varje steg har vem, vad och en källa med dokument, sida, paragraf och citat.
+- Dokumentet finns på kommunens sida och ingår i omfånget, de 25 dokumenten. Sidan finns i dokumentet.
+- Citatet står ordagrant på sidan, med samma jämförelse som för motstridigheter.
+- En publicerad process läses inte in med andra steg. Håller den inte längre återkallar en utgivare den först. En avvisad process läses inte in.
+
+### Granskning
+
+- Processen går som en helhet, med alla sina steg, från utkast via granskad till publicerad (ADR-0002). En utgivare som varken lade till processen eller läste in stegen granskar och publicerar den. En process utan steg kan inte granskas.
+- En process som inte ska beskrivas avvisas med motivering. En publicerad process kan återkallas med motivering.
+- När ett dokument som ett steg citerar får en ny version märks **det steget** "Dokumentet har ändrats". Processen förblir publicerad. En redaktör läser den nya versionen och tar ställning under Redaktion → Processer: står citatet kvar på sidan tas märkningen bort och versionen blir den senaste. Annars körs skillen för processen igen, efter att en utgivare har återkallat den.
+
+### Visning
+
+- **Processidan** under Styrande dokument → Processer visar stegen i ordning med vem, vad, när, citat och källa med länk till sidan i PDF:en. Hela processen har streckad kantlinje och etiketten Analys.
+- En publicerad motstridighet som citerar samma ställe som ett steg visas vid steget. Samma ställe är samma dokument och sida, och samma paragraf när båda anger en (`§ 13` och `13 §` räknas som samma).
+- **Dokumentsidan** listar de publicerade processerna som dokumentet ingår i.
+- **Listan** över styrande dokument visar antalet publicerade processer per dokument.

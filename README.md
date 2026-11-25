@@ -62,7 +62,7 @@ Hur protokollen hämtas och tolkas står i [docs/protokoll.md](docs/protokoll.md
 
 Ledamotsregistret, partiet över tid och hur en redaktör slår ihop namn står i [docs/ledamoter.md](docs/ledamoter.md).
 
-Kommunens styrande dokument och motstridigheterna i dem, med formatet för skillen `harnosandskollen-styrande-dokument`, står i [docs/styrande-dokument.md](docs/styrande-dokument.md).
+Kommunens styrande dokument, motstridigheterna i dem och processerna ur dem, med formaten för skillen `harnosandskollen-styrande-dokument`, står i [docs/styrande-dokument.md](docs/styrande-dokument.md).
 
 Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [docs/tackning-ekonomi.md](docs/tackning-ekonomi.md).
 

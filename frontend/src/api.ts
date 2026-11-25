@@ -2150,6 +2150,8 @@ export interface Styrdokumentrad {
   giltighet: Giltighet
   /** Antal publicerade motstridigheter (#151). Saknas på dokumentsidan, som har listan. */
   motstridigheter?: number
+  /** Antal publicerade processer som dokumentet ingår i (#152). Saknas på dokumentsidan, som har listan. */
+  processer?: number
 }
 
 export interface Styrdokumentkalla {
@@ -2190,7 +2192,7 @@ export interface Styrdokumentversion {
   textfel: string | null
 }
 
-export interface Styrdokument extends Omit<Styrdokumentrad, 'motstridigheter'> {
+export interface Styrdokument extends Omit<Styrdokumentrad, 'motstridigheter' | 'processer'> {
   filnamn: string
   url: string
   borttagen: string | null
@@ -2202,6 +2204,8 @@ export interface Styrdokument extends Omit<Styrdokumentrad, 'motstridigheter'> {
   versioner: Styrdokumentversion[]
   kalla: Styrdokumentkalla
   motstridigheter: Motstridighet[]
+  /** De publicerade processerna som dokumentet ingår i, med antalet steg ur dokumentet. */
+  processer: { id: number; namn: string; steg: number }[]
 }
 
 export const hamtaStyrandeDokument = () => hamta<Styrdokumentlista>('/api/styrande-dokument')
@@ -2295,3 +2299,55 @@ export const sattMotstridighetsstatus = (id: number, status: Motstridighetsstatu
   })
 export const taStallningTillMotstridighet = (id: number) =>
   skrivSammansattning<Motstridighet>(`/api/motstridigheter/${id}/stallning`)
+
+// Processer ur reglementen och delegationsordningar (#152)
+
+export interface Processteg {
+  id: number
+  ordning: number
+  vem: string
+  vad: string
+  /** När, eller inom vilken tidsfrist, om dokumentet anger det. */
+  nar: string | null
+  kalla: Stalle & { paragraf: string; text: string }
+  /** Dokumentet har fått en ny version, och ingen redaktör har tagit ställning. */
+  dokument_andrat: string | null
+  /** Publicerade motstridigheter som citerar stället steget bygger på. */
+  motstridigheter: Motstridighet[]
+}
+
+export interface Process {
+  id: number
+  namn: string
+  beskrivning: string | null
+  ordning: number
+  publicerad: string | null
+  steg: Processteg[]
+  dokument: { id: number; titel: string | null }[]
+  dokument_andrat: boolean
+  // Redaktionens fält.
+  granskning?: Granskningsstatus
+  redaktorer?: string[]
+  skapad?: string
+  skapad_av?: string | null
+  steg_inlasta?: string | null
+  granskad_av?: string | null
+  publicerad_av?: string | null
+  avvisning?: string | null
+  aterkallelse?: string | null
+}
+
+export const hamtaProcesser = () => hamta<{ processer: Process[] }>('/api/processer')
+export const hamtaProcess = (id: number) => hamtaEllerSaknas<Process>(`/api/processer/${id}`)
+export const hamtaProcesserForRedaktionen = () =>
+  hamta<{ processer: Process[]; andrade: Process[] }>('/api/processer/redaktion')
+export const laggTillProcess = (namn: string, beskrivning: string) =>
+  skrivSammansattning<Process>('/api/processer', 'POST', { namn, beskrivning })
+export const granskaProcess = (id: number) => skrivSammansattning<Process>(`/api/processer/${id}/granskning`)
+export const publiceraProcess = (id: number) => skrivSammansattning<Process>(`/api/processer/${id}/publicering`)
+export const avvisaProcess = (id: number, motivering: string) =>
+  skrivSammansattning<Process>(`/api/processer/${id}/avvisning`, 'POST', { motivering })
+export const aterkallaProcess = (id: number, motivering: string) =>
+  skrivSammansattning<Process>(`/api/processer/${id}/aterkallelse`, 'POST', { motivering })
+export const taStallningTillProcessteg = (id: number, steg: number) =>
+  skrivSammansattning<Process>(`/api/processer/${id}/steg/${steg}/stallning`)
