@@ -53,10 +53,10 @@ npm test
 Inspelningarna uppdateras från de riktiga källorna (Kolada, SCB, SKR och protokollen på harnosand.se) med:
 
 ```bash
-PROTOKOLL_URVAL=2 uv run --directory backend python -m app.spela_in tests/recordings
+PROTOKOLL_URVAL=2 STYRANDE_URVAL=1 uv run --directory backend python -m app.spela_in tests/recordings
 ```
 
-`PROTOKOLL_URVAL=2` begränsar protokollen till två per sida och årsmapp, vilket är vad testerna förväntar sig. Utan det hämtas alla protokoll sedan 2022 (cirka 200 MB). Ange källans id för att bara spela in en källa, t.ex. `... tests/recordings harnosand-protokoll-kf`. Testerna av protokollen har förväntade värden som är kontrollerade för hand, så de behöver ses över när protokollen spelas in på nytt.
+`PROTOKOLL_URVAL=2` begränsar protokollen till två per sida och årsmapp, vilket är vad testerna förväntar sig. Utan det hämtas alla protokoll sedan 2022 (cirka 200 MB). `STYRANDE_URVAL=1` begränsar kommunens styrande dokument till ett per rubrik. Utan det hämtas alla 138 (cirka 190 MB). Ange källans id för att bara spela in en källa, t.ex. `... tests/recordings harnosand-protokoll-kf`. Testerna av protokollen har förväntade värden som är kontrollerade för hand, så de behöver ses över när protokollen spelas in på nytt.
 
 Hur protokollen hämtas och tolkas står i [docs/protokoll.md](docs/protokoll.md).
 
@@ -77,6 +77,7 @@ Hur SKR:s skatteunderlagsprognos hämtas och räknas om för Härnösand står i
 | `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND`, `SKR_ANROP_PER_SEKUND`, `PROTOKOLL_ANROP_PER_SEKUND` | Högsta anropsfrekvens mot källan (standard 5, 2, 1 respektive 1). `0` tar bort gränsen. |
 | `SOFFICE` | Sökväg till LibreOffice `soffice` om den inte finns i `PATH`. |
 | `PROTOKOLL_URVAL` | Högst så många protokoll per organsida och årsmapp. Bara för inspelningar och test, sätts inte i drift. |
+| `STYRANDE_URVAL` | Högst så många styrande dokument per rubrik på kommunens sida. Bara för inspelningar och test, sätts inte i drift. |
 | `SESSION_SECRET` | Hemlighet för sessionskakan. Krävs på servern. Saknas den blir alla utloggade vid omstart. |
 | `SESSION_HTTPS_ONLY` | `true` när appen nås via https. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-inloggning. Utan klient-id är den avstängd. |

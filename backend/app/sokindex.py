@@ -12,6 +12,8 @@ källa: en funktion som ger enheterna med deras text. En ny typ läggs till med 
 - **ledamot:** registrerade ledamöter med sina namn (A). Privatpersoner som nämns i protokollen får ingen
   egen enhet, deras namn finns bara i protokollets text.
 - **kallelsepunkt:** punkterna i kallelsernas föredragningslistor, med rubrik och diarienummer (A).
+- **styrande_dokument:** sidorna i den gällande versionen av kommunens styrande dokument (D), med titeln (A) på första
+  sidan (#63). Texten lästes när versionen lagrades. Ett borttaget dokument har inga sidor i indexet.
 
 Enheterna innehåller den gällande versionen: behandlingar och ärenden läses med de publicerade rättelserna
 pålagda (`behandlingar.las`). Varje enhet har markeringarna som sidan den länkar till visar.
@@ -49,9 +51,10 @@ from .sources.harnosand import ORGAN
 
 logger = logging.getLogger(__name__)
 
-TYPER = ("behandling", "protokollsida", "budgetforslag", "arende", "ledamot", "kallelsepunkt")
+TYPER = ("behandling", "protokollsida", "budgetforslag", "arende", "ledamot", "kallelsepunkt", "styrande_dokument")
 # Protokollsidorna först: behandlingarna hittar sin sida i protokollets text.
-_INDEXERINGSORDNING = ("protokollsida", "behandling", "budgetforslag", "arende", "ledamot", "kallelsepunkt")
+_INDEXERINGSORDNING = ("protokollsida", "behandling", "budgetforslag", "arende", "ledamot", "kallelsepunkt",
+                       "styrande_dokument")
 
 
 # Enheter
@@ -375,6 +378,29 @@ def _kallelsepunkter(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
     yield Grupp("", enheter)
 
 
+def _styrande_dokument(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
+    from . import styrande_dokument  # styrande_dokument använder insamlingens moduler
+
+    for r in conn.execute(
+        """
+        SELECT DISTINCT ON (d.id) d.id, d.titel, v.version, v.sidor, v.ocr, v.dokumentinformation
+        FROM styrande_dokument d JOIN styrande_dokument_version v ON v.dokument_id = d.id
+        WHERE d.borttagen IS NULL ORDER BY d.id, v.version DESC
+        """
+    ).fetchall():
+        info = r["dokumentinformation"]
+        organ = styrande_dokument.faststallt_organ(info.get("faststalld_av"))
+        datum = styrande_dokument.tolka_datum(info.get("datum"))
+        bas = f"/api/styrande-dokument/{r['id']}/versioner/{r['version']}"
+        yield Grupp(f"{r['id']}:", [
+            Enhet(typ="styrande_dokument", nyckel=f"{r['id']}:{i}", rubrik=f"{r['titel']}, sidan {i}",
+                  undertitel=f"Sidan {i}", lank=f"/politik/styrande-dokument/{r['id']}",
+                  text_a=r["titel"] if i == 1 else "", text_c=text, organ=organ, datum=datum, ar=_ar(datum),
+                  dokument=f"{bas}#page={i}", sida=i, markeringar=["ocr"] if r["ocr"] else [])
+            for i, text in enumerate(r["sidor"], start=1) if text.strip()
+        ])
+
+
 @dataclass(frozen=True)
 class Kalla:
     enheter: Callable[[psycopg.Connection, Omfang], Iterable[Grupp]]
@@ -389,6 +415,7 @@ KALLOR: dict[str, Kalla] = {
     "arende": Kalla(_arenden),
     "ledamot": Kalla(_ledamoter),
     "kallelsepunkt": Kalla(_kallelsepunkter),
+    "styrande_dokument": Kalla(_styrande_dokument),
 }
 
 
@@ -550,7 +577,8 @@ def _utdrag(text: str | None) -> list[dict]:
 
 
 _TYPNAMN = {"behandling": "Behandling", "protokollsida": "Protokollsida", "budgetforslag": "Budgetförslag",
-            "arende": "Ärende", "ledamot": "Ledamot", "kallelsepunkt": "Kallelsepunkt"}
+            "arende": "Ärende", "ledamot": "Ledamot", "kallelsepunkt": "Kallelsepunkt",
+            "styrande_dokument": "Styrande dokument"}
 
 
 def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | None = None, typ: str | None = None,

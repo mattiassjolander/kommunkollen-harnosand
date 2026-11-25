@@ -127,6 +127,21 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
       <RouterLink :to="`/politik/arenden/${b.arende.id}`" data-testid="arendelank">Ärendets väg ›</RouterLink>
     </section>
 
+    <section
+      v-if="b.styrande_dokument?.length"
+      class="kort"
+      aria-labelledby="styrdok-rubrik"
+      data-testid="faststallda-dokument"
+    >
+      <h2 id="styrdok-rubrik">Styrande dokument</h2>
+      <p class="arendetext">Fastställde enligt dokumentinformationen (samma organ, datum och diarienummer):</p>
+      <ul>
+        <li v-for="s in b.styrande_dokument" :key="s.id">
+          <RouterLink :to="`/politik/styrande-dokument/${s.id}`">{{ s.titel }}</RouterLink>
+        </li>
+      </ul>
+    </section>
+
     <section v-if="b.yrkanden.length" class="kort" aria-labelledby="yrk-rubrik" data-testid="yrkanden">
       <h2 id="yrk-rubrik">Yrkanden</h2>
       <ul class="yrkanden">

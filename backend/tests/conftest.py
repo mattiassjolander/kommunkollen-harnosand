@@ -41,6 +41,8 @@ def utan_anropsgrans(monkeypatch):
     monkeypatch.setenv("PROTOKOLL_URVAL", "2")
     # Föredragningslistan läses bara ur de små kallelserna, som finns i inspelningarna (#109).
     monkeypatch.setenv("KALLELSE_MAX_STORLEK_FOR_LISTA", "2000000")
+    # Inspelningarna har en fil per rubrik på sidan med kommunens styrande dokument (#63).
+    monkeypatch.setenv("STYRANDE_URVAL", "1")
 
 
 @pytest.fixture(autouse=True)

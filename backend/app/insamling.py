@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import kalender, kallelsepunkter, rankningar, sammansattning, sammantradesplan, skatteunderlag, sokindex
+from . import kalender, kallelsepunkter, rankningar, sammansattning, sammantradesplan, skatteunderlag, sokindex, styrande_dokument
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -152,6 +152,11 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         res.antal_nya += antal["nya"]
         res.antal_andrade += antal["andrade"]
         res.antal_oforandrade += antal["oforandrade"]
+    for lista in hamtning.styrande_dokument:
+        antal = styrande_dokument.lagra(conn, lista, korning_id, hamtad, kalender.idag())
+        res.antal_nya += antal["nya"]
+        res.antal_andrade += antal["andrade"]
+        res.antal_oforandrade += antal["oforandrade"]
     if hamtning.val or dokument_andrade:
         # Nya val- eller protokolluppgifter kan ge nya kopplingar till ledamotsregistret (#65).
         sammansattning.koppla(conn)
@@ -246,6 +251,9 @@ def _kor(
                 # Källor med dokument får veta vilka adresser som redan är hämtade.
                 kalla.kanda_dokument = {r["url"] for r in conn.execute(
                     "SELECT DISTINCT url FROM dokument WHERE datakalla_id = %s", (kalla.id,))}
+            if hasattr(kalla, "kanda_filer"):
+                # Styrande dokument (#63): filer som redan är hämtade laddas inte ner igen.
+                kalla.kanda_filer = styrande_dokument.kanda_filer(conn)
             with kallklient(client, robusthet, getattr(kalla, "anrop_per_sekund", None)) as kc:
                 hamtning = kalla.hamta(kc, _senast_lyckad(conn, kalla.id))
             res = _lagra(conn, kalla, hamtning, korning_id, startad)

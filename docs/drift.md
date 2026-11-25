@@ -61,6 +61,7 @@ ssh kommunkollen "cd /opt/kommunkollen && docker compose logs --tail 50 insamlar
 - Nätverksfel, timeout (30 s) och svar 429 eller 5xx försöks igen två gånger, efter 2 och 4 sekunder.
 - Anropen mot varje källa begränsas av `KOLADA_ANROP_PER_SEKUND`, `SCB_ANROP_PER_SEKUND` och `PROTOKOLL_ANROP_PER_SEKUND`.
 - Protokollen hämtas från organens sidor och arkivmapparna från 2022. Den första insamlingen hämtar alla, cirka 270 filer och 200 MB som sparas i databasen, och tar några minuter. Därefter hämtas arkivets filer inte igen. `PROTOKOLL_URVAL` sätts inte i drift.
+- Kommunens styrande dokument hämtas från sidan Kommunens styrande dokument. Den första insamlingen hämtar alla, 138 filer och cirka 190 MB som sparas i databasen. Därefter hämtas bara nya eller ändrade filer. Försvinner fler än hälften av dokumenten (och fler än 10) från sidan på en gång avbryts källan med status Misslyckad, så att en ändrad sida inte markerar allt som borttaget. `STYRANDE_URVAL` sätts inte i drift.
 - Ett protokoll som inte går att tolka sparas och visas ändå. Källan får status Delvis fel, och felmeddelandet anger vilket protokoll det gäller.
 - Avbryts en körning (t.ex. vid omstart) återupptas den vid nästa insamling. Källor som redan var klara hoppas över, och inga uppgifter dubbleras.
 - En redaktör kan köra om en enskild källa med knappen Kör om i vyn Datakällor.

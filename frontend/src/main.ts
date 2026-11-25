@@ -28,6 +28,8 @@ import SammantradesplanerView from './views/politik/SammantradesplanerView.vue'
 import KalenderView from './views/KalenderView.vue'
 import LedamotView from './views/politik/LedamotView.vue'
 import LedamoterView from './views/politik/LedamoterView.vue'
+import StyrandeDokumentView from './views/politik/StyrandeDokumentView.vue'
+import StyrdokumentView from './views/politik/StyrdokumentView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
 import ProtokollavvikelserView from './views/politik/ProtokollavvikelserView.vue'
 import RattelserView from './views/politik/RattelserView.vue'
@@ -77,6 +79,8 @@ const router = createRouter({
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },
     { path: '/politik/sammansattning', component: SammansattningView, meta: { titel: 'Sammansättning' } },
+    { path: '/politik/styrande-dokument', component: StyrandeDokumentView, meta: { titel: 'Styrande dokument' } },
+    { path: '/politik/styrande-dokument/:id(\\d+)', component: StyrdokumentView, meta: { titel: 'Styrande dokument' } },
     // Redaktionens vyer låg tidigare under /politik (#146).
     { path: '/redaktion', redirect: '/redaktion/rattelser' },
     ...Object.entries(FLYTTADE).map(

@@ -744,6 +744,8 @@ export interface Behandling extends Behandlingsrad {
   propositionsordning: string | null
   voteringar: Votering[]
   reservationer: { text: string; personer: Namngiven[]; partier: string[] }[]
+  /** Styrande dokument som behandlingen fastställde, enligt dokumentinformationen (#63). */
+  styrande_dokument?: { id: number; titel: string }[]
 }
 
 export class Saknas extends Error {}
@@ -2050,7 +2052,14 @@ export async function taBortMetodbyte(rankning: string, ar: number): Promise<Met
 
 // Sökning (#142): fulltext i behandlingar, protokollsidor, budgetförslag, ärenden, ledamöter och kallelsepunkter.
 
-export type Soktyp = 'behandling' | 'protokollsida' | 'budgetforslag' | 'arende' | 'ledamot' | 'kallelsepunkt'
+export type Soktyp =
+  | 'behandling'
+  | 'protokollsida'
+  | 'budgetforslag'
+  | 'arende'
+  | 'ledamot'
+  | 'kallelsepunkt'
+  | 'styrande_dokument'
 export type Sokmarkering =
   | 'automatiskt_tolkad'
   | 'ocr'
@@ -2110,3 +2119,85 @@ export async function sok(f: Sokfilter): Promise<Soksvar> {
   if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
   return svar.json()
 }
+
+// Styrande dokument (#63)
+
+export type Giltighetsstatus = 'gallande' | 'utganget' | 'borttaget'
+
+export interface Giltighet {
+  status: Giltighetsstatus
+  /** Varifrån giltigheten kommer. null: dokumentet anger ingen giltighetstid, eller det är borttaget. */
+  kalla: 'dokumentinformationen' | 'titeln' | null
+  till: string | null
+  borttagen?: string
+  text: string
+}
+
+export interface Faststallt {
+  /** "Fastställd/upprättad av" som det står i dokumentet. */
+  text: string | null
+  organ: Organ | null
+  datum: string | null
+}
+
+export interface Styrdokumentrad {
+  id: number
+  titel: string
+  kategorier: string[]
+  faststallt: Faststallt
+  giltighet: Giltighet
+}
+
+export interface Styrdokumentkalla {
+  titel: string
+  url: string
+  kontrollerad: string | null
+}
+
+export interface Styrdokumentlista {
+  dokument: Styrdokumentrad[]
+  kategorier: string[]
+  kalla: Styrdokumentkalla
+}
+
+export type Dokumentinformationsfalt =
+  | 'dokumentnamn'
+  | 'dokumenttyp'
+  | 'faststalld_av'
+  | 'datum'
+  | 'diarienummer'
+  | 'dokumentansvarig'
+  | 'version'
+  | 'senast_reviderad'
+  | 'giltig_tom'
+  | 'dokumentinformation'
+  | 'galler_for'
+  | 'annan_information'
+
+export interface Styrdokumentversion {
+  version: number
+  hamtad: string
+  ersatt: string | null
+  kommunens_url: string
+  kopia: string
+  storlek: number
+  sidor: number
+  ocr: boolean
+  textfel: string | null
+}
+
+export interface Styrdokument extends Styrdokumentrad {
+  filnamn: string
+  url: string
+  borttagen: string | null
+  forst_sedd: string
+  senast_sedd: string
+  dokumentinformation: { ruta: boolean } & Record<Dokumentinformationsfalt, string | null>
+  galler_fran: string | null
+  beslut: { sammantrade_id: number; paragraf: number; rubrik: string; organ: Organ; datum: string; grund: string }[]
+  versioner: Styrdokumentversion[]
+  kalla: Styrdokumentkalla
+}
+
+export const hamtaStyrandeDokument = () => hamta<Styrdokumentlista>('/api/styrande-dokument')
+export const hamtaStyrdokument = (id: number) => hamtaEllerSaknas<Styrdokument>(`/api/styrande-dokument/${id}`)

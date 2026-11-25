@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -29,6 +29,7 @@ from .sources.harnosand import ORGAN, Protokollkalla
 from .sources.sammantradesplaner import Sammantradesplaner
 from .sources.scb import Scb
 from .sources.skr import SkrSkatteunderlag
+from .sources.styrande_dokument import StyrandeDokument, urval_fran_miljo
 from .sources.valmyndigheten import Valmyndigheten
 
 KOMMUN = "2280"  # Härnösand
@@ -58,6 +59,7 @@ def standardkallor() -> list[Datakalla]:
         Valmyndigheten(anrop_per_sekund=_anropsgrans("VALMYNDIGHETEN", 1)),
         Foretagsklimat(anrop_per_sekund=_anropsgrans("RANKNINGAR", 1)),
         Miljobarometern(anrop_per_sekund=_anropsgrans("RANKNINGAR", 1)),
+        StyrandeDokument(urval=urval_fran_miljo(), anrop_per_sekund=_anropsgrans("PROTOKOLL", 1)),
     ]
 
 
@@ -431,6 +433,9 @@ def create_app(
     def behandling(sammantrade_id: int, paragraf: int) -> dict:
         with db.connect(database_url) as conn:
             resultat = protokoll.las_behandling(conn, sammantrade_id, paragraf)
+            if resultat is not None:
+                # Styrande dokument som behandlingen fastställde (#63).
+                resultat["styrande_dokument"] = styrande_dokument.for_behandling(conn, sammantrade_id, paragraf)
         if resultat is None:
             raise HTTPException(404, f"§ {paragraf} finns inte i sammanträdet {sammantrade_id}")
         return resultat
@@ -940,6 +945,33 @@ def create_app(
     @app.post("/api/sammansattning/uppgifter/{uppgift_id}/aterkallelse")
     def aterkalla_personuppgift(uppgift_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         return _sammansattning(sammansattning.aterkalla_uppgift, uppgift_id, data, anv.epost)
+
+    @app.get("/api/styrande-dokument", dependencies=[Depends(krav_roll("lasare"))])
+    def styrande_dokument_lista() -> dict:
+        """Kommunens styrande dokument (#63) med kategori, fastställt av och giltighet."""
+        with db.connect(database_url) as conn:
+            return styrande_dokument.lista(conn, kalender.idag())
+
+    @app.get("/api/styrande-dokument/{dokument_id}", dependencies=[Depends(krav_roll("lasare"))])
+    def styrande_dokument_sida(dokument_id: int) -> dict:
+        with db.connect(database_url) as conn:
+            resultat = styrande_dokument.las(conn, dokument_id, kalender.idag())
+        if resultat is None:
+            raise HTTPException(404, f"Det styrande dokumentet {dokument_id} finns inte")
+        return resultat
+
+    @app.get("/api/styrande-dokument/{dokument_id}/versioner/{version}", dependencies=[Depends(krav_roll("lasare"))])
+    def styrande_dokument_fil(dokument_id: int, version: int) -> Response:
+        """Plattformens kopia av en version, så att den finns kvar när kommunen byter ut eller tar bort filen."""
+        with db.connect(database_url) as conn:
+            d = styrande_dokument.fil(conn, dokument_id, version)
+        if d is None:
+            raise HTTPException(404, f"Version {version} av dokumentet {dokument_id} finns inte")
+        filnamn = d["filnamn"].encode("ascii", "replace").decode().replace("?", "_").replace('"', "")
+        return Response(
+            bytes(d["innehall"]), media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filnamn}"', "ETag": f'"{d["sha256"]}"'},
+        )
 
     @app.get("/api/dokument/{dokument_id}", dependencies=[Depends(krav_roll("lasare"))])
     def dokument(dokument_id: int) -> Response:

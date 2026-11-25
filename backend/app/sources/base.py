@@ -63,6 +63,8 @@ class Hamtning:
     val: list = field(default_factory=list)
     # Rankningar med placeringar och delmått (rankningar.Rankningsdata), som lagras i app.rankningar.
     rankningar: list = field(default_factory=list)
+    # Listan över kommunens styrande dokument (styrande_dokument.Dokumentlista), som lagras i app.styrande_dokument.
+    styrande_dokument: list = field(default_factory=list)
     # Delar av hämtningen som misslyckades medan resten gick bra. Ger status "delvis fel".
     # Om ingenting gick att hämta ska källan i stället kasta ett undantag.
     fel: list[str] = field(default_factory=list)

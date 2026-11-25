@@ -31,6 +31,7 @@ const TYPNAMN: Record<Soktyp, string> = {
   arende: 'Ärenden',
   ledamot: 'Ledamöter',
   kallelsepunkt: 'Kallelsepunkter',
+  styrande_dokument: 'Styrande dokument',
 }
 const ETIKETT: Record<Soktyp, string> = {
   behandling: 'Behandling',
@@ -39,6 +40,7 @@ const ETIKETT: Record<Soktyp, string> = {
   arende: 'Ärende',
   ledamot: 'Ledamot',
   kallelsepunkt: 'Kallelsepunkt',
+  styrande_dokument: 'Styrande dokument',
 }
 
 const fraga = (namn: string) =>
@@ -119,7 +121,14 @@ const meta = (t: Soktraff) =>
     .filter(Boolean)
     .join(' · ')
 const pdftext = (t: Soktraff) => {
-  const kalla = t.typ === 'kallelsepunkt' ? 'kallelsen' : t.typ === 'budgetforslag' ? 'förslaget' : 'protokollet'
+  const kalla =
+    t.typ === 'kallelsepunkt'
+      ? 'kallelsen'
+      : t.typ === 'budgetforslag'
+        ? 'förslaget'
+        : t.typ === 'styrande_dokument'
+          ? 'dokumentet'
+          : 'protokollet'
   return t.sida ? `Sidan ${t.sida} i ${kalla}` : `Öppna ${kalla}`
 }
 const sammantrade = (t: Soktraff) => ({
