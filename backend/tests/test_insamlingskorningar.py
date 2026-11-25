@@ -60,8 +60,8 @@ def test_forsta_korningen_registreras_med_resultat_per_kalla(api):
     assert status["senaste_korning"]["avslutad"]
     assert status["senaste_lyckade_korning"]["id"] == status["senaste_korning"]["id"]
     # Kolada, SCB, SKR, protokollen från fem organ, sammanträdesplanerna, Valmyndigheten och två rankningar
-    assert status["kallor_kontrollerade"] == 12
-    assert status["kallor_utan_fel"] == 12
+    assert status["kallor_kontrollerade"] == 13
+    assert status["kallor_utan_fel"] == 13
     assert status["fullstandigt_uppdaterad"] is True
 
     kolada = kalla(api, "kolada")
@@ -74,7 +74,7 @@ def test_forsta_korningen_registreras_med_resultat_per_kalla(api):
     [korning] = api.get("/api/insamlingar").json()
     assert {r["datakalla_id"] for r in korning["kallor"]} == {
         "kolada", "scb", "skr-skatteunderlagsprognos", *(f"harnosand-protokoll-{o}" for o in ("kf", "ks", "sam", "soc", "skol")),
-        "harnosand-sammantradesplaner", "valmyndigheten", "foretagsklimat", "miljobasta-kommun"}
+        "harnosand-sammantradesplaner", "harnosand-styrande-dokument", "valmyndigheten", "foretagsklimat", "miljobasta-kommun"}
     [rad] = [r for r in korning["kallor"] if r["datakalla_id"] == "kolada"]
     assert rad["status"] == "lyckad"
     assert rad["antal_nya"] > 0
@@ -129,8 +129,8 @@ def test_omkorning_av_en_enskild_kalla_gor_inte_de_andra_inaktuella(api):
     assert api.post("/api/insamlingar", params={"kalla": "kolada"}).status_code == 200
 
     status = api.get("/api/status").json()
-    assert status["kallor_kontrollerade"] == 12
-    assert status["kallor_utan_fel"] == 12
+    assert status["kallor_kontrollerade"] == 13
+    assert status["kallor_utan_fel"] == 13
     assert status["fullstandigt_uppdaterad"] is True
 
 
