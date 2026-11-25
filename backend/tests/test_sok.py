@@ -52,7 +52,7 @@ def test_insamlingen_indexerar_protokollet_kallelsen_arendena_och_ledamoterna(ap
     svar = sok(api, "förskola")
     assert per_typ(svar) == {"behandling": 2, "protokollsida": 6, "arende": 1, "kallelsepunkt": 1}
     assert [p["namn"] for p in svar["per_typ"]] == [
-        "Behandling", "Protokollsida", "Budgetförslag", "Ärende", "Ledamot", "Kallelsepunkt"]
+        "Behandling", "Protokollsida", "Budgetförslag", "Ärende", "Ledamot", "Kallelsepunkt", "Styrande dokument"]
 
     traffar = {(t["typ"], t["rubrik"]): t for t in svar["traffar"]}
     b = traffar[("behandling", "Svar på motion om kontinuitet i allmän förskola")]
