@@ -20,6 +20,7 @@ import ArendeView from './views/politik/ArendeView.vue'
 import AvvikelserView from './views/politik/AvvikelserView.vue'
 import BudgetforslagView from './views/politik/BudgetforslagView.vue'
 import TidigareBudgetView from './views/politik/TidigareBudgetView.vue'
+import BudgetforslagetView from './views/politik/BudgetforslagetView.vue'
 import BudgetutkastView from './views/politik/BudgetutkastView.vue'
 import BehandlingView from './views/politik/BehandlingView.vue'
 import KopplingarView from './views/politik/KopplingarView.vue'
@@ -71,6 +72,7 @@ const router = createRouter({
       component: TidigareBudgetView,
       meta: { titel: 'Förra versionen' },
     },
+    { path: '/politik/budget/:ar(\\d{4})/:nyckel', component: BudgetforslagetView, meta: { titel: 'Budgetförslag' } },
     { path: '/redaktion/budgetutkast', component: BudgetutkastView, meta: { titel: 'Budgetutkast' } },
     { path: '/politik/ledamoter', component: LedamoterView, meta: { titel: 'Ledamöter' } },
     { path: '/politik/ledamoter/:id', component: LedamotView, meta: { titel: 'Ledamot' } },

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Brodiagram (vattenfall) som bygger upp en summa steg för steg, liggande så att långa namn får plats
-// även i mobilbredd. Färgerna följer den divergerande skalan i docs/design.md: ett tillskott är blått,
+// även i mobilbredd. Med `staende` står stegen som kolumner när diagrammet får plats, och ligger med en rad
+// per steg på smal skärm (#147). Färgerna följer den divergerande skalan i docs/design.md: ett tillskott är blått,
 // ett avdrag rött ("lägre", inte "dåligt") och summan grå. Tecken och text bär informationen.
 import { computed, ref } from 'vue'
 import { tal } from '../format'
@@ -17,7 +18,7 @@ export interface Brosteg {
   markering?: string
 }
 
-const props = defineProps<{ steg: Brosteg[]; enhet: string; period: string }>()
+const props = defineProps<{ steg: Brosteg[]; enhet: string; period: string; staende?: boolean }>()
 
 // Varje stegs start och slut på skalan.
 const staplar = computed(() => {
@@ -26,7 +27,8 @@ const staplar = computed(() => {
     const v = s.varde ?? 0
     const fran = s.typ === 'summa' ? 0 : lopande
     const till = s.typ === 'summa' ? v : lopande + v
-    if (s.typ !== 'summa') lopande = till
+    // En summa mitt i diagrammet är också startpunkten för stegen efter den.
+    lopande = till
     return { ...s, fran, till }
   })
 })
@@ -37,6 +39,11 @@ const doman = computed(() => {
   return { min, spann: max - min || 1 }
 })
 const pos = (x: number) => ((x - doman.value.min) / doman.value.spann) * 100
+// Stapelns start och längd på skalan, som CSS-variabler: liggande blir de left och width, stående bottom och height.
+const stapelstil = (s: { fran: number; till: number }) => ({
+  '--start': `${pos(Math.min(s.fran, s.till))}%`,
+  '--langd': `${Math.max(pos(Math.max(s.fran, s.till)) - pos(Math.min(s.fran, s.till)), 0.4)}%`,
+})
 
 const tecken = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '±')
 function etikett(s: Brosteg): string {
@@ -48,12 +55,13 @@ const aktiv = ref<string | null>(null)
 </script>
 
 <template>
+  <div class="behallare" :class="{ staende }">
   <div class="bro" role="list" :aria-label="`Brodiagram ${period}, ${enhet}`" @mouseleave="aktiv = null">
     <div
-      v-for="s in staplar"
+      v-for="(s, i) in staplar"
       :key="s.id"
       class="rad"
-      :class="{ summa: s.typ === 'summa', aktiv: aktiv === s.id }"
+      :class="{ summa: s.typ === 'summa', aktiv: aktiv === s.id, borjan: i < staplar.length / 2 }"
       role="listitem"
       data-testid="brosteg"
       :data-steg="s.id"
@@ -64,12 +72,12 @@ const aktiv = ref<string | null>(null)
         <span v-if="s.markering" class="markering" data-testid="bromarkering">{{ s.markering }}</span>
       </span>
       <span class="spar" aria-hidden="true">
-        <span class="noll" :style="{ left: `${pos(0)}%` }" />
+        <span class="noll" :style="{ '--noll': `${pos(0)}%` }" />
         <span
           v-if="s.varde !== null"
           class="stapel"
           :class="s.typ === 'summa' ? 'neutral' : s.varde < 0 ? 'lagre' : 'hogre'"
-          :style="{ left: `${pos(Math.min(s.fran, s.till))}%`, width: `${Math.max(pos(Math.max(s.fran, s.till)) - pos(Math.min(s.fran, s.till)), 0.4)}%` }"
+          :style="stapelstil(s)"
         />
       </span>
       <span class="varde tal" :class="{ saknas: s.varde === null }" data-testid="brovarde">{{ etikett(s) }}</span>
@@ -80,9 +88,13 @@ const aktiv = ref<string | null>(null)
       </span>
     </div>
   </div>
+  </div>
 </template>
 
 <style scoped>
+.behallare {
+  container-type: inline-size;
+}
 .bro {
   display: flex;
   flex-direction: column;
@@ -131,12 +143,15 @@ const aktiv = ref<string | null>(null)
   position: absolute;
   top: -3px;
   bottom: -3px;
+  left: var(--noll);
   border-left: 1px solid var(--line-strong);
 }
 .stapel {
   position: absolute;
   top: 2px;
   bottom: 2px;
+  left: var(--start);
+  width: var(--langd);
   border-radius: 2px;
 }
 .stapel.hogre {
@@ -175,5 +190,66 @@ const aktiv = ref<string | null>(null)
 .tipskalla {
   font-size: 12px;
   color: var(--ink-muted);
+}
+/* Stående kolumner när diagrammet får plats. */
+@container (min-width: 820px) {
+  .staende .bro {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .staende .rad {
+    flex: 1 1 0;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 220px auto;
+    grid-template-areas: 'varde' 'spar' 'titel';
+    gap: 4px;
+    padding: 0;
+  }
+  .staende .rad.summa {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .staende .titel {
+    grid-area: titel;
+    font-size: 11px;
+    text-align: center;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+  .staende .spar {
+    grid-area: spar;
+    grid-column: auto;
+    grid-row: auto;
+    height: auto;
+    align-self: stretch;
+  }
+  .staende .varde {
+    grid-area: varde;
+    align-self: end;
+    font-size: 11px;
+    text-align: center;
+    white-space: normal;
+  }
+  .staende .noll {
+    top: auto;
+    left: -2px;
+    right: -2px;
+    bottom: var(--noll);
+    border-left: 0;
+    border-top: 1px solid var(--line-strong);
+  }
+  .staende .stapel {
+    top: auto;
+    left: 15%;
+    width: 70%;
+    bottom: var(--start);
+    height: var(--langd);
+  }
+  .staende .borjan .tips {
+    left: 0;
+    right: auto;
+  }
 }
 </style>

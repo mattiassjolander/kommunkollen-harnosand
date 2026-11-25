@@ -223,6 +223,132 @@ test('planförutsättningarna jämförs med SKR:s skatteunderlagsprognoser (#62)
   await expect(skr.getByTestId('skr-forklaring')).toContainText('En differens behöver därför inte vara ett fel')
 })
 
+// Ett budgetförslag för sig (#147): läsaren öppnar Moderaternas förslag från jämförelsen och ser nyckeltalen,
+// summeringen och graferna mot planförutsättningarna. Förslagen publicerades i det första testet.
+test('läsaren öppnar ett budgetförslag och ser graferna mot planförutsättningarna (#147)', async ({ page }) => {
+  await page.request.post('/api/auth/logga-ut')
+  await page.goto('/politik/budget')
+  await page.getByTestId('budgetjamforelse').locator('thead th[data-nyckel="M"]').getByTestId('forslagslank').click()
+  await expect(page).toHaveURL(/\/politik\/budget\/2027\/M$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Moderaternas budgetförslag för Härnösands kommun 2027')
+  await expect(page.getByTestId('brodsmula')).toContainText('Budgetförslag')
+  await expect(page.getByTestId('originalet')).toHaveAttribute('href', /\/api\/budgetforslag\/\d+\/original$/)
+
+  // Nyckeltalen: −37 − 4 + 0 + 1 + 15 + 13 = −12 mnkr, och skatten sänks med 10 öre.
+  const nyckeltal = page.getByTestId('nyckeltal')
+  await expect(nyckeltal.locator('[data-nyckeltal="forandring"]')).toContainText('−12,0 mnkr')
+  await expect(nyckeltal.locator('[data-nyckeltal="skattesats"]')).toContainText('−10 öre')
+  await expect(nyckeltal.locator('[data-nyckeltal="resultat"]')).toContainText('2,5 % av skatter och bidrag')
+  await expect(nyckeltal.locator('[data-nyckeltal="differens"]')).toContainText('beräknat resultat')
+  // Redaktionens summering, märkt Analys och med sidhänvisningar.
+  const summering = page.getByTestId('summering')
+  await expect(summering.getByRole('heading')).toContainText('Analys')
+  await expect(summering.locator('[data-fraga="besparingar"]')).toContainText('Budgetminskning med 20 %')
+  await expect(summering.locator('[data-fraga="besparingar"]').getByRole('link', { name: 's. 1' })).toHaveAttribute('href', /#page=1$/)
+
+  // A: från största ökning till största minskning, med ett streck för den antagna budgetens förändring.
+  const a = page.getByTestId('graf-forandring')
+  const staplar = a.getByTestId('forandringsstapel')
+  await expect(staplar.first()).toHaveAttribute('data-organ', 'Skolnämnden')
+  await expect(staplar.first().getByTestId('forandringsvarde')).toHaveText('+15,0 mnkr')
+  await expect(a.locator('[data-organ="Kommunstyrelsen"]').getByTestId('forandringsvarde')).toHaveText('−37,0 mnkr')
+  await expect(a.getByTestId('antagenstreck').first()).toBeAttached()
+  await expect(a.getByRole('list', { name: /Förändring mot planförutsättningarna/ })).toBeVisible()
+  // Tabellvyn för skärmläsare och utskrift.
+  await a.getByRole('button', { name: 'Tabell' }).click()
+  await expect(a.getByTestId('tabell-forandring').locator('tr', { hasText: 'Kommunstyrelsen' })).toContainText('−37,0 mnkr')
+  await expect(a.getByTestId('tabell-forandring').getByRole('columnheader', { name: 'Antagen budget' })).toBeVisible()
+
+  // B: planförutsättningarnas resultat, ramförändringarna i samma ordning som A, skatten, det beräknade resultatet,
+  // det som inte redovisas och sist det budgeterade resultatet.
+  const b = page.getByTestId('graf-resultat')
+  const steg = b.getByTestId('brosteg')
+  const ordning = await steg.evaluateAll((s) => s.map((x) => x.getAttribute('data-steg')))
+  expect(ordning).toEqual([
+    'plan',
+    'ram-Skolnämnden',
+    'ram-Socialnämnden',
+    'ram-Samhällsnämnden',
+    'ram-Kommunfullmäktige',
+    'ram-Kommungemensam verksamhet',
+    'ram-Kommunstyrelsen',
+    'skatt',
+    'beraknat',
+    'ej-redovisat',
+    'budgeterat',
+  ])
+  // En högre ram ger ett lägre resultat.
+  await expect(b.locator('[data-steg="ram-Skolnämnden"]').getByTestId('brovarde')).toHaveText('−15,0 mnkr')
+  await expect(b.locator('[data-steg="ram-Kommunstyrelsen"]').getByTestId('brovarde')).toHaveText('+37,0 mnkr')
+  await expect(b.locator('[data-steg="ej-redovisat"]')).toContainText('Ej redovisat')
+  await expect(b.getByTestId('brotext')).toContainText('ger det beräknade resultatet')
+  // Stående kolumner på bred skärm, en rad per steg på smal.
+  const y = async () => Promise.all([steg.nth(0), steg.nth(1)].map(async (s) => (await s.boundingBox())!.y))
+  const [y0, y1] = await y()
+  expect(Math.abs(y0 - y1)).toBeLessThan(2)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const [m0, m1] = await y()
+  expect(m1).toBeGreaterThan(m0 + 10)
+  await page.setViewportSize({ width: 1280, height: 720 })
+
+  // D: åtgärderna per nämnd efter förändringens storlek, med täckning.
+  const d = page.getByTestId('atgarder-per-namnd')
+  await expect(d.getByTestId('namndatgarder').first()).toHaveAttribute('data-organ', 'Kommunstyrelsen')
+  const ks = d.locator('[data-organ="Kommunstyrelsen"]')
+  await expect(ks.getByTestId('atgard')).toContainText('Budgetminskning med 20 % Kommunstyrelseförvaltningen')
+  await expect(ks.getByTestId('atgard').getByRole('link', { name: 's. 1' })).toHaveAttribute('href', /#page=1$/)
+  await expect(ks.getByTestId('tackning')).toHaveText('åtgärderna förklarar −37,0 av −37,0 mnkr')
+  await expect(d.locator('[data-organ="Socialnämnden"]').getByTestId('tackning')).toHaveText('inga belopp angivna')
+  await expect(d.locator('[data-organ="Kommunfullmäktige"]').getByTestId('tackning')).toHaveText('Inga åtgärder anges')
+
+  // Byta förslag: de andra förslagen för året och länken till jämförelsen.
+  const byt = page.getByTestId('byt-forslag')
+  await expect(byt.locator('[data-nyckel="M"]')).toHaveCount(0)
+  await byt.locator('[data-nyckel="L"]').click()
+  await expect(page).toHaveURL(/\/politik\/budget\/2027\/L$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Liberalernas budgetförslag 2027')
+
+  // Den antagna budgeten har en egen sida, utan streck för sig själv.
+  await page.getByTestId('byt-forslag').getByRole('link', { name: /Antagen budget/ }).click()
+  await expect(page.getByTestId('antagen')).toHaveText('Antagen budget')
+  // Vyvalet följer med när läsaren byter förslag, och tabellen valdes ovan.
+  await page.getByTestId('graf-forandring').getByRole('button', { name: 'Diagram' }).click()
+  await expect(page.getByTestId('graf-forandring').getByTestId('forandringsstapel').first()).toBeVisible()
+  await expect(page.getByTestId('antagenstreck')).toHaveCount(0)
+  await page.getByTestId('graf-forandring').getByRole('button', { name: 'Tabell' }).click()
+  await expect(page.getByTestId('tabell-forandring').getByRole('columnheader', { name: 'Antagen budget' })).toHaveCount(0)
+
+  await page.getByTestId('alla-budgetforslag').click()
+  await expect(page).toHaveURL(/\/politik\/budget\?ar=2027$/)
+
+  // Ett förslag som inte är publicerat finns inte för läsaren.
+  await page.goto('/politik/budget/2027/KD')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sidan finns inte')
+  await expect(page.getByTestId('graf-forandring')).toHaveCount(0)
+})
+
+// En nämnd som förslaget inte anger visas som "Anges inte", aldrig som noll, och räknas inte i brodiagrammet (#147).
+// Inget förslag i testdatan utelämnar en nämnd, så svaret ändras på vägen.
+test('en nämnd som förslaget inte anger visas som Anges inte (#147)', async ({ page }) => {
+  await page.route('**/api/budget/2027', async (route) => {
+    const svar = await route.fetch()
+    const j = await svar.json()
+    const l = j.forslag.find((f: { nyckel: string }) => f.nyckel === 'L')
+    const utan = (r: { organ: string }) => r.organ !== 'Samhällsnämnden'
+    l.uppgifter.ramar = l.uppgifter.ramar.filter(utan)
+    l.berakning.ramar = l.berakning.ramar.filter(utan)
+    await route.fulfill({ response: svar, json: j })
+  })
+  await page.goto('/politik/budget/2027/L')
+  const rad = page.getByTestId('graf-forandring').locator('[data-organ="Samhällsnämnden"]')
+  await expect(rad.getByTestId('anges-inte')).toHaveText('Anges inte')
+  await expect(rad.getByTestId('forandringsvarde')).toHaveCount(0)
+  await expect(page.getByTestId('graf-forandring').getByTestId('forandringsstapel').last()).toHaveAttribute('data-organ', 'Samhällsnämnden')
+  await expect(page.getByTestId('graf-resultat').locator('[data-steg="ram-Samhällsnämnden"]')).toHaveCount(0)
+  await expect(page.getByTestId('graf-resultat').locator('[data-steg="ram-Skolnämnden"]')).toHaveCount(1)
+  await expect(page.getByTestId('atgarder-per-namnd').locator('[data-organ="Samhällsnämnden"]').getByTestId('tackning')).toHaveText('Anges inte')
+})
+
 // Söm 1 (#76): en utgivare återkallar planförutsättningarna för 2027 och Sverigedemokraternas förslag. Läsaren ser
 // förslagen utan förändringar och notiser i stället för det återkallade. Testet körs sist i filen, eftersom de
 // återkallade uppgifterna inte kommer tillbaka förrän en rättad version läses in och publiceras.
@@ -272,6 +398,15 @@ test('utgivaren återkallar planförutsättningarna och ett förslag (#76)', asy
   await expect(page.getByTestId('planforutsattningar')).toHaveCount(0)
   // Ramarna står kvar som förslagen anger dem.
   await expect(tabell.locator('tr[data-organ="Kommunstyrelsen"] td').nth(1)).toContainText('150,0 mnkr')
+
+  // Det återkallade förslagets egen sida visar samma notis och inga grafer (#147).
+  await page.goto('/politik/budget/2027/SD')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sverigedemokraternas budgetförslag 2027')
+  await expect(page.getByTestId('aterkallat-forslag')).toHaveText('Förslaget från SD är tillbakadraget för rättning.')
+  await expect(page.getByTestId('graf-forandring')).toHaveCount(0)
+  await expect(page.getByTestId('graf-resultat')).toHaveCount(0)
+  await expect(page.getByTestId('atgarder-per-namnd')).toHaveCount(0)
+  await expect(page.getByTestId('byt-forslag').getByTestId('alla-budgetforslag')).toHaveText('Alla budgetförslag 2027')
 })
 
 // Söm 2 (#76, del 2): redaktören skapar nya versioner av de återkallade uppgifterna och rättar dem i gränssnittet,
