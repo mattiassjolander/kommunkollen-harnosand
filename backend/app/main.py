@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, motstridigheter, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -950,15 +950,81 @@ def create_app(
     def styrande_dokument_lista() -> dict:
         """Kommunens styrande dokument (#63) med kategori, fastställt av och giltighet."""
         with db.connect(database_url) as conn:
-            return styrande_dokument.lista(conn, kalender.idag())
+            resultat = styrande_dokument.lista(conn, kalender.idag())
+            antal = motstridigheter.antal_per_dokument(conn)
+        for d in resultat["dokument"]:
+            d["motstridigheter"] = antal.get(d["id"], 0)
+        return resultat
 
     @app.get("/api/styrande-dokument/{dokument_id}", dependencies=[Depends(krav_roll("lasare"))])
     def styrande_dokument_sida(dokument_id: int) -> dict:
         with db.connect(database_url) as conn:
             resultat = styrande_dokument.las(conn, dokument_id, kalender.idag())
+            if resultat is not None:
+                resultat["motstridigheter"] = motstridigheter.for_dokument(conn, dokument_id)
         if resultat is None:
             raise HTTPException(404, f"Det styrande dokumentet {dokument_id} finns inte")
         return resultat
+
+    # Motstridigheter i styrande dokument (#151): förslag från insamlingen och skillen, granskade och publicerade av
+    # en utgivare som inte läst in dem. Läsaren ser bara de publicerade.
+
+    def _motstridighet(steg, *args):
+        with db.connect(database_url) as conn:
+            try:
+                return steg(conn, *args)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except motstridigheter.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
+            except motstridigheter.EjTillatet as e:
+                raise HTTPException(403, str(e)) from e
+            except motstridigheter.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/motstridigheter", dependencies=[Depends(krav_roll("lasare"))])
+    def lista_motstridigheter(typ: str | None = None, status: str | None = None) -> dict:
+        """De publicerade motstridigheterna, filtrerbara på typ och status."""
+        return _motstridighet(motstridigheter.publicerade, typ, status)
+
+    @app.post("/api/motstridigheter")
+    def las_in_motstridigheter(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Läser in skillens fil som utkast, med samma kontroller som `python -m app.motstridigheter`."""
+        def steg(conn):
+            res = motstridigheter.las_in(conn, data, anv.epost, datetime.now(timezone.utc))
+            conn.commit()
+            return res
+        return _motstridighet(steg)
+
+    @app.get("/api/motstridigheter/forslag", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def motstridighetsforslag(granskning: str | None = None, typ: str | None = None,
+                              dokument: int | None = None) -> dict:
+        return _motstridighet(motstridigheter.forslag, granskning, typ, dokument)
+
+    @app.post("/api/motstridigheter/{mid}/granskning")
+    def granska_motstridighet(mid: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(motstridigheter.granska, mid, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/motstridigheter/{mid}/publicering")
+    def publicera_motstridighet(mid: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(motstridigheter.publicera, mid, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/motstridigheter/{mid}/avvisning")
+    def avvisa_motstridighet(mid: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(motstridigheter.avvisa, mid, data, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/motstridigheter/{mid}/aterkallelse")
+    def aterkalla_motstridighet(mid: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(motstridigheter.aterkalla, mid, data, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/motstridigheter/{mid}/status")
+    def satt_motstridighetens_status(mid: int, data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        return _motstridighet(motstridigheter.satt_status, mid, data, anv.epost)
+
+    @app.post("/api/motstridigheter/{mid}/stallning")
+    def ta_stallning_till_motstridighet(mid: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """En redaktör har tagit ställning till att ett berört dokument har ändrats."""
+        return _motstridighet(motstridigheter.ta_stallning, mid, anv.epost)
 
     @app.get("/api/styrande-dokument/{dokument_id}/versioner/{version}", dependencies=[Depends(krav_roll("lasare"))])
     def styrande_dokument_fil(dokument_id: int, version: int) -> Response:

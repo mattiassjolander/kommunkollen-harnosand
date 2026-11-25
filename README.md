@@ -62,6 +62,8 @@ Hur protokollen hämtas och tolkas står i [docs/protokoll.md](docs/protokoll.md
 
 Ledamotsregistret, partiet över tid och hur en redaktör slår ihop namn står i [docs/ledamoter.md](docs/ledamoter.md).
 
+Kommunens styrande dokument och motstridigheterna i dem, med formatet för skillen `harnosandskollen-styrande-dokument`, står i [docs/styrande-dokument.md](docs/styrande-dokument.md).
+
 Vilka ekonomiska nyckeltal som hämtas, och hur de täcker kravspecen, står i [docs/tackning-ekonomi.md](docs/tackning-ekonomi.md).
 
 Hur SKR:s skatteunderlagsprognos hämtas och räknas om för Härnösand står i [docs/skatteunderlag.md](docs/skatteunderlag.md). Omräkningen kräver LibreOffice (`soffice`).
