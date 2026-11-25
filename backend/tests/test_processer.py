@@ -85,16 +85,16 @@ def publicera(api: TestClient, pid: int) -> dict:
 
 # Listan
 
-def test_de_sex_forsta_processerna_finns_och_en_redaktor_lagger_till_en_ny(api):
+def test_de_forsta_processerna_finns_och_en_redaktor_lagger_till_en_ny(api):
     lista = redaktionen(api)
     assert list(lista) == ["Kallelse till sammanträde", "Justering av protokoll", "Motion", "Medborgarförslag",
-                           "Anmälan av delegationsbeslut", "Budgetprocessen"]
+                           "Anmälan av delegationsbeslut", "Budgetprocessen", "E-förslag"]
     assert all(p["granskning"] == "utkast" and p["steg"] == [] for p in lista.values())
 
     svar = api.post("/api/processer", json={"namn": "  Interpellation ", "beskrivning": "Fråga till ett kommunalråd."})
     assert svar.status_code == 200, svar.text
     ny = svar.json()
-    assert (ny["namn"], ny["ordning"], ny["granskning"], ny["redaktorer"]) == ("Interpellation", 7, "utkast", [REDAKTOR])
+    assert (ny["namn"], ny["ordning"], ny["granskning"], ny["redaktorer"]) == ("Interpellation", 8, "utkast", [REDAKTOR])
     assert api.post("/api/processer", json={"namn": "interpellation"}).status_code == 409
     assert api.post("/api/processer", json={"namn": ""}).status_code == 422
     # En utgivare lägger inte till processer, och läsaren inte heller.

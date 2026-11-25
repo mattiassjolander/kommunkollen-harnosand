@@ -63,4 +63,5 @@ INSERT INTO process (namn, ordning) VALUES
     ('Motion', 3),
     ('Medborgarförslag', 4),
     ('Anmälan av delegationsbeslut', 5),
-    ('Budgetprocessen', 6);
+    ('Budgetprocessen', 6),
+    ('E-förslag', 7);

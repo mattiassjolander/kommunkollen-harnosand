@@ -37,7 +37,7 @@ test.beforeAll(async ({ request }) => {
 test('en redaktör lägger till en process, en utgivare publicerar den och läsaren ser stegen märkta Analys', async ({
   page,
 }) => {
-  // Redaktören lägger till processen på listan. De sex första finns redan.
+  // Redaktören lägger till processen på listan. Den första listan finns redan.
   await page.request.post('/api/auth/test/redaktor')
   await page.goto('/redaktion/processer')
   await expect(page.getByRole('heading', { name: 'Processer', level: 1 })).toBeVisible()

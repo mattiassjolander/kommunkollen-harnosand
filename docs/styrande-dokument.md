@@ -110,6 +110,7 @@ AI hittar och grupperar inte processer på egen hand, eftersom det blir subjekti
 4. Medborgarförslag
 5. Anmälan av delegationsbeslut
 6. Budgetprocessen
+7. E-förslag
 
 En redaktör lägger till en ny process under Redaktion → Processer. Den blir ett utkast utan steg.
 
