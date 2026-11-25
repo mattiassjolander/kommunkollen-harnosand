@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import kalender, kallelsepunkter, rankningar, sammansattning, sammantradesplan, skatteunderlag, sokindex, styrande_dokument
+from . import kalender, kallelsepunkter, motstridigheter, rankningar, sammansattning, sammantradesplan, skatteunderlag, sokindex, styrande_dokument
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -154,6 +154,8 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         res.antal_oforandrade += antal["oforandrade"]
     for lista in hamtning.styrande_dokument:
         antal = styrande_dokument.lagra(conn, lista, korning_id, hamtad, kalender.idag())
+        # Kandidater till flera gällande versioner (#151), som utkast för redaktionen.
+        motstridigheter.foresla_kandidater(conn, kalender.idag(), hamtad)
         res.antal_nya += antal["nya"]
         res.antal_andrade += antal["andrade"]
         res.antal_oforandrade += antal["oforandrade"]

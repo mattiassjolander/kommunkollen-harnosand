@@ -204,6 +204,10 @@ def _ny_version(conn: psycopg.Connection, dokument_id: int, lank: Lank, innehall
     info = las_dokumentinformation(sidor[0] if sidor else "")
     if senaste is not None:
         conn.execute("UPDATE styrande_dokument_version SET ersatt = %s WHERE id = %s", (hamtad, senaste["id"]))
+        # Motstridigheter som berör dokumentet märks "Dokumentet har ändrats" (#151).
+        from .motstridigheter import markera_andrat
+
+        markera_andrat(conn, dokument_id, hamtad.date())
     conn.execute(
         """
         INSERT INTO styrande_dokument_version (dokument_id, version, url, sha256, storlek, innehall, hamtad, korning_id,
@@ -336,7 +340,7 @@ def kontrollerad(conn: psycopg.Connection) -> str | None:
 def lista(conn: psycopg.Connection, idag: date) -> dict:
     rader = conn.execute(
         f"""
-        SELECT d.id, d.titel, d.kategorier, d.borttagen, v.dokumentinformation
+        SELECT d.id, d.sitevision_id, d.titel, d.kategorier, d.borttagen, v.dokumentinformation
         FROM styrande_dokument d JOIN ({_SENASTE}) v ON v.dokument_id = d.id
         ORDER BY d.titel COLLATE "C", d.id
         """
@@ -346,7 +350,7 @@ def lista(conn: psycopg.Connection, idag: date) -> dict:
     for r in rader:
         info = r["dokumentinformation"]
         dokument.append({
-            "id": r["id"], "titel": r["titel"],
+            "id": r["id"], "sitevision_id": r["sitevision_id"], "titel": r["titel"],
             "kategorier": sorted(r["kategorier"], key=lambda k: ordning.get(k, len(ordning))),
             "faststallt": _faststallt(info), "giltighet": giltighet(r["titel"], info, r["borttagen"], idag),
         })
@@ -373,7 +377,7 @@ def las(conn: psycopg.Connection, dokument_id: int, idag: date) -> dict | None:
     ordning = {r["namn"]: r["ordning"] for r in conn.execute("SELECT namn, ordning FROM styrande_kategori")}
     galler = galler_fran(info)
     return {
-        "id": d["id"], "titel": d["titel"], "filnamn": d["filnamn"],
+        "id": d["id"], "sitevision_id": d["sitevision_id"], "titel": d["titel"], "filnamn": d["filnamn"],
         "kategorier": sorted(d["kategorier"], key=lambda k: ordning.get(k, len(ordning))),
         "url": d["url"], "borttagen": d["borttagen"].isoformat() if d["borttagen"] else None,
         "forst_sedd": d["forst_sedd"].isoformat(), "senast_sedd": d["senast_sedd"].isoformat(),

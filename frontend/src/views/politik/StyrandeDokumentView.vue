@@ -75,6 +75,10 @@ const antal = (status: string) => (data.value?.dokument ?? []).filter((d) => d.g
       policyer, planer, program, riktlinjer och föreskrifter. Kategorin är rubriken på kommunens sida. Vem som
       fastställt dokumentet och giltigheten är lästa ur dokumenten och återges som de står där.
     </p>
+    <p class="ingress">
+      <RouterLink to="/politik/styrande-dokument/motstridigheter" data-testid="till-motstridigheter">Motstridigheter</RouterLink>:
+      ställen i reglementen och delegationsordningar som inte går ihop, enligt redaktionens analys.
+    </p>
   </header>
 
   <div class="filter">
@@ -120,6 +124,7 @@ const antal = (status: string) => (data.value?.dokument ?? []).filter((d) => d.g
           <th scope="col">Kategori</th>
           <th scope="col">Fastställt av</th>
           <th scope="col">Giltighet</th>
+          <th scope="col">Motstridigheter</th>
         </tr>
       </thead>
       <tbody>
@@ -135,6 +140,9 @@ const antal = (status: string) => (data.value?.dokument ?? []).filter((d) => d.g
             <span v-else class="saknas">Uppgift saknas</span>
           </td>
           <td><Giltighetsmarkering :giltighet="d.giltighet" /></td>
+          <td class="tal" data-testid="antal-motstridigheter">
+            <template v-if="d.motstridigheter">{{ d.motstridigheter }} <span class="analysetikett">Analys</span></template>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -211,6 +219,14 @@ const antal = (status: string) => (data.value?.dokument ?? []).filter((d) => d.g
 }
 .saknas {
   color: var(--ink-muted);
+}
+.analysetikett {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 6px;
 }
 .kallrad {
   margin: 12px 0 0;

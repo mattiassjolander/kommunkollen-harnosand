@@ -63,6 +63,7 @@ export const HUVUDVYER: Huvudvy[] = [
       { till: '/redaktion/rattelser', namn: 'Rättelser', grupp: 'Granska', roller: REDAKTION, vantar: 'rattelser' },
       { till: '/redaktion/kopplingar', namn: 'Kopplingar', grupp: 'Granska', roller: ['redaktor'], vantar: 'kopplingar' },
       { till: '/redaktion/partitillhorighet', namn: 'Partitillhörighet', grupp: 'Granska', roller: REDAKTION },
+      { till: '/redaktion/motstridigheter', namn: 'Motstridigheter', grupp: 'Granska', roller: REDAKTION },
       { till: '/redaktion/sammantradesplaner', namn: 'Sammanträdesplaner', grupp: 'Registrera', roller: ['redaktor'] },
       { till: '/redaktion/budgetutkast', namn: 'Budgetutkast', grupp: 'Registrera', roller: REDAKTION },
     ],

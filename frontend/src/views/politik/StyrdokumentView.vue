@@ -5,6 +5,7 @@ import { EjInloggad, Saknas, hamtaStyrdokument, type Dokumentinformationsfalt, t
 import { datum } from '../../format'
 import { dokumenttitel } from '../../navigering'
 import Giltighetsmarkering from '../../components/Giltighetsmarkering.vue'
+import Motstridighetskort from '../../components/Motstridighetskort.vue'
 
 // Dokumentsidan för ett styrande dokument (#63): dokumentinformationen som den står i rutan på första sidan,
 // giltigheten med källa, beslutet som fastställde dokumentet och versionerna med plattformens kopior.
@@ -124,6 +125,18 @@ const mb = (byte: number) => `${(byte / 1_000_000).toLocaleString('sv-SE', { max
       </p>
     </section>
 
+    <section class="kort" aria-labelledby="motstridighet-rubrik" data-testid="motstridigheter">
+      <h2 id="motstridighet-rubrik">Motstridigheter</h2>
+      <template v-if="d.motstridigheter.length">
+        <p class="not forsta">
+          Ställen i eller mellan reglementen och delegationsordningar som inte går ihop, enligt redaktionens analys.
+          <RouterLink to="/politik/styrande-dokument/motstridigheter">Alla motstridigheter</RouterLink>
+        </p>
+        <Motstridighetskort v-for="m in d.motstridigheter" :key="m.id" :m="m" />
+      </template>
+      <p v-else class="not" data-testid="inga-motstridigheter">Redaktionen har inte publicerat några motstridigheter för dokumentet.</p>
+    </section>
+
     <section class="kort" aria-labelledby="version-rubrik" data-testid="versioner">
       <h2 id="version-rubrik">Versioner</h2>
       <table class="tabell">
@@ -207,6 +220,9 @@ const mb = (byte: number) => `${(byte / 1_000_000).toLocaleString('sv-SE', { max
   color: var(--ink-muted);
   font-size: 13px;
   margin: 8px 0 0;
+}
+.forsta {
+  margin: 0 0 12px;
 }
 .lista {
   margin: 0;

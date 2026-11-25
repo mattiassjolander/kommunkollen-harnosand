@@ -2142,10 +2142,14 @@ export interface Faststallt {
 
 export interface Styrdokumentrad {
   id: number
+  /** Dokumentets id på kommunens sida (18.…). */
+  sitevision_id: string
   titel: string
   kategorier: string[]
   faststallt: Faststallt
   giltighet: Giltighet
+  /** Antal publicerade motstridigheter (#151). Saknas på dokumentsidan, som har listan. */
+  motstridigheter?: number
 }
 
 export interface Styrdokumentkalla {
@@ -2186,7 +2190,7 @@ export interface Styrdokumentversion {
   textfel: string | null
 }
 
-export interface Styrdokument extends Styrdokumentrad {
+export interface Styrdokument extends Omit<Styrdokumentrad, 'motstridigheter'> {
   filnamn: string
   url: string
   borttagen: string | null
@@ -2197,7 +2201,97 @@ export interface Styrdokument extends Styrdokumentrad {
   beslut: { sammantrade_id: number; paragraf: number; rubrik: string; organ: Organ; datum: string; grund: string }[]
   versioner: Styrdokumentversion[]
   kalla: Styrdokumentkalla
+  motstridigheter: Motstridighet[]
 }
 
 export const hamtaStyrandeDokument = () => hamta<Styrdokumentlista>('/api/styrande-dokument')
 export const hamtaStyrdokument = (id: number) => hamtaEllerSaknas<Styrdokument>(`/api/styrande-dokument/${id}`)
+
+// Motstridigheter i styrande dokument (#151)
+
+export type Motstridighetstyp = 'motsagelse' | 'felaktig_hanvisning' | 'flera_versioner'
+export type Motstridighetsstatus = 'ny' | 'anmald' | 'atgardad'
+export type Granskningsstatus = 'utkast' | 'granskad' | 'publicerad' | 'avvisad' | 'aterkallad'
+
+/** Ett citerat ställe i ett styrande dokument, i den version det kommer från. */
+export interface Stalle {
+  dokument_id: number
+  titel: string | null
+  version: number
+  sida: number
+  paragraf?: string | null
+  text?: string
+  /** Dokumentsidan. */
+  lank: string
+  /** Sidan i plattformens kopia av versionen. */
+  kopia: string
+}
+
+export interface Motstridighet {
+  id: number
+  typ: Motstridighetstyp
+  typnamn: string
+  forklaring: string
+  citat: Stalle[]
+  /** Felaktig hänvisning: uppgiften om det som finns, med källa. */
+  uppgift: (Stalle & { citat?: string }) | null
+  dokument: { id: number; titel: string | null; version: number | null }[]
+  kalla: 'insamling' | 'skill'
+  /** Insamlingens grund för en kandidat, t.ex. "samma diarienummer". */
+  grund: string | null
+  status: Motstridighetsstatus
+  statusnamn: string
+  statusdatum: string | null
+  anteckning: string | null
+  /** Ett berört dokument har fått en ny version, och ingen redaktör har tagit ställning. */
+  dokument_andrat: string | null
+  publicerad: string | null
+  // Redaktionens fält.
+  granskning?: Granskningsstatus
+  redaktorer?: string[]
+  skapad?: string
+  granskad_av?: string | null
+  publicerad_av?: string | null
+  avvisning?: string | null
+  aterkallelse?: string | null
+}
+
+export interface Motstridigheter {
+  typer: { id: Motstridighetstyp; namn: string; antal: number }[]
+  statusar: { id: Motstridighetsstatus; namn: string; antal: number }[]
+  motstridigheter: Motstridighet[]
+}
+
+export interface Motstridighetsforslag {
+  forslag: Motstridighet[]
+  andrade: Motstridighet[]
+  typer: { id: Motstridighetstyp; namn: string }[]
+  dokument: { id: number; titel: string | null }[]
+}
+
+function parametrar(filter: Record<string, string | undefined>): string {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(filter)) if (v) p.set(k, v)
+  const q = p.toString()
+  return q ? `?${q}` : ''
+}
+
+export const hamtaMotstridigheter = (filter: { typ?: string; status?: string } = {}) =>
+  hamta<Motstridigheter>(`/api/motstridigheter${parametrar(filter)}`)
+export const hamtaMotstridighetsforslag = (filter: { granskning?: string; typ?: string; dokument?: string } = {}) =>
+  hamta<Motstridighetsforslag>(`/api/motstridigheter/forslag${parametrar(filter)}`)
+export const granskaMotstridighet = (id: number) => skrivSammansattning<Motstridighet>(`/api/motstridigheter/${id}/granskning`)
+export const publiceraMotstridighet = (id: number) =>
+  skrivSammansattning<Motstridighet>(`/api/motstridigheter/${id}/publicering`)
+export const avvisaMotstridighet = (id: number, motivering: string) =>
+  skrivSammansattning<Motstridighet>(`/api/motstridigheter/${id}/avvisning`, 'POST', { motivering })
+export const aterkallaMotstridighet = (id: number, motivering: string) =>
+  skrivSammansattning<Motstridighet>(`/api/motstridigheter/${id}/aterkallelse`, 'POST', { motivering })
+export const sattMotstridighetsstatus = (id: number, status: Motstridighetsstatus, datum: string, anteckning: string) =>
+  skrivSammansattning<Motstridighet>(`/api/motstridigheter/${id}/status`, 'POST', {
+    status,
+    datum: datum || null,
+    anteckning,
+  })
+export const taStallningTillMotstridighet = (id: number) =>
+  skrivSammansattning<Motstridighet>(`/api/motstridigheter/${id}/stallning`)
