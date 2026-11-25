@@ -730,7 +730,7 @@ Beslut fattade 2026-11-13, efter att specen skrevs:
 - **Roller:** *redaktör* registrerar och redigerar, *utgivare* godkänner för publicering. ("Granskning" används bara om revisionens arbete.) Ingen godkänner sin egen registrering. Inloggning sker med Google. Statusflöde: utkast → granskad → publicerad.
 - **Stack:** Python (FastAPI) + Postgres i backend, Vue 3 + TypeScript i frontend. Se ADR-0001.
 - **Drift:** egen LXC på Proxmox-servern, deploy via self-hosted GitHub-runner.
-- **AI-analys:** körs på alla nya dokument vid varje insamling, och på historiken endast för utvalda dokumenttyper. Budgettak i normaldrift är cirka 200–500 kr per månad, plus en separat engångsbudget för historiken. AI föreslår, och en människa bekräftar. Se ADR-0002.
+- **AI-analys:** körs på alla nya dokument vid varje insamling, och på historiken endast för utvalda dokumenttyper. Ändrat: analysen körs som en skill som en redaktör startar, inte i insamlingen (ADR-0009). Budgettak i normaldrift är cirka 200–500 kr per månad, plus en separat engångsbudget för historiken. AI föreslår, och en människa bekräftar. Se ADR-0002.
 - **Partisymboler:** partifärger och förkortningar används i stället för logotyper (varumärken).
 - **Grafisk profil:** egen neutral profil, se [design.md](design.md). Partifärger används bara för att märka ut partier.
 - **Organ som ingår:** kommunfullmäktige, kommunstyrelsen, samhällsnämnden, socialnämnden och skolnämnden. Utanför: KSAU, vars protokoll inte publiceras rutinmässigt, samt Överförmyndarnämnden och Valnämnden. De kommunala bolagen ingår bara genom koncernsiffrorna i årsredovisningen.
