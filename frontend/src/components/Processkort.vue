@@ -1,15 +1,28 @@
 <script setup lang="ts">
+import { computed, nextTick, ref } from 'vue'
 import type { Process, Processteg } from '../api'
 import { datum } from '../format'
 import Motstridighetskort from './Motstridighetskort.vue'
+import Processdiagram from './Processdiagram.vue'
 
 // Stegen i en process ur reglementen och delegationsordningar (#152), i ordning: vem, vad, när och källan med länk
 // till sidan i plattformens kopia. Processen är redaktionens analys och står därför med streckad kantlinje och
 // etiketten Analys (design.md, Säkerhetsmarkeringar). Publicerade motstridigheter som citerar stället ett steg bygger
-// på visas vid steget. Sloten `steg` tar redaktionens åtgärder för ett steg.
+// på visas vid steget. Sloten `steg` tar redaktionens åtgärder för ett steg. Med `diagram` visas processdiagrammet
+// (#158) ovanför stegen, när alla steg har en aktör. Ett steg som väljs i diagrammet markeras i listan.
 
-defineProps<{ p: Process }>()
+const props = defineProps<{ p: Process; diagram?: boolean }>()
 defineSlots<{ default?: () => unknown; steg?: (props: { s: Processteg }) => unknown }>()
+
+const visaDiagram = computed(() => props.diagram && props.p.steg.length > 0 && props.p.steg.every((s) => s.aktor))
+const valt = ref<number | null>(null)
+async function valj(id: number) {
+  valt.value = id
+  await nextTick()
+  const li = document.getElementById(`steg-${id}`)
+  li?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  li?.focus({ preventScroll: true })
+}
 </script>
 
 <template>
@@ -23,8 +36,11 @@ defineSlots<{ default?: () => unknown; steg?: (props: { s: Processteg }) => unkn
     </header>
     <p v-if="p.beskrivning" class="beskrivning">{{ p.beskrivning }}</p>
     <p v-if="!p.steg.length" class="not" data-testid="inga-steg">Stegen är inte inlästa än.</p>
+    <Processdiagram v-if="visaDiagram" :p="p" @valj="valj" />
     <ol class="steg">
-      <li v-for="s in p.steg" :key="s.id" data-testid="steg">
+      <li v-for="s in p.steg" :id="`steg-${s.id}`" :key="s.id" tabindex="-1" :class="{ valt: valt === s.id }"
+          data-testid="steg">
+        <p v-if="s.aktor && s.aktor !== s.vem" class="aktor" data-testid="aktor">{{ s.aktor }}</p>
         <p class="vem-vad">
           <strong data-testid="vem">{{ s.vem }}</strong>
           <span data-testid="vad">{{ s.vad }}</span>
@@ -89,6 +105,23 @@ defineSlots<{ default?: () => unknown; steg?: (props: { s: Processteg }) => unkn
 }
 .steg > li {
   margin-bottom: 16px;
+  scroll-margin: 16px;
+}
+.steg > li.valt {
+  background: var(--accent-wash);
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius);
+}
+.steg > li:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.aktor {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
 }
 .vem-vad {
   margin: 0;

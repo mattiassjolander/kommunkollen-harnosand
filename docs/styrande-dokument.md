@@ -118,10 +118,16 @@ En redaktör lägger till en ny process under Redaktion → Processer. Den blir 
 
 Varje steg anger:
 
+- **aktören**: ett kort namn på den roll eller det organ som utför steget, till exempel Ordföranden, Kommunstyrelsen eller Delegaten. Den bestämmer stegets bana i processdiagrammet (#158) och stavas lika i hela processen,
 - **vem** som gör något: ett organ, ordföranden, förvaltningen eller en ledamot,
 - **vad** som görs,
 - **när**, eller inom vilken tidsfrist, om dokumentet anger det,
-- **källan**: ett ordagrant citat med dokument, version, sida och paragraf.
+- **källan**: ett ordagrant citat med dokument, version, sida och paragraf,
+- **övergångarna**: de steg som följer. Ett steg med flera övergångar är ett vägval, och varje övergång har då ett **villkor**, en kort formulering av redaktionen. Citatet i steget som övergången leder till ska säga villkoret. Ett steg utan övergång avslutar processen.
+
+### Processdiagrammet
+
+Processens sida och granskningssidan visar processen som ett processdiagram (#158) ovanför stegen, likt BPMN: en bana per aktör i den ordning aktörerna först förekommer, och stegen från vänster till höger i processens ordning. Diagrammet har bara start- och sluthändelser, steg och vägval (exklusiv gateway). Det första steget och steg som ingen övergång leder till börjar i en starthändelse, märkt med stegets "när". En övergång bakåt (en slinga) går längs banans nederkant. Diagrammet ritar bara steg med citat: säger dokumenten inte vad som händer sedan slutar övergången i en sluthändelse. Ett steg med "Dokumentet har ändrats" eller en motstridighet får en markering med text. Ett steg som väljs i diagrammet markeras i listan, som är textversionen. Diagrammet visas bara när alla steg har en aktör, så steg inlästa före #158 läses in igen.
 
 Skillen `harnosandskollen-styrande-dokument` läser de 25 dokumenten i omfånget (se *Motstridigheter*) för varje process på listan och skriver stegen. Backend anropar ingen AI (ADR-0009).
 
@@ -136,9 +142,11 @@ Skillen skriver `data/styrande-dokument/processer.json` i huvudmappen för repot
       "process": "Kallelse till sammanträde",
       "steg": [
         {
+          "aktor": "Ordföranden",
           "vem": "Ordföranden",
           "vad": "Kallelsen skickas digitalt till varje ledamot och ersättare.",
           "nar": "Senast fem dagar före sammanträdesdagen",
+          "overgangar": [],
           "kalla": {"dokument": "18.580e43d7163221b2781b73fe", "sida": 4, "paragraf": "§ 13",
                     "text": "Kallelsen ska digitalt tillsändas varje ledamot och ersättare senast fem dagar före sammanträdesdagen."}
         }
@@ -148,9 +156,11 @@ Skillen skriver `data/styrande-dokument/processer.json` i huvudmappen för repot
       "process": "Justering av protokoll",
       "steg": [
         {
+          "aktor": "Ordföranden och justeraren",
           "vem": "Ordföranden och en ledamot",
           "vad": "Justerar protokollet.",
           "nar": "Senast 14 dagar efter sammanträdet",
+          "overgangar": [],
           "kalla": {"dokument": "18.580e43d7163221b2781b73fe", "sida": 5, "paragraf": "§ 26",
                     "text": "Protokoll justeras senast 14 dagar efter sammanträdet av ordförande och en ledamot."}
         }
@@ -164,9 +174,11 @@ Skillen skriver `data/styrande-dokument/processer.json` i huvudmappen för repot
 |---|---|
 | `process` | Namnet på processen som det står på redaktionens lista. |
 | `steg` | Stegen i ordning. Minst ett. |
+| `aktor` | Aktören, högst 40 tecken. Stavas lika i alla steg som samma aktör utför. |
 | `vem` | Vem som gör något, som dokumentet anger det. |
 | `vad` | Vad som görs, kort och utan värdering. |
 | `nar` | När eller inom vilken tidsfrist, om dokumentet anger det. Utelämnas annars. |
+| `overgangar` | De steg som följer: `[{"till": 2, "villkor": "Ärendet är färdigberett"}]`, där `till` är stegets nummer i filen räknat från 1. `[]` om steget avslutar processen. `villkor` (högst 60 tecken) krävs när det finns flera övergångar och kan utelämnas annars. |
 | `kalla` | `dokument` (`18.…`), `sida` i PDF:en räknat från 1, `paragraf` och `text`, ett ordagrant citat från sidan. Saknar dokumentet paragrafer anges punkten eller avsnittets rubrik, till exempel `"Registrering och anmälan av delegationsbeslut"`. |
 
 Citatet hör till dokumentets senaste version när filen läses in, och versionen sparas med steget. Filen kan ha en eller flera processer. Stegen för en process ersätter de tidigare stegen, och processen blir ett utkast som granskas på nytt. Samma steg som redan finns läses inte in igen.
@@ -176,7 +188,8 @@ Citatet hör till dokumentets senaste version när filen läses in, och versione
 Hela filen läses in i en transaktion. Avvisas något läses inget in, och felet anger processens och stegets nummer, till exempel "Process 2 (Justering av protokoll), steg 1, källan: citatet står inte ordagrant på sidan 5":
 
 - Processen finns på redaktionens lista och står bara en gång i filen. Den har minst ett steg.
-- Varje steg har vem, vad och en källa med dokument, sida, paragraf och citat.
+- Varje steg har aktör, vem, vad, övergångar och en källa med dokument, sida, paragraf och citat. En aktör stavas lika i hela processen.
+- En övergång går till ett annat steg i samma process, och bara en gång. Ett steg med flera övergångar har ett villkor på varje.
 - Dokumentet finns på kommunens sida och ingår i omfånget, de 25 dokumenten. Sidan finns i dokumentet.
 - Citatet står ordagrant på sidan, med samma jämförelse som för motstridigheter.
 - En publicerad process läses inte in med andra steg. Håller den inte längre återkallar en utgivare den först. En avvisad process läses inte in.

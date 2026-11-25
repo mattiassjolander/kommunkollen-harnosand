@@ -150,7 +150,7 @@ async function laggTill() {
           <template v-if="p.avvisning"> · Avvisad: {{ p.avvisning }}</template>
           <template v-if="p.aterkallelse"> · Återkallad: {{ p.aterkallelse }}</template>
         </p>
-        <Processkort :p="p">
+        <Processkort :p="p" diagram>
           <div v-if="arUtgivare" class="atgarder">
             <template v-if="p.granskning === 'utkast' || p.granskning === 'granskad'">
               <span v-if="egen(p)" class="not">Du har lagt till processen eller läst in steg och kan inte själv godkänna den.</span>

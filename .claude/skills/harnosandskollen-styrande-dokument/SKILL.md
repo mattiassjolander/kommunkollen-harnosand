@@ -104,12 +104,21 @@ Läs alla 25 dokumenten med processen i tankarna. Stegen kan hämtas ur flera do
 
 För varje steg, notera:
 
+- **aktören**: ett kort namn på rollen eller organet som utför steget, till exempel Ordföranden, Kommunfullmäktige eller Delegaten. Den blir stegets bana i processdiagrammet. Använd samma namn, stavat likadant, för alla steg samma aktör utför i processen, och slå inte ihop aktörer som dokumenten skiljer på,
 - **vem** som gör något: ett organ, ordföranden, förvaltningen eller en ledamot, så som dokumentet anger det,
 - **vad** som görs, kort och sakligt,
 - **när** eller inom vilken tidsfrist, bara om dokumentet anger det,
 - **källan**: dokumentets `sitevision_id`, sidan i PDF:en, paragrafen (eller punkten eller avsnittets rubrik om dokumentet saknar paragrafer) och ett ordagrant citat.
 
-Ordna stegen så som arbetsgången går. Ett steg bygger på ett ställe. Säger två dokument olika saker om samma steg, ta med båda stegen och nämn det i rapporten: det kan vara en motstridighet.
+Ordna stegen så som arbetsgången går, och ange för varje steg vilka steg som följer (**övergångar**):
+
+- Följer ett steg alltid på ett annat är det en övergång utan villkor.
+- Kan arbetsgången gå åt olika håll är steget ett vägval: en övergång per väg, var och en med ett kort **villkor**, till exempel "Ordföranden kan inte kalla". Citatet i steget som övergången leder till ska säga villkoret.
+- Säger dokumenten inte vad som händer sedan avslutar steget processen (`[]`). Hitta inte på steg för att binda ihop processen, till exempel "Fullmäktige beslutar", om inget dokument säger det.
+- Ett steg som gäller vid behov och inte följer på något annat steg (till exempel att en ersättare får yttra sig) får ingen övergång till sig. Det börjar då i en egen starthändelse i diagrammet, märkt med stegets "när".
+- En övergång tillbaka till ett tidigare steg (en slinga) går bra. Ett steg kan inte gå till sig självt.
+
+Ett steg bygger på ett ställe. Säger två dokument olika saker om samma steg, ta med båda stegen och nämn det i rapporten: det kan vara en motstridighet.
 
 Kontrollera alltid kallelsen och justeringen i det gemensamma reglementet för kommunstyrelse och nämnder: kallelsen ska skickas senast fem dagar före sammanträdesdagen (§ 13) och protokollet justeras senast 14 dagar efter sammanträdet (§ 26). De ska komma med som steg.
 

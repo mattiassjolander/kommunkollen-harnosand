@@ -358,6 +358,18 @@ _Avoid_: Dubblett (om dokument med olika innehåll)
 En arbetsgång som redaktionen har valt att beskriva ur de styrande dokumenten, till exempel kallelse till sammanträde eller justering av protokoll. Den består av steg: vem som gör något, vad som görs, när eller inom vilken tidsfrist, och var det står. Stegen kan hämtas ur flera dokument. Den är redaktionens analys och går igenom samma flöde som en motstridighet.
 _Avoid_: Rutin (som begrepp), flöde
 
+**Aktör**:
+Den roll eller det organ som utför ett steg i en process, med ett kort namn som är detsamma för alla steg den utför i processen, till exempel Ordföranden, Kommunstyrelsen eller Delegaten. Stegets längre beskrivning av vem som gör det står kvar.
+_Avoid_: Part, roll (som begrepp)
+
+**Övergång**:
+Att ett steg i en process följs av ett annat, eventuellt under ett **villkor**, till exempel att den äldste ledamoten kallar bara om ordföranden inte kan. Ett steg med flera övergångar med villkor är ett vägval. Ett steg utan övergång avslutar processen.
+_Avoid_: Flöde, pil
+
+**Processdiagram**:
+En process ritad med en bana per aktör, där stegen står i banorna och övergångarna binder ihop dem.
+_Avoid_: Flödesschema, BPMN-diagram
+
 ## Redaktionellt arbete
 
 **Redaktör**:

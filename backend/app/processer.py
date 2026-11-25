@@ -6,7 +6,9 @@ skillen `harnosandskollen-styrande-dokument` fyller i stegen ur de 25 reglemente
 (`las_in`, formatet i docs/styrande-dokument.md). Backend anropar ingen AI (ADR-0009).
 
 Ett steg anger vem som gör något, vad som görs, när eller inom vilken tidsfrist (om dokumentet anger det) och källan:
-ett ordagrant citat med dokument, version, sida och paragraf. Stegen kan hämtas ur flera dokument.
+ett ordagrant citat med dokument, version, sida och paragraf. Stegen kan hämtas ur flera dokument. För
+processdiagrammet (#158) har varje steg en aktör, ett kort namn som bestämmer banan, och övergångar till de steg som
+följer, med villkor när steget är ett vägval.
 
 Processen går som en helhet, med alla sina steg, från utkast via granskad till publicerad (ADR-0002). Ingen godkänner
 en process som hen själv har lagt till eller läst in steg i. När ett dokument som ett steg citerar får en ny version
@@ -71,6 +73,32 @@ def _text(v: Any, var: str, falt: str, kravs: bool = True) -> str | None:
     return " ".join(v.split())
 
 
+def _overgangar(v: Any, sv: str, nr: int, antal: int) -> list[dict]:
+    """Stegets övergångar: [{till: stegnummer i filen, villkor}]. En tom lista avslutar processen. Ett steg med flera
+    övergångar är ett vägval, och varje övergång har då ett villkor."""
+    if not isinstance(v, list):
+        raise Ogiltig(f"{sv}: övergångarna saknas. Ange en lista med {{\"till\": stegnummer, \"villkor\": ...}}, "
+                      "eller [] om steget avslutar processen")
+    ut = []
+    for o in v:
+        if not isinstance(o, dict) or set(o) - {"till", "villkor"}:
+            raise Ogiltig(f"{sv}: en övergång ska vara {{\"till\": stegnummer, \"villkor\": ...}}")
+        till = o.get("till")
+        if not isinstance(till, int) or isinstance(till, bool) or not 1 <= till <= antal:
+            raise Ogiltig(f"{sv}: övergången går till steg {till}, som inte finns i processen")
+        if till == nr:
+            raise Ogiltig(f"{sv}: ett steg kan inte gå till sig självt")
+        if any(u["till"] == till for u in ut):
+            raise Ogiltig(f"{sv}: övergången till steg {till} finns två gånger")
+        villkor = _text(o.get("villkor"), sv, "villkoret", kravs=False)
+        if villkor and len(villkor) > 60:
+            raise Ogiltig(f"{sv}: villkoret är längre än 60 tecken")
+        ut.append({"till": till, "villkor": villkor})
+    if len(ut) > 1 and not all(o["villkor"] for o in ut):
+        raise Ogiltig(f"{sv}: steget är ett vägval med flera övergångar, och varje övergång ska ha ett villkor")
+    return ut
+
+
 def tolka(conn: psycopg.Connection, data: Any) -> list[dict]:
     """Kontrollerar skillens fil och ger processerna med sina steg. Ogiltig med processens och stegets nummer."""
     if not isinstance(data, dict) or not isinstance(data.get("processer"), list):
@@ -101,18 +129,28 @@ def tolka(conn: psycopg.Connection, data: Any) -> list[dict]:
         for j, s in enumerate(steg_in, 1):
             sv = f"{var}, steg {j}"
             if not isinstance(s, dict):
-                raise Ogiltig(f"{sv}: ska vara ett objekt med vem, vad, när och källa")
-            if okanda := set(s) - {"vem", "vad", "nar", "kalla"}:
+                raise Ogiltig(f"{sv}: ska vara ett objekt med aktör, vem, vad, när, övergångar och källa")
+            if okanda := set(s) - {"aktor", "vem", "vad", "nar", "overgangar", "kalla"}:
                 raise Ogiltig(f"{sv}: okända fält {', '.join(sorted(okanda))}")
+            aktor = _text(s.get("aktor"), sv, "aktören (stegets bana i diagrammet)")
+            if len(aktor) > 40:
+                raise Ogiltig(f"{sv}: aktören är längre än 40 tecken. Ange ett kort namn, t.ex. Ordföranden")
             vem = _text(s.get("vem"), sv, "vem som gör något")
             vad = _text(s.get("vad"), sv, "vad som görs")
             nar = _text(s.get("nar"), sv, "när", kravs=False)
+            overgangar = _overgangar(s.get("overgangar"), sv, j, len(steg_in))
             if s.get("kalla") is None:
                 raise Ogiltig(f"{sv}: källan saknas. Ange dokument, sida, paragraf och ett ordagrant citat")
             _, kalla = citerat_stalle(conn, s["kalla"], f"{sv}, källan", cache, paragraf=True)
-            steg.append({"vem": vem, "vad": vad, "nar": nar} | kalla)
-        delar = [f"{s['vem']}|{s['vad']}|{s['nar']}|{s['dokument_id']}|{s['sida']}|{s['paragraf']}|"
-                 f"{jamforbar(s['text'])}" for s in steg]
+            steg.append({"aktor": aktor, "vem": vem, "vad": vad, "nar": nar, "overgangar": overgangar} | kalla)
+        # Samma aktör stavas lika i hela processen, annars blir det två banor.
+        stavning: dict[str, str] = {}
+        for j, s in enumerate(steg, 1):
+            if stavning.setdefault(s["aktor"].casefold(), s["aktor"]) != s["aktor"]:
+                raise Ogiltig(f"{var}, steg {j}: aktören {s['aktor']} stavas "
+                              f"{stavning[s['aktor'].casefold()]} i ett tidigare steg")
+        delar = [f"{s['aktor']}|{s['vem']}|{s['vad']}|{s['nar']}|{s['dokument_id']}|{s['sida']}|{s['paragraf']}|"
+                 f"{jamforbar(s['text'])}|{json.dumps(s['overgangar'], ensure_ascii=False)}" for s in steg]
         nyckel = hashlib.sha256("\n".join(delar).encode()).hexdigest()[:24]
         ut.append({"process": rad, "steg": steg, "nyckel": nyckel})
     return ut
@@ -135,13 +173,16 @@ def las_in(conn: psycopg.Connection, data: Any, redaktor: str, nu: datetime) -> 
         if p["status"] == "avvisad":
             raise Konflikt(f"{p['namn']} är avvisad och ska inte beskrivas")
         conn.execute("DELETE FROM process_steg WHERE process_id = %s", (p["id"],))
-        for n, s in enumerate(f["steg"], 1):
-            conn.execute(
-                "INSERT INTO process_steg (process_id, ordning, vem, vad, nar, dokument_id, version, sida, paragraf, "
-                "citat) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (p["id"], n, s["vem"], s["vad"], s["nar"], s["dokument_id"], s["version"], s["sida"], s["paragraf"],
-                 s["text"]),
-            )
+        ids = [conn.execute(
+            "INSERT INTO process_steg (process_id, ordning, aktor, vem, vad, nar, dokument_id, version, sida, "
+            "paragraf, citat) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (p["id"], n, s["aktor"], s["vem"], s["vad"], s["nar"], s["dokument_id"], s["version"], s["sida"],
+             s["paragraf"], s["text"]),
+        ).fetchone()["id"] for n, s in enumerate(f["steg"], 1)]
+        for sid, s in zip(ids, f["steg"]):
+            for o in s["overgangar"]:
+                conn.execute("INSERT INTO process_overgang (fran_steg, till_steg, villkor) VALUES (%s, %s, %s)",
+                             (sid, ids[o["till"] - 1], o["villkor"]))
         conn.execute(
             "UPDATE process SET status = 'utkast', stegnyckel = %s, steg_inlasta = %s, granskad_av = NULL, "
             "granskad = NULL, redaktorer = CASE WHEN %s = ANY(redaktorer) THEN redaktorer "
@@ -255,10 +296,16 @@ def _steg(conn: psycopg.Connection, pids: list[int]) -> dict[int, list[dict]]:
         "SELECT s.*, d.titel FROM process_steg s JOIN styrande_dokument d ON d.id = s.dokument_id "
         "WHERE s.process_id = ANY(%s) ORDER BY s.process_id, s.ordning", (pids,)).fetchall()
     vid = motstridigheter.vid_stallen(conn, rader)
+    overgangar: dict[int, list[dict]] = {}
+    for o in conn.execute(
+            "SELECT o.fran_steg, o.till_steg, o.villkor FROM process_overgang o JOIN process_steg s ON s.id = o.till_steg "
+            "WHERE o.fran_steg = ANY(%s) ORDER BY o.fran_steg, s.ordning", ([s["id"] for s in rader],)):
+        overgangar.setdefault(o["fran_steg"], []).append({"till": o["till_steg"], "villkor": o["villkor"]})
     ut: dict[int, list[dict]] = {p: [] for p in pids}
     for s, m in zip(rader, vid):
         ut[s["process_id"]].append({
-            "id": s["id"], "ordning": s["ordning"], "vem": s["vem"], "vad": s["vad"], "nar": s["nar"],
+            "id": s["id"], "ordning": s["ordning"], "aktor": s["aktor"], "vem": s["vem"], "vad": s["vad"],
+            "nar": s["nar"], "overgangar": overgangar.get(s["id"], []),
             "kalla": {"dokument_id": s["dokument_id"], "titel": s["titel"], "version": s["version"], "sida": s["sida"],
                       "paragraf": s["paragraf"], "text": s["citat"],
                       "lank": f"/politik/styrande-dokument/{s['dokument_id']}",
