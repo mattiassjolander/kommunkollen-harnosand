@@ -168,7 +168,7 @@ def _skapa(conn: psycopg.Connection, typ: str, nyckel: str, forklaring: str, cit
 # Inläsning från skillen
 
 
-def _jamforbar(text: str) -> str:
+def jamforbar(text: str) -> str:
     """Text som går att jämföra med sidans text: utan blanksteg, avstavning och skillnader i streck och citattecken."""
     t = unicodedata.normalize("NFKC", text).casefold().replace("\xad", "")
     t = re.sub(r"[-‐‑–—]\s*\n\s*", "", t)  # avstavning vid radslut
@@ -204,7 +204,7 @@ def _dokumentet(conn: psycopg.Connection, ref: Any, var: str, cache: dict) -> di
     return d
 
 
-def _stalle(conn: psycopg.Connection, c: Any, var: str, cache: dict, paragraf: bool) -> tuple[dict, dict]:
+def citerat_stalle(conn: psycopg.Connection, c: Any, var: str, cache: dict, paragraf: bool) -> tuple[dict, dict]:
     """Ett citerat ställe: {dokument, sida, paragraf, text}. Texten ska stå på sidan i dokumentets senaste version."""
     if not isinstance(c, dict):
         raise Ogiltig(f"{var}: ska vara ett objekt med dokument, sida och text")
@@ -219,13 +219,13 @@ def _stalle(conn: psycopg.Connection, c: Any, var: str, cache: dict, paragraf: b
     text = c.get("text")
     if not isinstance(text, str) or not text.strip():
         raise Ogiltig(f"{var}: citatet saknas")
-    if _jamforbar(text) not in _jamforbar(d["sidor"][sida - 1]):
+    if jamforbar(text) not in jamforbar(d["sidor"][sida - 1]):
         raise Ogiltig(f"{var}: citatet står inte ordagrant på sidan {sida} i {d['titel']}")
     para = c.get("paragraf")
     if para is not None and (not isinstance(para, str) or not para.strip()):
         raise Ogiltig(f"{var}: paragrafen ska vara en text, till exempel \"3 kap. 2 §\"")
     if paragraf and not para:
-        raise Ogiltig(f"{var}: paragrafen saknas. En motsägelse citerar båda ställena med paragraf")
+        raise Ogiltig(f"{var}: paragrafen saknas, till exempel \"3 kap. 2 §\" eller \"§ 13\"")
     return d, {"dokument_id": d["id"], "version": d["version"], "sida": sida,
                "paragraf": para.strip() if para else None, "text": " ".join(text.split())}
 
@@ -255,7 +255,7 @@ def tolka(conn: psycopg.Connection, data: Any) -> list[dict]:
         dokument: dict[int, dict] = {}
         citat = []
         for j, c in enumerate(citat_in, 1):
-            d, s = _stalle(conn, c, f"{var}, citat {j}", cache, paragraf=typ == "motsagelse")
+            d, s = citerat_stalle(conn, c, f"{var}, citat {j}", cache, paragraf=typ == "motsagelse")
             dokument[d["id"]] = d
             citat.append(s)
         uppgift = None
@@ -275,7 +275,7 @@ def tolka(conn: psycopg.Connection, data: Any) -> list[dict]:
             if okanda := set(u) - {"text", "dokument", "sida", "citat"}:
                 raise Ogiltig(f"{var}, uppgiften: okända fält {', '.join(sorted(okanda))}")
             if u.get("citat"):
-                ud, kalla = _stalle(conn, {"dokument": u.get("dokument"), "sida": u.get("sida"), "text": u["citat"]},
+                ud, kalla = citerat_stalle(conn, {"dokument": u.get("dokument"), "sida": u.get("sida"), "text": u["citat"]},
                                     f"{var}, uppgiften", cache, paragraf=False)
             else:
                 ud = _dokumentet(conn, u.get("dokument"), f"{var}, uppgiften", cache)
@@ -300,7 +300,7 @@ def tolka(conn: psycopg.Connection, data: Any) -> list[dict]:
         if typ == "flera_versioner":
             nyckel = _nyckel_flera(list(dokument))
         else:
-            delar = sorted(f"{c['dokument_id']}:{c['sida']}:{_jamforbar(c['text'])}" for c in citat)
+            delar = sorted(f"{c['dokument_id']}:{c['sida']}:{jamforbar(c['text'])}" for c in citat)
             nyckel = f"{typ}:" + hashlib.sha256("|".join(delar).encode()).hexdigest()[:24]
         ut.append({"typ": typ, "nyckel": nyckel, "forklaring": forklaring, "citat": citat, "uppgift": uppgift,
                    "dokument": list(dokument.values())})
@@ -508,6 +508,28 @@ def for_dokument(conn: psycopg.Connection, dokument_id: int) -> list[dict]:
     rader = _hamta(conn, ("publicerad",), dokument_id=dokument_id)
     titlar = _titlar(conn, rader)
     return [_ut(r, titlar, False) for r in rader]
+
+
+def paragrafnyckel(paragraf: str | None) -> tuple[str, ...]:
+    """Paragrafen utan skrivsätt: "§13", "13 §" och "§ 13" blir samma, "3 kap. 2 §" blir ("3", "kap", "2")."""
+    return tuple(re.findall(r"\d+|kap", (paragraf or "").casefold()))
+
+
+def samma_stalle(a: dict, b: dict) -> bool:
+    """Två citat avser samma ställe: samma dokument och sida, och samma paragraf när båda anger en."""
+    if (a["dokument_id"], a["sida"]) != (b["dokument_id"], b["sida"]):
+        return False
+    pa, pb = paragrafnyckel(a.get("paragraf")), paragrafnyckel(b.get("paragraf"))
+    return not pa or not pb or pa == pb
+
+
+def vid_stallen(conn: psycopg.Connection, stallen: list[dict]) -> list[list[dict]]:
+    """De publicerade motstridigheter som citerar vart och ett av ställena ({dokument_id, sida, paragraf}), i samma
+    ordning. Används för att visa motstridigheter vid stegen i en process (#152)."""
+    ids = sorted({s["dokument_id"] for s in stallen})
+    rader = [r for r in _hamta(conn, ("publicerad",)) if set(r["dokument_ids"]) & set(ids)]
+    titlar = _titlar(conn, rader)
+    return [[_ut(r, titlar, False) for r in rader if any(samma_stalle(c, s) for c in r["citat"])] for s in stallen]
 
 
 def antal_per_dokument(conn: psycopg.Connection) -> dict[int, int]:

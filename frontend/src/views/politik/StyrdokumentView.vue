@@ -137,6 +137,22 @@ const mb = (byte: number) => `${(byte / 1_000_000).toLocaleString('sv-SE', { max
       <p v-else class="not" data-testid="inga-motstridigheter">Redaktionen har inte publicerat några motstridigheter för dokumentet.</p>
     </section>
 
+    <section class="kort" aria-labelledby="process-rubrik" data-testid="processer">
+      <h2 id="process-rubrik">Processer</h2>
+      <template v-if="d.processer.length">
+        <p class="not forsta">
+          Arbetsgångar som har steg ur dokumentet, enligt redaktionens analys. <span class="analysetikett">Analys</span>
+        </p>
+        <ul class="lista">
+          <li v-for="p in d.processer" :key="p.id" data-testid="process">
+            <RouterLink :to="`/politik/styrande-dokument/processer/${p.id}`">{{ p.namn }}</RouterLink>
+            <span class="not"> · {{ p.steg === 1 ? '1 steg' : `${p.steg} steg` }} ur dokumentet</span>
+          </li>
+        </ul>
+      </template>
+      <p v-else class="not" data-testid="inga-processer">Dokumentet ingår inte i någon publicerad process.</p>
+    </section>
+
     <section class="kort" aria-labelledby="version-rubrik" data-testid="versioner">
       <h2 id="version-rubrik">Versioner</h2>
       <table class="tabell">
@@ -223,6 +239,14 @@ const mb = (byte: number) => `${(byte / 1_000_000).toLocaleString('sv-SE', { max
 }
 .forsta {
   margin: 0 0 12px;
+}
+.analysetikett {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 6px;
 }
 .lista {
   margin: 0;

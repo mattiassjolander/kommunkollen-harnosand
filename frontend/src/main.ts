@@ -32,6 +32,9 @@ import StyrandeDokumentView from './views/politik/StyrandeDokumentView.vue'
 import StyrdokumentView from './views/politik/StyrdokumentView.vue'
 import MotstridigheterView from './views/politik/MotstridigheterView.vue'
 import MotstridighetsforslagView from './views/politik/MotstridighetsforslagView.vue'
+import ProcesserView from './views/politik/ProcesserView.vue'
+import ProcessView from './views/politik/ProcessView.vue'
+import ProcessforslagView from './views/politik/ProcessforslagView.vue'
 import PolitikView from './views/politik/PolitikView.vue'
 import ProtokollavvikelserView from './views/politik/ProtokollavvikelserView.vue'
 import RattelserView from './views/politik/RattelserView.vue'
@@ -89,6 +92,13 @@ const router = createRouter({
       meta: { titel: 'Motstridigheter' },
     },
     { path: '/redaktion/motstridigheter', component: MotstridighetsforslagView, meta: { titel: 'Motstridigheter' } },
+    { path: '/politik/styrande-dokument/processer', component: ProcesserView, meta: { titel: 'Processer' } },
+    {
+      path: '/politik/styrande-dokument/processer/:id(\\d+)',
+      component: ProcessView,
+      meta: { titel: 'Processer' },
+    },
+    { path: '/redaktion/processer', component: ProcessforslagView, meta: { titel: 'Processer' } },
     // Redaktionens vyer låg tidigare under /politik (#146).
     { path: '/redaktion', redirect: '/redaktion/rattelser' },
     ...Object.entries(FLYTTADE).map(

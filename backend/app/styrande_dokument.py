@@ -204,10 +204,11 @@ def _ny_version(conn: psycopg.Connection, dokument_id: int, lank: Lank, innehall
     info = las_dokumentinformation(sidor[0] if sidor else "")
     if senaste is not None:
         conn.execute("UPDATE styrande_dokument_version SET ersatt = %s WHERE id = %s", (hamtad, senaste["id"]))
-        # Motstridigheter som berör dokumentet märks "Dokumentet har ändrats" (#151).
-        from .motstridigheter import markera_andrat
+        # Motstridigheter och processteg som berör dokumentet märks "Dokumentet har ändrats" (#151, #152).
+        from . import motstridigheter, processer
 
-        markera_andrat(conn, dokument_id, hamtad.date())
+        motstridigheter.markera_andrat(conn, dokument_id, hamtad.date())
+        processer.markera_andrat(conn, dokument_id, hamtad.date())
     conn.execute(
         """
         INSERT INTO styrande_dokument_version (dokument_id, version, url, sha256, storlek, innehall, hamtad, korning_id,

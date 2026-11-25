@@ -1,11 +1,11 @@
 ---
 name: harnosandskollen-styrande-dokument
-description: Söker motstridigheter i kommunens reglementen och delegationsordningar i Kommunkollen (motsägelser, felaktiga hänvisningar och flera gällande versioner) och läser in dem som utkast, lokalt eller på servern. Använd när användaren vill analysera de styrande dokumenten eller leta motstridigheter i dem.
+description: Analyserar kommunens reglementen och delegationsordningar i Kommunkollen. Söker motstridigheter (motsägelser, felaktiga hänvisningar och flera gällande versioner) och fyller i stegen i redaktionens processer (vem, vad, när och källa), och läser in dem som utkast, lokalt eller på servern. Använd när användaren vill analysera de styrande dokumenten, leta motstridigheter i dem eller ta fram processer ur dem.
 ---
 
-# Motstridigheter i styrande dokument
+# Motstridigheter och processer i styrande dokument
 
-Skillen läser kommunens reglementen och delegationsordningar tillsammans och föreslår **motstridigheter** (#151): motsägelser, felaktiga hänvisningar och flera gällande versioner. Förslagen skrivs till en fil, kontrolleras och läses in som **utkast**. En utgivare som inte läst in dem granskar och publicerar dem (utkast → granskad → publicerad, ADR-0002). Claude läser in och lämnar granskningen till utgivaren.
+Skillen har två grenar. Den läser kommunens reglementen och delegationsordningar tillsammans och föreslår **motstridigheter** (#151), eller fyller i stegen i redaktionens **processer** (#152, avsnittet *Processer* nedan). Motstridigheter: motsägelser, felaktiga hänvisningar och flera gällande versioner. Förslagen skrivs till en fil, kontrolleras och läses in som **utkast**. En utgivare som inte läst in dem granskar och publicerar dem (utkast → granskad → publicerad, ADR-0002). Claude läser in och lämnar granskningen till utgivaren.
 
 Typerna, filformatet och kontrollerna står i `docs/styrande-dokument.md`. Begreppen är de i `GLOSSARY.md`, avsnitt *Styrande dokument*. Läs båda innan du skriver något.
 
@@ -81,3 +81,64 @@ Avsluta med:
 - det du var osäker på,
 - vad provet och inläsningen gav,
 - att en utgivare som inte läst in förslagen nu granskar och publicerar dem under Redaktion → Motstridigheter.
+
+# Processer
+
+Grenen för processer (#152) fyller i stegen i de processer som redaktionen har valt att beskriva. Hitta inte på egna processer och gruppera inte om dem: listan bestäms av redaktionen. Saknas en process som användaren vill ha, be en redaktör lägga till den under Redaktion → Processer först. Formatet och kontrollerna står i `docs/styrande-dokument.md`, avsnittet *Processer*.
+
+## P1. Hämta listan och underlaget
+
+Underlaget är detsamma som för motstridigheterna (steg 1 ovan). Hämta redaktionens lista. Den kräver inloggning som redaktör, så läs den från databasen på servern. Det är bara läsning:
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose exec -T db psql -U kommunkollen -Atc \"SELECT namn, status FROM process WHERE status <> 'avvisad' ORDER BY ordning\""
+```
+
+Användaren kan också ge processerna som ska fyllas i.
+
+Klart när du har listan och alla dokument i omfånget ligger i `underlag/`.
+
+## P2. Läs dokumenten för varje process
+
+Läs alla 25 dokumenten med processen i tankarna. Stegen kan hämtas ur flera dokument. Budgetprocessen kan till exempel ta steg ur *Reglemente för ekonomistyrning*, *Reglemente för god ekonomisk hushållning* och *Kommunfullmäktiges arbetsordning*.
+
+För varje steg, notera:
+
+- **vem** som gör något: ett organ, ordföranden, förvaltningen eller en ledamot, så som dokumentet anger det,
+- **vad** som görs, kort och sakligt,
+- **när** eller inom vilken tidsfrist, bara om dokumentet anger det,
+- **källan**: dokumentets `sitevision_id`, sidan i PDF:en, paragrafen (eller punkten eller avsnittets rubrik om dokumentet saknar paragrafer) och ett ordagrant citat.
+
+Ordna stegen så som arbetsgången går. Ett steg bygger på ett ställe. Säger två dokument olika saker om samma steg, ta med båda stegen och nämn det i rapporten: det kan vara en motstridighet.
+
+Kontrollera alltid kallelsen och justeringen i det gemensamma reglementet för kommunstyrelse och nämnder: kallelsen ska skickas senast fem dagar före sammanträdesdagen (§ 13) och protokollet justeras senast 14 dagar efter sammanträdet (§ 26). De ska komma med som steg.
+
+Klart när varje process på listan har sina steg med källa, eller du kan säga varför en process saknar steg i dokumenten.
+
+## P3. Skriv filen
+
+Skriv `data/styrande-dokument/processer.json` enligt `docs/styrande-dokument.md`. Namnet på processen skrivs som på listan. Citaten är ordagranna och så korta som möjligt men entydiga. `vem` och `vad` återger vad dokumenten säger och värderar inte, och inga personer namnges.
+
+Stegen för en process ersätter de tidigare stegen och blir ett nytt utkast. Ta därför bara med de processer som ska läsas in. En publicerad process läses inte in med andra steg: den måste återkallas av en utgivare först. Fråga användaren innan du föreslår det.
+
+## P4. Kontrollera
+
+```bash
+ssh kommunkollen 'cd /opt/kommunkollen && docker compose exec -T backend /app/.venv/bin/python -m app.processer - --redaktor EPOST --prova' < data/styrande-dokument/processer.json
+```
+
+Ett fel anger processens och stegets nummer. Rätta filen och prova igen. Lokalt fungerar `uv run --directory backend python -m app.processer`.
+
+Klart när provet går igenom och anger antalet processer med nya steg.
+
+## P5. Läs in på servern
+
+Bara när användaren uttryckligen har sagt ja till just den här inläsningen. Den som läser in räknas som redaktör för processen och kan inte själv granska eller publicera den.
+
+```bash
+ssh kommunkollen 'cd /opt/kommunkollen && docker compose exec -T backend /app/.venv/bin/python -m app.processer - --redaktor EPOST' < data/styrande-dokument/processer.json
+```
+
+## Rapporten för processer
+
+Avsluta med processerna och antalet steg i var och en med dokument och paragraf, vad du var osäker på, vad provet och inläsningen gav, och att en utgivare som varken lade till processen eller läste in stegen nu granskar och publicerar den under Redaktion → Processer.

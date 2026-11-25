@@ -486,6 +486,9 @@ test('läsaren jämför budget och utfall per nämnd (#83)', async ({ page }) =>
   await page.request.post('/api/auth/test/utgivare')
   await page.goto('/redaktion/budgetutkast')
   await expect(page.getByTestId('budgetutkast').or(page.getByTestId('inga-utkast')).first()).toBeVisible()
+  // Uppföljningen hämtas för sig och har ingen markering för att den har laddat, så vänta in anropen innan utkasten
+  // räknas.
+  await page.waitForLoadState('networkidle')
   const utkast = page.locator('[data-testid="uppfoljningsutkast"][data-budgetar="2027"]')
   if ((await utkast.count()) > 0) {
     const soc = utkast.locator('tr[data-organ="Socialnämnden"]')

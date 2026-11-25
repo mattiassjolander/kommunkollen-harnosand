@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, motstridigheter, partiforslag, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, motstridigheter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -952,8 +952,10 @@ def create_app(
         with db.connect(database_url) as conn:
             resultat = styrande_dokument.lista(conn, kalender.idag())
             antal = motstridigheter.antal_per_dokument(conn)
+            antal_processer = processer.antal_per_dokument(conn)
         for d in resultat["dokument"]:
             d["motstridigheter"] = antal.get(d["id"], 0)
+            d["processer"] = antal_processer.get(d["id"], 0)
         return resultat
 
     @app.get("/api/styrande-dokument/{dokument_id}", dependencies=[Depends(krav_roll("lasare"))])
@@ -962,6 +964,7 @@ def create_app(
             resultat = styrande_dokument.las(conn, dokument_id, kalender.idag())
             if resultat is not None:
                 resultat["motstridigheter"] = motstridigheter.for_dokument(conn, dokument_id)
+                resultat["processer"] = processer.for_dokument(conn, dokument_id)
         if resultat is None:
             raise HTTPException(404, f"Det styrande dokumentet {dokument_id} finns inte")
         return resultat
@@ -1025,6 +1028,58 @@ def create_app(
     def ta_stallning_till_motstridighet(mid: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
         """En redaktör har tagit ställning till att ett berört dokument har ändrats."""
         return _motstridighet(motstridigheter.ta_stallning, mid, anv.epost)
+
+    # Processer ur reglementen och delegationsordningar (#152): redaktionen bestämmer listan, skillen läser in stegen
+    # och en utgivare som inte lagt till eller läst in processen granskar och publicerar den. Läsaren ser bara de
+    # publicerade.
+
+    @app.get("/api/processer", dependencies=[Depends(krav_roll("lasare"))])
+    def lista_processer() -> dict:
+        with db.connect(database_url) as conn:
+            return {"processer": processer.publicerade(conn)}
+
+    @app.get("/api/processer/redaktion", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def processer_for_redaktionen() -> dict:
+        return _motstridighet(processer.redaktionen)
+
+    @app.post("/api/processer")
+    def lagg_till_process(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """En redaktör lägger till en process på listan. Den blir ett utkast utan steg."""
+        return _motstridighet(processer.lagg_till, data, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/processer/inlasning")
+    def las_in_processteg(data: dict, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Läser in skillens steg som utkast, med samma kontroller som `python -m app.processer`."""
+        def steg(conn):
+            res = processer.las_in(conn, data, anv.epost, datetime.now(timezone.utc))
+            conn.commit()
+            return res
+        return _motstridighet(steg)
+
+    @app.get("/api/processer/{pid}", dependencies=[Depends(krav_roll("lasare"))])
+    def las_process(pid: int) -> dict:
+        return _motstridighet(processer.las, pid)
+
+    @app.post("/api/processer/{pid}/granskning")
+    def granska_process(pid: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(processer.granska, pid, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/processer/{pid}/publicering")
+    def publicera_process(pid: int, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(processer.publicera, pid, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/processer/{pid}/avvisning")
+    def avvisa_process(pid: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(processer.avvisa, pid, data, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/processer/{pid}/aterkallelse")
+    def aterkalla_process(pid: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        return _motstridighet(processer.aterkalla, pid, data, anv.epost, datetime.now(timezone.utc))
+
+    @app.post("/api/processer/{pid}/steg/{sid}/stallning")
+    def ta_stallning_till_processteg(pid: int, sid: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """En redaktör har tagit ställning till att dokumentet som steget citerar har ändrats."""
+        return _motstridighet(processer.ta_stallning, pid, sid, anv.epost)
 
     @app.get("/api/styrande-dokument/{dokument_id}/versioner/{version}", dependencies=[Depends(krav_roll("lasare"))])
     def styrande_dokument_fil(dokument_id: int, version: int) -> Response:

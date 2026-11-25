@@ -78,6 +78,8 @@ const antal = (status: string) => (data.value?.dokument ?? []).filter((d) => d.g
     <p class="ingress">
       <RouterLink to="/politik/styrande-dokument/motstridigheter" data-testid="till-motstridigheter">Motstridigheter</RouterLink>:
       ställen i reglementen och delegationsordningar som inte går ihop, enligt redaktionens analys.
+      <RouterLink to="/politik/styrande-dokument/processer" data-testid="till-processer">Processer</RouterLink>: hur
+      saker ska gå till enligt dokumenten, steg för steg.
     </p>
   </header>
 
@@ -125,6 +127,7 @@ const antal = (status: string) => (data.value?.dokument ?? []).filter((d) => d.g
           <th scope="col">Fastställt av</th>
           <th scope="col">Giltighet</th>
           <th scope="col">Motstridigheter</th>
+          <th scope="col">Processer</th>
         </tr>
       </thead>
       <tbody>
@@ -142,6 +145,9 @@ const antal = (status: string) => (data.value?.dokument ?? []).filter((d) => d.g
           <td><Giltighetsmarkering :giltighet="d.giltighet" /></td>
           <td class="tal" data-testid="antal-motstridigheter">
             <template v-if="d.motstridigheter">{{ d.motstridigheter }} <span class="analysetikett">Analys</span></template>
+          </td>
+          <td class="tal" data-testid="antal-processer">
+            <template v-if="d.processer">{{ d.processer }} <span class="analysetikett">Analys</span></template>
           </td>
         </tr>
       </tbody>
