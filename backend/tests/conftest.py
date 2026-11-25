@@ -1,12 +1,18 @@
 """Söm 1: backendens HTTP-API mot riktig Postgres, med källorna utbytta mot inspelade svar.
 
 Postgres tas från `TEST_DATABASE_URL` om den är satt (CI), annars startas en inbäddad
-Postgres via pgserver. Varje test får en egen, tom databas.
+Postgres via pgserver. Varje test får en egen databas, kopierad från en mall där alla migreringar
+redan är körda.
+
+Testerna kan köras parallellt med pytest-xdist (`pytest -n auto`): varje process har sin egen mall
+och varje test sin egen databas.
 """
 
 from __future__ import annotations
 
 import base64
+import copy
+import hashlib
 import json
 import os
 import tempfile
@@ -55,6 +61,58 @@ def testmodell_for_sokningen():
     sokvektorer.satt_modell(sokvektorer.Testmodell())
 
 
+# Text ur de inspelade PDF:erna, per PDF (sha256) och läge. Att läsa texten med pypdf är det som tar
+# längst tid i en insamling, och samma inspelade PDF:er läses i många tester.
+_SIDTEXTER: dict[tuple[bytes, bool], tuple[list[str], list[str]]] = {}
+
+
+@pytest.fixture(autouse=True)
+def pdftexten_lases_en_gang(monkeypatch):
+    """Sparar texten ur varje PDF så att den bara läses en gång per testkörning.
+
+    Bara text som pypdf har läst sparas. Fel och text som lästs med OCR går alltid genom den
+    vanliga läsningen, så testerna av dem påverkas inte.
+    """
+    from app import protokolltolkning
+
+    las = protokolltolkning.las_sidtexter
+
+    def cachad(pdf: bytes, layout: bool = True):
+        h = hashlib.sha256(pdf).digest()
+        if (h, layout) in _SIDTEXTER or (not layout and (h, True) in _SIDTEXTER):
+            lop, lay = _SIDTEXTER.get((h, layout)) or _SIDTEXTER[(h, True)]
+            return list(lop), list(lay) if layout else [], False
+        lop, lay, ocr = las(pdf, layout)
+        if not ocr:
+            _SIDTEXTER[(h, layout)] = (list(lop), list(lay))
+        return lop, lay, ocr
+
+    monkeypatch.setattr(protokolltolkning, "las_sidtexter", cachad)
+
+
+# SKR:s prognos omräknad med LibreOffice, per fil (sha256) och kommun. Omräkningen tar flera sekunder.
+_PROGNOSER: dict[tuple[bytes, str], dict] = {}
+
+
+@pytest.fixture(autouse=True)
+def prognosen_raknas_om_en_gang(monkeypatch):
+    """Sparar SKR-prognosen som LibreOffice har räknat om, så att varje fil bara räknas om en gång.
+
+    Fel sparas inte, så testerna av dem går alltid genom den vanliga omräkningen.
+    """
+    from app import skatteunderlag
+
+    prognos = skatteunderlag.prognos
+
+    def cachad(innehall: bytes, kommun: str = skatteunderlag.KOMMUN) -> dict:
+        nyckel = (hashlib.sha256(innehall).digest(), kommun)
+        if nyckel not in _PROGNOSER:
+            _PROGNOSER[nyckel] = prognos(innehall, kommun)
+        return copy.deepcopy(_PROGNOSER[nyckel])
+
+    monkeypatch.setattr(skatteunderlag, "prognos", cachad)
+
+
 @pytest.fixture(scope="session")
 def postgres_url() -> str:
     url = os.environ.get("TEST_DATABASE_URL")
@@ -66,11 +124,26 @@ def postgres_url() -> str:
     return server.get_uri()
 
 
-@pytest.fixture
-def database_url(postgres_url: str):
-    namn = f"test_{uuid.uuid4().hex[:12]}"
+@pytest.fixture(scope="session")
+def malldatabas(postgres_url: str):
+    """En databas där alla migreringar är körda. Varje test får en kopia av den."""
+    from app import db
+
+    namn = f"mall_{uuid.uuid4().hex[:12]}"
     with psycopg.connect(postgres_url, autocommit=True) as admin:
         admin.execute(f'CREATE DATABASE "{namn}"')
+    bas, _, _ = postgres_url.rpartition("/")
+    db.migrate(f"{bas}/{namn}")
+    yield namn
+    with psycopg.connect(postgres_url, autocommit=True) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{namn}" WITH (FORCE)')
+
+
+@pytest.fixture
+def database_url(postgres_url: str, malldatabas: str):
+    namn = f"test_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(postgres_url, autocommit=True) as admin:
+        admin.execute(f'CREATE DATABASE "{namn}" TEMPLATE "{malldatabas}"')
     bas, _, _ = postgres_url.rpartition("/")
     yield f"{bas}/{namn}"
     with psycopg.connect(postgres_url, autocommit=True) as admin:
