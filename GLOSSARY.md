@@ -172,6 +172,13 @@ En behandling med minst två yrkanden som går isär, eller med votering eller r
 **Lång beredning**:
 Ett ärende där det har gått mer än 12 månader från första behandlingen till det slutliga beslutet.
 
+**Topplista**:
+De tio ärenden, ledamöter eller voteringar som har mest av ett mått under ett år eller en mandatperiod, t.ex. längsta beredning eller jämnaste voteringar. En topplista per parti visar alla partier i kommunfullmäktige, med antal och antal per mandat. Varje rad har de behandlingar som räknats. Det finns ingen topplista över närvaro per person.
+_Avoid_: Rankning (kommunens placering i externa jämförelser)
+
+**Per mandat**:
+Ett partis antal delat med partiets mandat i kommunfullmäktige vid mandatperiodens början, enligt Valmyndigheten. För ett kalenderår gäller mandatperioden som omfattar den 1 juli.
+
 ## Ekonomiska nyckeltal
 
 **Nyckeltal**:

@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, motstridigheter, namnvarianter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, markningar, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, motstridigheter, namnvarianter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, markningar, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, topplistor, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -380,6 +380,16 @@ def create_app(
         with db.connect(database_url) as conn:
             fran, till = intervall(conn, fran, till, organ)
             return aterkommande.aterkommande(conn, fran, till, organ)
+
+    @app.get("/api/topplistor", dependencies=[Depends(krav_roll("lasare"))])
+    def topplistorna(ar: str | None = None, period: int | None = None) -> dict:
+        """Topplistor för ett år (standard det senaste) eller en mandatperiod (ar=mandatperiod, #163)."""
+        with db.connect(database_url) as conn:
+            try:
+                valt = topplistor.urval(conn, ar, period)
+            except topplistor.Ogiltigt as e:
+                raise HTTPException(422, str(e)) from e
+            return topplistor.berakna(conn, valt)
 
     @app.get("/api/kommande", dependencies=[Depends(krav_roll("lasare"))])
     def kommande_arenden(manader: int = Query(kommande.MANADER, ge=1, le=120)) -> dict:

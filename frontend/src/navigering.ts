@@ -50,6 +50,7 @@ export const HUVUDVYER: Huvudvy[] = [
       { till: '/politik/budget', namn: 'Budgetförslag', grupp: 'Dokument' },
       { till: '/politik/styrande-dokument', namn: 'Styrande dokument', grupp: 'Dokument' },
       { till: '/politik/statistik', namn: 'Statistik', grupp: 'Uppföljning' },
+      { till: '/politik/topplistor', namn: 'Topplistor', grupp: 'Uppföljning' },
       { till: '/politik/avvikelser', namn: 'Avvikelser', grupp: 'Uppföljning' },
     ],
   },

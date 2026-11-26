@@ -41,6 +41,7 @@ import ProtokollavvikelserView from './views/politik/ProtokollavvikelserView.vue
 import RattelserView from './views/politik/RattelserView.vue'
 import PartitillhorighetView from './views/politik/PartitillhorighetView.vue'
 import StatistikView from './views/politik/StatistikView.vue'
+import TopplistorView from './views/politik/TopplistorView.vue'
 import SammantradeView from './views/politik/SammantradeView.vue'
 import SammansattningView from './views/politik/SammansattningView.vue'
 
@@ -74,6 +75,7 @@ const router = createRouter({
     { path: '/redaktion/rattelser', component: RattelserView, meta: { titel: 'Rättelser' } },
     { path: '/redaktion/partitillhorighet', component: PartitillhorighetView, meta: { titel: 'Partitillhörighet' } },
     { path: '/politik/statistik', component: StatistikView, meta: { titel: 'Statistik' } },
+    { path: '/politik/topplistor', component: TopplistorView, meta: { titel: 'Topplistor' } },
     { path: '/politik/avvikelser', component: AvvikelserView, meta: { titel: 'Avvikelser i protokollen' } },
     { path: '/redaktion/att-anmala', component: ProtokollavvikelserView, meta: { titel: 'Att anmäla' } },
     { path: '/politik/budget', component: BudgetforslagView, meta: { titel: 'Budgetförslag' } },
