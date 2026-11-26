@@ -110,6 +110,25 @@ Norrlandspartiet skriver sig "NorrP" i protokollen. Plattformen förkortar det N
 
 Paletten klarar alltså inte kontrollerna, och det går inte att rätta utan att överge partiernas färger: S och V är båda röda. Därför bär färgen aldrig information. Förkortningen står alltid bredvid, och ringen ger pricken kontrast.
 
+### Organfärger
+
+De fem organen har varsin färg, så att det syns vilket organ som sammanträder, till exempel i kalendern. Färgerna är den kategoriska paletten i fast ordning, och de följer organet i alla vyer. Det finns inga ikoner för organen, och partifärger blandas aldrig in.
+
+| Organ | Förkortning | Token | Palettplats |
+|---|---|---|---|
+| Kommunfullmäktige | KF | `--organ-kf` | `--series-1` |
+| Kommunstyrelsen | KS | `--organ-ks` | `--series-2` |
+| Samhällsnämnden | SAM | `--organ-sam` | `--series-3` |
+| Socialnämnden | SOC | `--organ-soc` | `--series-4` |
+| Skolnämnden | SKOL | `--organ-skol` | `--series-5` |
+
+- Organtokens pekar på palettplatserna och får därför mörka lägets värden av sig själva.
+- **Förkortningen eller det fulla namnet står alltid bredvid färgen.** Färgen bär aldrig betydelse ensam.
+- Färgen visas bara som kantlinje eller prick, aldrig som stor fyllyta. Texten bredvid står i `--ink`, inte i accentblått, så att KF:s blå inte förväxlas med en länk.
+- Där utrymmet är litet, som i kalenderns månadsvy, står förkortningen. Det fulla namnet finns då i `title` och i text för skärmläsare. Där det finns plats, som i listor, står det fulla namnet.
+- Ett okänt organ (inte ett av de fem) får markeringen i `--ink-muted`, och förkortningen är organets id i versaler.
+- Färgerna och förkortningarna finns på ett ställe i koden (`frontend/src/organ.ts`).
+
 ## Typografi
 
 - **Typsnitt:** Inter (öppen licens, självhostat) med `system-ui, "Segoe UI", sans-serif` som reserv. Ett enda typsnitt i hela gränssnittet, inget display- eller serift typsnitt.
