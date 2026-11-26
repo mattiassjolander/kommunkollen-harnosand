@@ -5,6 +5,7 @@ import {
   hamtaInloggningsmetod,
   hamtaJag,
   hamtaKopplingar,
+  hamtaNamnforslag,
   hamtaRattelser,
   loggaUt,
   type Inloggningsmetod,
@@ -55,9 +56,9 @@ function avbrytInloggning() {
   history.replaceState(null, '', window.location.pathname)
 }
 
-// Antal som väntar i Redaktion: rättelser som inte är publicerade och kopplingsförslag.
+// Antal som väntar i Redaktion: rättelser som inte är publicerade, kopplingsförslag och namnförslag.
 const roller = computed(() => jag.value?.roller ?? [])
-const vantar = ref<Partial<Record<'rattelser' | 'kopplingar', number>>>({})
+const vantar = ref<Partial<Record<'rattelser' | 'kopplingar' | 'namnvarianter', number>>>({})
 async function raknaVantande() {
   const r = roller.value
   const ut: typeof vantar.value = {}
@@ -72,6 +73,9 @@ async function raknaVantande() {
     jobb.push(
       hamtaKopplingar('forslag').then((k) => {
         ut.kopplingar = k.length
+      }),
+      hamtaNamnforslag('forslag').then((f) => {
+        ut.namnvarianter = f.length
       }),
     )
   await Promise.allSettled(jobb)

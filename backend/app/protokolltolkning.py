@@ -19,7 +19,7 @@ import re
 from collections import Counter
 from difflib import SequenceMatcher
 from functools import lru_cache
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 from pypdf import PdfReader
@@ -40,6 +40,8 @@ class Narvaro:
     # var beslutande: paragraferna vid de sittningar personen var närvarande, i ett protokoll med flera.
     paragrafer: list[int] | None = None
     jav: list[int] = field(default_factory=list)
+    # "Tom plats för Namn" (#165): stolen var tom, och personen räknas som frånvarande.
+    tom_plats: bool = False
 
 
 @dataclass
@@ -323,6 +325,11 @@ _TJANSTGOR = re.compile(
 )
 
 
+# En person utan parti med en anteckning: "Namn Namnsson tjänstgörande ersättare för Annan", "Namn, ersätter Annan".
+_UTAN_PARTI = re.compile(
+    r"^[A-ZÅÄÖÉ][\wåäöéü'’-]*(?:[ -][A-ZÅÄÖÉ][\wåäöéü'’-]*){1,3}(?:\s+tjänstgör|,\s*ersätter\s)")
+
+
 def _kategori(etikett: str, nu: str) -> str | None:
     """Kategorin som en etikett i vänstermarginalen anger. None = listan är slut."""
     e = etikett.lower()
@@ -430,6 +437,11 @@ def _narvaro_forsta_sidan(t: Tolkning, layout: str) -> bool:
             if ny := _person(text, kategori, standardroll):
                 t.narvaro.append(ny[0])
                 anteckning = ny[1]
+            elif _UTAN_PARTI.match(text):
+                # "Ro Blomkvist tjänstgörande ersättare för Axel Bodo" (utan parti) är en egen person.
+                # Namnet rensas i _rensa_narvaro.
+                t.narvaro.append(Narvaro(namn=text, parti=None, roll=standardroll, kategori=kategori))
+                anteckning = ""
             elif t.narvaro:
                 # Radbruten fortsättning ("§§ 26-27", "16:10", "för Annan (M)") hör till raden ovanför.
                 anteckning = f"{anteckning} {text}"
@@ -467,7 +479,7 @@ def _narvaro_forsta_sidan(t: Tolkning, layout: str) -> bool:
             namn, parti = ny[0].namn, ny[0].parti
             if ny[1]:
                 anteckningar.insert(0, ny[1])
-        elif rollkolumn is not None and len(falt) == 2 and re.search(r",|§|\sersätter\s", forsta):
+        elif len(falt) <= 2 and re.search(r",|§|\sersätter\s", forsta):
             # "Glenn Sehlin, §§ 131-138", "Britta Thyr, 1:e vice ordförande", "Namn, ersätter Annan § 138"
             oppen = _namnfalt_poster(t, forsta, roll, kategori)
             anteckning = ""
@@ -702,6 +714,91 @@ def _tjanstgoringar(text: str) -> list[tuple[str, str | None]]:
         elif ref and not ut:
             ut.append(("", ref))  # bara paragrafer, utan namn
     return ut or [(text, None)]
+
+
+# Namnen i närvarolistan (#165)
+#
+# Oavsett form ska bara själva namnet bli namnet. Det som står efter det (parti, roll, paragrafer och
+# tjänstgöring) tolkas och tas bort ur namnet. "Tom plats för Namn" är ingen person utan en tom stol.
+
+_TOM_PLATS = re.compile(r"^tom\s+plats\b(?:\s+(?:för|efter))?\s*(?P<namn>.*)$", re.IGNORECASE)
+# Där namnet slutar: parti, komma, paragrafer eller en tjänstgöring.
+_NAMNSLUT = re.compile(r"\s*[(,§]|\s+(?=(?:tjänstgör\w*|ersätter|för|jäv)\b)", re.IGNORECASE)
+_ANTECKNINGSORD = re.compile(r"(?:tjänstgör|ersätter|för\s|jäv|§|kl\b|närvarande)", re.IGNORECASE)
+
+
+def _rensa_narvaro(t: Tolkning) -> None:
+    ut: list[Narvaro] = []
+    for n in t.narvaro:
+        ut.extend([n] if n.kategori == "ovrig" else _rensad(n))
+    t.narvaro = ut
+    _avhuggna_tjanstgoringar(t)
+
+
+def _rensad(n: Narvaro) -> list[Narvaro]:
+    """Personen (eller personerna, en per tjänstgöring) som en närvaropost anger."""
+    text = " ".join(n.namn.split())
+    if text.lower().startswith("vakant"):
+        return []  # "Vakant", "Vakant plats efter Namn": ingen satt på platsen
+    if m := _TOM_PLATS.match(text):
+        # "Tom plats för Ester Sundin Hemström": hon var frånvarande.
+        namn, parti = _namn_parti(m["namn"])
+        if not namn:
+            return []
+        return [replace(n, namn=namn, parti=parti, kategori="franvarande", tjanstgor_for=None,
+                        tjanstgor_for_parti=None, paragrafer=None, tom_plats=True)]
+    m = _NAMNSLUT.search(text)
+    if m is None or m.start() == 0:
+        return [replace(n, namn=text)]
+    namn, rest, parti, roll = text[: m.start()].strip(), text[m.start() :].strip(), n.parti, n.roll
+    if p := re.match(rf"\(\s*(?P<parti>{_KOD}|[a-zåäö]{{1,4}})?\s*\)?\s*", rest):
+        parti = (p["parti"] or "").upper() or parti
+        rest = rest[p.end() :]
+    rest = rest.lstrip(", ")
+    if rest and not _ANTECKNINGSORD.match(rest):
+        # ", 1:e vice ordförande" och ", ordförande" är rollen.
+        r = re.match(r"(?P<roll>[^,§]+?)\s*(?:,\s*|(?=§)|$)", rest)
+        roll, rest = _stor_bokstav(r["roll"]), rest[r.end() :]
+    grund = replace(n, namn=namn, parti=parti, roll=roll)
+    if m := re.match(r"ersätter\s+(?P<for>.+)$", rest, re.IGNORECASE):
+        # "ersätter Annan § 138 samt Tredje § 139": en post per tjänstgöring.
+        poster = []
+        for for_namn, ref in _tjanstgoringar(m["for"]):
+            for_namn, for_parti = _namn_parti(for_namn)
+            poster.append(replace(grund, tjanstgor_for=for_namn or None, tjanstgor_for_parti=for_parti,
+                                  paragrafer=paragraflista(ref) if ref else n.paragrafer))
+    else:
+        if rest:
+            _anteckning(grund, rest)
+        poster = [grund]
+    if re.match(r"tjänstgör|ersätter|för\s", rest, re.IGNORECASE):
+        # Personen är ersättare och tjänstgör för någon, eller på en vakant plats.
+        for x in poster:
+            x.roll = "Ersättare" if x.roll in (None, "Ledamot") else x.roll
+            x.kategori = "beslutande" if x.kategori == "ej_tjanstgorande" else x.kategori
+    return poster
+
+
+def rensat_namn(namn: str) -> str | None:
+    """Namnet som tolkningen ger ur en närvaropost, eller None om posten inte är en person ("Vakant")."""
+    poster = _rensad(Narvaro(namn=namn, parti=None, roll=None, kategori="beslutande"))
+    return poster[0].namn if poster else None
+
+
+def _avhuggna_tjanstgoringar(t: Tolkning) -> None:
+    """ "Christina Ögrim, ersätter Ingemar": namnet klipptes av vid radbrytningen. Förnamnet kopplas till den
+    enda frånvarande personen i närvarolistan med det förnamnet. Finns ingen, eller flera, är det en avvikelse."""
+    franvarande = [n for n in t.narvaro if n.kategori == "franvarande"]
+    for n in t.narvaro:
+        if not n.tjanstgor_for or " " in n.tjanstgor_for:
+            continue
+        kandidater = {(x.namn, x.parti) for x in franvarande if x.namn.split()[0] == n.tjanstgor_for}
+        if len(kandidater) == 1:
+            [(n.tjanstgor_for, parti)] = kandidater
+            n.tjanstgor_for_parti = n.tjanstgor_for_parti or parti
+        else:
+            t.avvikelser.append(f"{n.namn} tjänstgör för \"{n.tjanstgor_for}\", som inte går att koppla till "
+                                f"en frånvarande ledamot ({len(kandidater)} med förnamnet)")
 
 
 # Behandlingar
@@ -1939,6 +2036,7 @@ def _tolka(pdf: bytes) -> Tolkning:
         t.narvaro = []
         if not _narvarotabeller(t, layout[:6]):
             t.avvikelser.append("Närvarolistan hittades inte")
+    _rensa_narvaro(t)
     _behandlingar(t, lop, layout)
     _sittningar(t, layout)
     _voteringar(t, layout)

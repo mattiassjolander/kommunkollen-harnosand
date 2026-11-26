@@ -80,6 +80,15 @@ Tolka om de lagrade protokollen efter en förbättrad tolkning (hämtar inget fr
 ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.tolka_om"
 ```
 
+Med `--prov` görs omtolkningen i en transaktion som rullas tillbaka, och inget sparas. Kommandot skriver ut vad
+som skulle ändras i ledamotsregistret (#165): nya namn, namn som tas bort, namnvarianter som slås ihop automatiskt
+och nya förslag till redaktionen. Databasen migreras inte, så kör det efter att den nya versionen startats.
+Omtolkningen håller transaktionen öppen i några minuter.
+
+```bash
+ssh kommunkollen "cd /opt/kommunkollen && docker compose exec backend /app/.venv/bin/python -m app.tolka_om --prov"
+```
+
 Slå ihop planerade sammanträden med protokollet samma dag, när mötet började mer än en timme senare än
 planerat och protokollet lästes in före #107. Utan `--utfor` visas bara paren. Ta en säkerhetskopia först:
 

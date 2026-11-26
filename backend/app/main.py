@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, motstridigheter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, motstridigheter, namnvarianter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -878,6 +878,34 @@ def create_app(
                 raise HTTPException(404, str(e)) from e
             except ledamoter.Konflikt as e:
                 raise HTTPException(409, str(e)) from e
+
+    # Namnvarianter med mellannamn eller annan stavning (#165): förslag som en redaktör bekräftar eller avvisar.
+
+    @app.get("/api/namnforslag", dependencies=[Depends(krav_roll("redaktor"))])
+    def lista_namnforslag(status: str = "forslag") -> list[dict]:
+        if status not in ("forslag", "bekraftad", "avvisad"):
+            raise HTTPException(422, "status ska vara forslag, bekraftad eller avvisad")
+        with db.connect(database_url) as conn:
+            return namnvarianter.lista_forslag(conn, status)
+
+    def _namnbeslut(forslag_id: int, bekrafta: bool, anv: Anvandare) -> dict:
+        with db.connect(database_url) as conn:
+            try:
+                return namnvarianter.besluta(conn, forslag_id, bekrafta, anv.epost)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except ledamoter.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/namnforslag/{forslag_id}/bekrafta")
+    def bekrafta_namnforslag(forslag_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Namnen slås ihop. Huvudnamnet är det som förekommer oftast."""
+        return _namnbeslut(forslag_id, True, anv)
+
+    @app.post("/api/namnforslag/{forslag_id}/avvisa")
+    def avvisa_namnforslag(forslag_id: int, anv: Anvandare = Depends(krav_roll("redaktor"))) -> dict:
+        """Förslaget kommer inte tillbaka."""
+        return _namnbeslut(forslag_id, False, anv)
 
     # Sammansättning: kön och ålder bland kandidater, valda och tjänstgörande (#65). Statistiken är öppen. Kön och
     # ålder per person, kopplingarna och redaktionens uppgifter är bara för redaktionen.

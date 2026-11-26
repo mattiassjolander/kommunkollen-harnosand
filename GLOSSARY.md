@@ -53,8 +53,12 @@ En förtroendevald som deltar i ett organs sammanträde, som ordinarie ledamot e
 _Avoid_: Politiker, representant
 
 **Namnvariant**:
-Ett av flera sätt som samma ledamot skrivs på i protokollen. En redaktör slår ihop namnvarianter till en person och kan dela upp dem igen.
+Ett av flera sätt som samma ledamot skrivs på i protokollen. Namnvarianter som bara skiljer sig i bindestreck eller mellanslag ("Höglund-Bystedt" och "Höglund Bystedt") slås ihop automatiskt, och huvudnamnet är den stavning som förekommer oftast. Andra skillnader, som ett mellannamn eller en annan stavning, blir förslag som en redaktör bekräftar eller avvisar. En redaktör kan också slå ihop namnvarianter för hand och dela upp dem igen. En automatisk sammanslagning delar aldrig upp det en redaktör slagit ihop, och slår aldrig ihop det en redaktör delat upp.
 _Avoid_: Alias, dubblett
+
+**Tom plats**:
+En stol i närvarolistan som ingen satt på vid sammanträdet, till exempel "Tom plats för Ester Sundin Hemström". En tom plats är ingen person. Ledamoten vars plats var tom räknas som frånvarande.
+_Avoid_: Vakans (en vakant plats saknar ledamot, och en ersättare kan tjänstgöra på den)
 
 **Kandidat**:
 En person på ett partis lista till kommunfullmäktige i ett val, med placering på listan. Valmyndigheten anger kandidatens kön och ålder på valdagen, men gallrar uppgifterna i efterhand. Plattformen behåller de uppgifter den redan har sparat.

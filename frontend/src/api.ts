@@ -453,6 +453,8 @@ export interface Person {
    * sittningar personen var närvarande, när protokollet har flera sittningar (#85). */
   paragrafer: number[] | null
   jav: number[]
+  /** "Tom plats för Namn" (#165): stolen var tom, och personen räknas som frånvarande. */
+  tom_plats?: boolean
   /** Satt när närvarolistan inte anger parti och partiet härletts ur samma eller ett annat protokoll. */
   parti_harlett?: PartiHarlett | null
   /** Publicerade rättelser av partiet. */
@@ -1045,6 +1047,40 @@ async function beslutaKoppling(id: number, beslut: 'bekraftelse' | 'avvisning'):
   return svar.json()
 }
 export const bekraftaKoppling = (id: number) => beslutaKoppling(id, 'bekraftelse')
+
+/** Namnvarianter med mellannamn eller annan stavning som kan vara samma person (#165). */
+export type Namnforslagsstatus = 'forslag' | 'bekraftad' | 'avvisad'
+export interface Namnforslag {
+  id: number
+  status: Namnforslagsstatus
+  skal: string
+  skapad: string
+  beslutad_av: string | null
+  beslutad: string | null
+  /** De två namnen, med personen i registret som namnet hör till. */
+  namn: {
+    namn: string
+    ledamot: Pick<Ledamotsrad, 'id' | 'namn' | 'andra_namn' | 'partier' | 'organ' | 'antal_sammantraden' | 'senast'> | null
+  }[]
+}
+
+export async function hamtaNamnforslag(status: Namnforslagsstatus = 'forslag'): Promise<Namnforslag[]> {
+  const svar = await fetch(`/api/namnforslag?status=${status}`)
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error(`API-fel ${svar.status}`)
+  return svar.json()
+}
+
+async function beslutaNamnforslag(id: number, beslut: 'bekrafta' | 'avvisa'): Promise<Namnforslag> {
+  const svar = await fetch(`/api/namnforslag/${id}/${beslut}`, { method: 'POST' })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
+export const bekraftaNamnforslag = (id: number) => beslutaNamnforslag(id, 'bekrafta')
+export const avvisaNamnforslag = (id: number) => beslutaNamnforslag(id, 'avvisa')
 export const avvisaKoppling = (id: number) => beslutaKoppling(id, 'avvisning')
 
 /** Ändrar ett tidigare beslut om en koppling, med motivering (#77). */
