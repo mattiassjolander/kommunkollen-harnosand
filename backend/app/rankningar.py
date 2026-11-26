@@ -165,7 +165,7 @@ def _placeringar(conn: psycopg.Connection, rankning_id: str) -> list[dict]:
     ))
 
 
-def _sammanfattning(placeringar: list[dict]) -> dict | None:
+def _sammanfattning(placeringar: list[dict], metodbytesar: list[int]) -> dict | None:
     egna = sorted((p for p in placeringar if p["kommun"] == HARNOSAND), key=lambda p: p["ar"])
     if not egna:
         return None
@@ -180,13 +180,16 @@ def _sammanfattning(placeringar: list[dict]) -> dict | None:
         "foregaende": {"ar": foregaende["ar"], "placering": foregaende["placering"]} if foregaende else None,
         # Skillnaden i placeringens nummer (negativ = närmare plats 1). Ingen värdering.
         "andring": senaste["placering"] - foregaende["placering"] if foregaende else None,
+        # Metoden byttes mellan jämförelseåren (#177), så placeringarna går inte att jämföra.
+        "metodbyte": foregaende is not None and any(foregaende["ar"] < a <= senaste["ar"] for a in metodbytesar),
     }
 
 
 def lista(conn: psycopg.Connection) -> list[dict]:
     ut = []
     for r in conn.execute("SELECT * FROM rankning ORDER BY titel"):
-        ut.append({**_rankningsinfo(r), "senaste": _sammanfattning(_placeringar(conn, r["id"]))})
+        ut.append({**_rankningsinfo(r), "senaste": _sammanfattning(
+            _placeringar(conn, r["id"]), [m["ar"] for m in metodbyten(conn, r["id"])])})
     return ut
 
 
@@ -237,7 +240,8 @@ def rankning(conn: psycopg.Connection, rankning_id: str) -> dict:
     if r is None:
         raise LookupError(f"Rankningen {rankning_id} finns inte")
     placeringar = _placeringar(conn, rankning_id)
-    sammanfattning = _sammanfattning(placeringar)
+    byten = metodbyten(conn, rankning_id)
+    sammanfattning = _sammanfattning(placeringar, [m["ar"] for m in byten])
     kommuner = []
     for kommun in KOMMUNER:
         punkter = sorted((p for p in placeringar if p["kommun"] == kommun), key=lambda p: p["ar"])
@@ -255,7 +259,7 @@ def rankning(conn: psycopg.Connection, rankning_id: str) -> dict:
         "datakalla": dict(conn.execute("SELECT id, titel, url FROM datakalla WHERE id = %s",
                                        (r["datakalla_id"],)).fetchone()),
         "senaste": sammanfattning,
-        "metodbyten": metodbyten(conn, rankning_id),
+        "metodbyten": byten,
         "kommuner": kommuner,
         "delmatt": _delmattstabell(conn, rankning_id, sammanfattning["ar"]) if sammanfattning else [],
         "hamtad": hamtad.isoformat() if hamtad else None,

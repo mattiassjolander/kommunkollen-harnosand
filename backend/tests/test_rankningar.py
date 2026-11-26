@@ -199,7 +199,7 @@ def test_oversikten_visar_harnosands_senaste_placering_och_avsandaren(api):
     assert fk["avsandare"] == "Svenskt Näringsliv"
     assert fk["avsandartyp"] == "Arbetsgivar- och näringslivsorganisation"
     assert fk["senaste"] == {"ar": 2026, "placering": 265, "antal": 290, "poang": None, "max_poang": None,
-                             "foregaende": {"ar": 2025, "placering": 283}, "andring": -18}
+                             "foregaende": {"ar": 2025, "placering": 283}, "andring": -18, "metodbyte": False}
     mb = rankningar["miljobasta-kommun"]
     assert mb["avsandare"] == "Aktuell Hållbarhet"
     assert mb["senaste"]["placering"] == 52 and mb["senaste"]["poang"] == 16.8
@@ -289,7 +289,23 @@ def test_metodbyten_registreras_av_redaktionen_och_visas(api):
     assert api.get("/api/rankningar/foretagsklimat").json()["metodbyten"] == [
         {"ar": 2012, "beskrivning": "Enkäten fick nya frågor"}]
 
+    # Ett metodbyte före föregående år påverkar inte jämförelsen mellan de två senaste åren.
+    assert api.get("/api/rankningar/foretagsklimat").json()["senaste"]["metodbyte"] is False
+
     assert api.delete("/api/rankningar/foretagsklimat/metodbyten/2012").status_code in (401, 403)
     assert api.post("/api/auth/test/redaktor").status_code == 200
     assert api.delete("/api/rankningar/foretagsklimat/metodbyten/2012").json() == []
     assert api.delete("/api/rankningar/foretagsklimat/metodbyten/2012").status_code == 404
+
+
+def test_ett_metodbyte_mellan_de_tva_senaste_aren_markeras_pa_sammanfattningen(api):
+    # #177: placeringarna 2025 och 2026 går inte att jämföra om metoden byttes 2026.
+    assert api.post("/api/auth/test/redaktor").status_code == 200
+    assert api.post("/api/rankningar/foretagsklimat/metodbyten",
+                    json={"ar": 2026, "beskrivning": "Ny enkät"}).status_code == 201
+    assert api.get("/api/rankningar/foretagsklimat").json()["senaste"]["metodbyte"] is True
+    rankningar = {r["id"]: r for r in api.get("/api/rankningar").json()}
+    assert rankningar["foretagsklimat"]["senaste"]["metodbyte"] is True
+    assert rankningar["miljobasta-kommun"]["senaste"]["metodbyte"] is False
+    api.delete("/api/rankningar/foretagsklimat/metodbyten/2026")
+    assert api.get("/api/rankningar/foretagsklimat").json()["senaste"]["metodbyte"] is False
