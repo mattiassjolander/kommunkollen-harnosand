@@ -730,6 +730,12 @@ def _beslutar(rad: str) -> bool:
     return bool(re.fullmatch(r"[A-ZÅÄÖ][\wåäöé-]+ beslutar", rad))
 
 
+def _foreslas(rad: str) -> bool:
+    """'Skolnämnden föreslås besluta' inleder ett förslag till beslut och avslutar paragrafens rubrik (#164).
+    Förslaget är inget beslut: beslutet läses bara ur 'Skolnämnden beslutar' och 'Skolnämndens beslut'."""
+    return bool(re.fullmatch(r"[A-ZÅÄÖ][\wåäöé-]+ föreslås besluta", rad))
+
+
 # Rubriker inom en behandling som har ett nummer eller ordningstal: "Propositionsordning 2",
 # "Votering och utfall 1", "Andra voteringen".
 _NUMRERAD_RUBRIK = re.compile(
@@ -739,7 +745,8 @@ _NUMRERAD_RUBRIK = re.compile(
 
 
 def _ar_rubrik(rad: str) -> bool:
-    return rad in _RUBRIKER or _beslutsrubrik(rad) or _beslutar(rad) or bool(_NUMRERAD_RUBRIK.fullmatch(rad))
+    return (rad in _RUBRIKER or _beslutsrubrik(rad) or _beslutar(rad) or _foreslas(rad)
+            or bool(_NUMRERAD_RUBRIK.fullmatch(rad)))
 
 
 def _sidmobler(sida: str) -> list[str]:
@@ -999,6 +1006,8 @@ def _behandlingar(t: Tolkning, lop: list[str], layout: list[str] | None = None) 
             t.avvikelser.append(avvikelse)
         if beslut is None and any(_beslutsrubrik(r) or _beslutar(r) for r in kropp):
             t.avvikelser.append(f"§ {nr}: beslutet hittades inte")
+        elif beslut is None and (forslag := next((r for r in kropp if _foreslas(r)), None)):
+            t.avvikelser.append(f'§ {nr}: paragrafen har ett förslag till beslut ("{forslag}") men inget beslut')
         sektioner = _sektioner(kropp[j:])
         prop = [_lopande(s) for s in sektioner.get("propositionsordning", []) if s]
         t.behandlingar.append(Behandling(
