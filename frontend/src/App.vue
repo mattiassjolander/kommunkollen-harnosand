@@ -192,8 +192,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', tangent))
 <style scoped>
 .ram {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: var(--navbredd) 1fr;
   min-height: 100vh;
+}
+/* Sidomenyn är 220 px och 248 px från 1280 px skärmbredd, så att ingen menypost bryts över två rader (#175). */
+.ram {
+  --navbredd: 220px;
+}
+@media (min-width: 1280px) {
+  .ram {
+    --navbredd: 248px;
+  }
 }
 /* Navigeringen står still när sidan skrollar. Logotypen och användarrutan syns alltid längst ner,
    och bara länklistan skrollar om den inte får plats (design.md *Navigering*). */
