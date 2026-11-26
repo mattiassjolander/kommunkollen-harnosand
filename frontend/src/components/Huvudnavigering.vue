@@ -123,9 +123,10 @@ ul {
   background: var(--accent-wash);
   color: var(--accent);
 }
+/* Pilen är smal så att en vald huvudvy i fetstil ryms på en rad, t.ex. "Kommunen i jämförelse" (#175). */
 .pil {
   flex: none;
-  width: 32px;
+  width: 24px;
   height: 32px;
   padding: 0;
   border: 0;
