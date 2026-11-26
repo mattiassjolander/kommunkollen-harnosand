@@ -345,12 +345,29 @@ def arende_for(conn: psycopg.Connection, sammantrade_id: int, paragraf: int) -> 
     return {"id": rad["arende_id"], "antal_behandlingar": rad["antal"]} if rad else None
 
 
-_FORESLAR = re.compile(r"föreslår\s+(kommunfullmäktige|kommunstyrelsen)|förslag till (kommunfullmäktige|kommunstyrelsen)", re.I)
+# Ett organ som föreslår ett organ (#182): "Samhällsnämnden föreslår kommunstyrelsen …", "föreslår att
+# kommunfullmäktige …", "förslag till kommunfullmäktige". Protokollen skriver ibland "föreslå" för "föreslår".
+# "Som förvaltningen föreslår" och "föreslås besluta" följs inte av ett organ och är inga förslag.
+_ORGAN = r"(kommunfullmäktige|fullmäktige|kommunstyrelsen|\w*nämnden)\b"
+_FORESLAR = re.compile(rf"\bföreslår?\s+(?:att\s+)?{_ORGAN}|\bförslag\s+till\s+{_ORGAN}", re.I)
+
+
+def forslag_till(beslut: str | None) -> str | None:
+    """Organet som beslutet föreslår något, i gemener ("kommunfullmäktige", "kommunstyrelsen",
+    "samhällsnämnden"), eller None när beslutet inte är ett förslag till ett annat organ.
+
+    Den enda regeln för förslag till ett annat organ. Kommande ärenden, Motioner och medborgarförslag
+    och Slutligt beslut använder den, så att de gör samma bedömning."""
+    m = _FORESLAR.search(beslut or "")
+    if not m:
+        return None
+    organ = (m[1] or m[2]).lower()
+    return "kommunfullmäktige" if organ == "fullmäktige" else organ
 
 
 def slutligt_beslut(beslut: str | None) -> bool:
     """Ärendets senaste beslut är slutligt: det finns och är inte ett förslag till ett annat organ."""
-    return bool(beslut) and not _FORESLAR.search(beslut)
+    return bool(beslut) and forslag_till(beslut) is None
 
 
 def las_arende(conn: psycopg.Connection, arende_id: int) -> dict | None:

@@ -10,7 +10,8 @@ medborgarförslag (e-förslag). Typen räknas med publicerade rättelser pålagd
   är osäker och visas som ett förslag (ADR-0002).
 - **Besvarad** är kommunfullmäktiges beslut i sak (bifall, avslag, besvarad, delvis eller annat).
   Återremiss och bordläggning besvarar inte motionen. Ett medborgarförslag besvaras av den nämnd
-  eller styrelse som fattar beslutet i sak.
+  eller styrelse som fattar beslutet i sak. Ett förslag till ett annat organ (arenden.forslag_till)
+  besvarar det inte, men "genomförs på det sätt som förvaltningen föreslår" är ett bifall (#182).
 - **Ledtid** är dagarna från väckt till besvarad. En motion ska beredas inom ett år (kommunallagen
   5 kap. 35 §). Motioner och medborgarförslag som varit obesvarade längre än ett år, eller besvarades
   efter mer än ett år, markeras.
@@ -27,7 +28,7 @@ from datetime import date
 import psycopg
 
 from . import behandlingar, ledamoter
-from .arenden import LIKHETSGRANS, NIVA, likhet
+from .arenden import LIKHETSGRANS, NIVA, forslag_till, likhet
 from .partitillhorighet import Gallande
 from .sources.harnosand import organ_ref
 
@@ -119,7 +120,7 @@ def _forlopp(behandlingar: list[dict], idag: date, vackt: dict | None, besvarand
         if besvarande_organ is not None and b["organ"] not in besvarande_organ:
             continue
         u = utfall(b["beslut"])
-        if u in UTFALL and not (besvarande_organ is None and re.search(r"\bföreslår\b", b["beslut"] or "")):
+        if u in UTFALL and not (besvarande_organ is None and forslag_till(b["beslut"])):
             besvarad = b | {"utfall": u}
     start = vackt["datum"] if vackt else behandlingar[0]["datum"]
     slut = besvarad["datum"] if besvarad else idag

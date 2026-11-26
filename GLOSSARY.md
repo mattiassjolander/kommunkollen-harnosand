@@ -124,6 +124,9 @@ En motion som kommunfullmäktige har överlämnat till kommunstyrelsen för bere
 **Besvarad motion**:
 En motion som kommunfullmäktige har fattat beslut i sak om: bifall, avslag, besvarad eller delvis bifall. En återremiss eller bordläggning besvarar inte motionen.
 
+**Besvarat medborgarförslag**:
+Ett medborgarförslag som en nämnd eller kommunstyrelsen har fattat beslut i sak om, till exempel att e-förslaget genomförs på det sätt som förvaltningen föreslår. Ett förslag till ett annat organ besvarar det inte. Att skicka ärendet för kännedom eller till en förvaltning för avslut är inget nytt steg.
+
 **Ledtid**:
 Tiden från att en motion väcktes till att den besvarades.
 

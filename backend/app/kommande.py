@@ -10,6 +10,11 @@ att något återstår:
 - **Pågående uppdrag**: den senaste behandlingen ger någon i uppdrag att utreda, återrapportera
   eller redovisa något. Står det en tidpunkt i beslutet visas den.
 
+Ett förslag till ett annat organ är bara när ett organ föreslår ett organ (arenden.forslag_till).
+"Som förvaltningen föreslår" är inget förslag. Att skicka ärendet till någon för kännedom, till
+exempel till fullmäktiges presidium, eller till en förvaltning för avslut är inget nytt steg: det
+gör aldrig ärendet pågående och blir aldrig "Väntar på beslut" (#182).
+
 Uppskjutna ärenden, förslag och uppdrag tas bara med när den senaste behandlingen är från de
 senaste `manader` månaderna. Äldre ärenden har oftast avgjorts i en behandling som plattformen inte
 kunnat koppla. Obesvarade motioner och medborgarförslag tas alltid med, eftersom de ska besvaras
@@ -27,7 +32,7 @@ from datetime import date, timedelta
 import psycopg
 
 from . import markningar, motioner
-from .arenden import NIVA, SAMLING, las_arende
+from .arenden import NIVA, SAMLING, forslag_till, las_arende
 from .aterkommande import handelse
 from .protokoll import protokoll_for
 from .sources.harnosand import organ_ref
@@ -43,8 +48,6 @@ STATUS = {
 MANADER = 12
 
 _UTAN_ARENDE = {"formalia", "information", "interpellation"}
-_FORESLAR = re.compile(r"föreslår\s+(kommunfullmäktige|kommunstyrelsen|\S*nämnden)\b"
-                       r"|förslag till (kommunfullmäktige|kommunstyrelsen)", re.I)
 _TILL_ORGAN = {"kommunfullmäktige": "KF", "kommunstyrelsen": "KS", "samhällsnämnden": "SAM",
                "socialnämnden": "SOC", "skolnämnden": "SKOL"}
 _UPPDRAG = re.compile(r"\bi uppdrag\b|\buppdra[rs]?\b", re.I)
@@ -66,10 +69,8 @@ def frist(beslut: str | None) -> str | None:
 
 def mottagare(beslut: str | None) -> str | None:
     """Organet som ett förslag riktar sig till: 'KF', 'KS' eller en nämnd."""
-    m = _FORESLAR.search(beslut or "")
-    if not m:
-        return None
-    return _TILL_ORGAN.get((m[1] or m[2]).lower())
+    till = forslag_till(beslut)
+    return _TILL_ORGAN.get(till) if till else None
 
 
 def status_for(senaste: dict) -> str | None:
