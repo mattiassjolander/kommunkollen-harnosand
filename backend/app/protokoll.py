@@ -157,11 +157,11 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
         cur.executemany(
             """
             INSERT INTO narvaro (sammantrade_id, ordning, namn, parti, roll, kategori, tjanstgor_for,
-                                 tjanstgor_for_parti, paragrafer, jav)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                 tjanstgor_for_parti, paragrafer, jav, tom_plats)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [(sammantrade_id, i, n.namn, n.parti, n.roll, n.kategori, n.tjanstgor_for, n.tjanstgor_for_parti,
-              n.paragrafer, n.jav) for i, n in enumerate(t.narvaro)],
+              n.paragrafer, n.jav, n.tom_plats) for i, n in enumerate(t.narvaro)],
         )
     for i, b in enumerate(t.behandlingar):
         _lagra_behandling(conn, sammantrade_id, i, b)
@@ -320,7 +320,7 @@ def sok_behandlingar(
 def _narvaro(rader: list[dict]) -> list[Narvaro]:
     return [Narvaro(namn=r["namn"], parti=r["parti"], roll=r["roll"], kategori=r["kategori"],
                     tjanstgor_for=r["tjanstgor_for"], tjanstgor_for_parti=r["tjanstgor_for_parti"],
-                    paragrafer=r["paragrafer"], jav=r["jav"]) for r in rader]
+                    paragrafer=r["paragrafer"], jav=r["jav"], tom_plats=r["tom_plats"]) for r in rader]
 
 
 def _person(n: Narvaro, personer: dict[str, int]) -> dict:
@@ -329,6 +329,7 @@ def _person(n: Narvaro, personer: dict[str, int]) -> dict:
         "namn": n.namn, "parti": n.parti, "roll": n.roll, "kategori": n.kategori,
         "tjanstgor_for": {"namn": n.tjanstgor_for, "parti": n.tjanstgor_for_parti} if n.tjanstgor_for else None,
         "paragrafer": n.paragrafer, "jav": n.jav,
+        **({"tom_plats": True} if n.tom_plats else {}),  # "Tom plats för Namn" (#165)
     }
 
 

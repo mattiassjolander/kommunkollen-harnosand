@@ -257,35 +257,40 @@ def sla_ihop(conn: psycopg.Connection, huvud_id: int, annan_id: int, redaktor: s
     huvud, annan = _person(conn, huvud_id), _person(conn, annan_id)
     if huvud == annan:
         raise Konflikt("Namnen hör redan till samma person")
+    flytta(conn, huvud, annan, redaktor)
+    _uppdatera_sokindex(conn)
+    return las(conn, huvud)
+
+
+def flytta(conn: psycopg.Connection, huvud: int, annan: int, redaktor: str, automatisk: bool = False) -> None:
+    """Flyttar personen `annan`s namn till personen `huvud` och loggar det. Båda är huvudnamnens id."""
     flyttade = conn.execute(
         """
         UPDATE ledamot SET huvud_id = %(huvud)s WHERE id = %(annan)s OR huvud_id = %(annan)s
-        RETURNING id
+        RETURNING id, namn
         """,
         {"huvud": huvud, "annan": annan},
     ).fetchall()
     with conn.cursor() as cur:
         cur.executemany(
-            """INSERT INTO ledamot_handelse (typ, ledamot_id, huvud_id, tidigare_huvud_id, redaktor)
-               VALUES ('sammanslagning', %s, %s, %s, %s)""",
-            [(r["id"], huvud, annan if r["id"] != annan else None, redaktor) for r in flyttade],
+            """INSERT INTO ledamot_handelse (typ, ledamot_id, namn, huvud_id, tidigare_huvud_id, redaktor, automatisk)
+               VALUES ('sammanslagning', %s, %s, %s, %s, %s, %s)""",
+            [(r["id"], r["namn"], huvud, annan if r["id"] != annan else None, redaktor, automatisk) for r in flyttade],
         )
-    _uppdatera_sokindex(conn)
-    return las(conn, huvud)
 
 
 def dela_upp(conn: psycopg.Connection, namn_id: int, redaktor: str) -> dict:
     """Gör ett sammanslaget namn till en egen person igen."""
-    rad = conn.execute("SELECT id, huvud_id FROM ledamot WHERE id = %s", (namn_id,)).fetchone()
+    rad = conn.execute("SELECT id, namn, huvud_id FROM ledamot WHERE id = %s", (namn_id,)).fetchone()
     if rad is None:
         raise LookupError(f"Ledamoten {namn_id} finns inte")
     if rad["huvud_id"] is None:
         raise Konflikt("Namnet är inte sammanslaget med någon annan")
     conn.execute("UPDATE ledamot SET huvud_id = NULL WHERE id = %s", (namn_id,))
     conn.execute(
-        """INSERT INTO ledamot_handelse (typ, ledamot_id, huvud_id, tidigare_huvud_id, redaktor)
-           VALUES ('uppdelning', %s, NULL, %s, %s)""",
-        (namn_id, rad["huvud_id"], redaktor),
+        """INSERT INTO ledamot_handelse (typ, ledamot_id, namn, huvud_id, tidigare_huvud_id, redaktor)
+           VALUES ('uppdelning', %s, %s, NULL, %s, %s)""",
+        (namn_id, rad["namn"], rad["huvud_id"], redaktor),
     )
     _uppdatera_sokindex(conn)
     return las(conn, namn_id)

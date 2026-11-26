@@ -7,7 +7,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { plats, synligaVyer, type Huvudvy, type Undervy } from '../navigering'
 
-const props = defineProps<{ roller: readonly string[]; vantar: Partial<Record<'rattelser' | 'kopplingar', number>> }>()
+const props = defineProps<{ roller: readonly string[]; vantar: Partial<Record<'rattelser' | 'kopplingar' | 'namnvarianter', number>> }>()
 const emit = defineEmits<{ valt: [] }>()
 
 const route = useRoute()
