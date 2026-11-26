@@ -1,0 +1,52 @@
+# Dependabot (versionsuppdateringar). Säkerhetsuppdateringar är påslagna i repots inställningar och
+# kommer oberoende av schemat nedan. Uppdateringarna grupperas per ekosystem så att det blir en PR i
+# veckan per ekosystem i stället för en per paket. CI kör testerna på varje PR.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Stockholm
+    groups:
+      backend:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Stockholm
+    groups:
+      frontend:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+      timezone: Europe/Stockholm
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      timezone: Europe/Stockholm
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Basimages i Dockerfilerna. Nya huvudversioner (t.ex. Python 3.13, Node 26) tas medvetet för hand.
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Stockholm
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
