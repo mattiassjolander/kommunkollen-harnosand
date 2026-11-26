@@ -23,8 +23,9 @@ test('sidomenyn är bredare på stor skärm och "Kommunen i jämförelse" ryms p
     'true',
   )
   await expect(jamforelse).toHaveCSS('font-weight', '600')
-  await page.evaluate(() => document.fonts.ready)
-  expect((await jamforelse.boundingBox())!.height).toBe(hojd)
+  // Inter i fetstil laddas först när fet text visas. Vänta på typsnittet innan posten mäts.
+  await page.evaluate(() => document.fonts.load('600 14px Inter'))
+  await expect.poll(async () => (await jamforelse.boundingBox())!.height).toBe(hojd)
 
   // Under 1280 px är menyn kvar på 220 px.
   await page.setViewportSize({ width: 1200, height: 900 })
