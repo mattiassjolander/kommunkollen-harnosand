@@ -155,7 +155,7 @@ De fem organen har varsin färg, så att det syns vilket organ som sammanträder
 - Vänsternavigeringen listar huvudvyerna. Den står still när sidan skrollar. Logotypen, avsändartexten och användarrutan (inloggning, namn, roller) syns alltid längst ner i fönstret, och bara länklistan skrollar om den inte får plats.
 - Ordningen är *Översikt · Ekonomi · Politik och beslut · Kommunen i jämförelse · Om Kommunkollen · Redaktion*.
   - **Ekonomi:** Nyckeltal, Skatteunderlagsprognos, Budget och utfall, Ekonomiska flöden.
-  - **Politik och beslut**, med underrubriker: *Sammanträden* (Sammanträden, Kommande ärenden, Kalender), *Förtroendevalda* (Ledamöter, Sammansättning), *Dokument* (Budgetförslag, Styrande dokument) och *Uppföljning* (Statistik, Avvikelser).
+  - **Politik och beslut**, med underrubriker: *Sammanträden* (Sammanträden, Kommande ärenden, Kalender), *Förtroendevalda* (Ledamöter, Sammansättning), *Dokument* (Budgetförslag, Styrande dokument) och *Uppföljning* (Statistik, Topplistor, Avvikelser).
   - **Kommunen i jämförelse:** Rankningar, Undersökningar.
   - **Om Kommunkollen** är en diskret rad längre ner, med mindre text, och leder till Datakällor. Statusindikatorn i sidhuvudet länkar också dit.
 - En huvudvy med undervyer är en grupp. Gruppens namn leder till dess första undervy och fäller ut gruppen. Bredvid namnet står en pil, ▸ när gruppen är stängd och ▾ när den är öppen. Pilen är en knapp med `aria-expanded` och `aria-controls`. Den fäller ut eller in gruppen utan att byta sida och nås med tangentbordet. Den grupp man är i är alltid utfälld. Undervyerna är indragna länkar, och underrubrikerna står i `--ink-muted` med 12 px. Den valda undervyn markeras med `--accent-wash` och `--accent`. Det finns inga flikrader.

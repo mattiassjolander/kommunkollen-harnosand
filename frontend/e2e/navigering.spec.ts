@@ -68,6 +68,7 @@ test('menyn har grupper med pilar som fäller ut utan att byta sida (#160)', asy
     'Budgetförslag',
     'Styrande dokument',
     'Statistik',
+    'Topplistor',
     'Avvikelser',
   ])
   for (const rubrik of ['Sammanträden', 'Förtroendevalda', 'Dokument', 'Uppföljning']) {

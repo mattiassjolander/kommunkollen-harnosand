@@ -2455,3 +2455,89 @@ export const aterkallaProcess = (id: number, motivering: string) =>
   skrivSammansattning<Process>(`/api/processer/${id}/aterkallelse`, 'POST', { motivering })
 export const taStallningTillProcessteg = (id: number, steg: number) =>
   skrivSammansattning<Process>(`/api/processer/${id}/steg/${steg}/stallning`)
+
+// Topplistor per år eller mandatperiod (#163)
+
+/** En behandling som räknats i en topplista. */
+export interface Topplistebehandling {
+  sammantrade: Kortsammantrade
+  paragraf: number
+  rubrik: string
+}
+
+interface Topplisterad {
+  plats: number
+  behandlingar: Topplistebehandling[]
+}
+
+export interface Arenderad extends Topplisterad {
+  arende_id: number
+  rubrik: string
+}
+
+export interface Personrad extends Topplisterad {
+  person_id: number
+  namn: string
+  parti: string | null
+  antal: number
+}
+
+export interface Partirad {
+  /** null: partiet framgår inte av protokollet. */
+  parti: string | null
+  antal: number
+  mandat: number | null
+  per_mandat: number | null
+  behandlingar: Topplistebehandling[]
+}
+
+export interface Topplista<T> {
+  rader: T[]
+  /** Antal rader innan listan kortades till de tio första. */
+  totalt: number
+}
+
+export interface Topplistor {
+  urval: { ar: number | null; period: number | null; namn: string; fran: string; till: string }
+  val: { ar: number[]; perioder: { valar: number; namn: string }[] }
+  idag: string
+  mandat: { valar: number; period: string; totalt: number; per_parti: Record<string, number> } | null
+  underlag: {
+    sammantraden: number
+    ej_tolkade: Kortsammantrade[]
+    paragrafprotokoll: Kortsammantrade[]
+    utan_datum: number
+  }
+  listor: {
+    langsta_beredning: Topplista<Arenderad & { dagar: number; fran: string; till: string }>
+    langst_pagaende: Topplista<Arenderad & { dagar: number; fran: string; status: string }>
+    reservationer_per_parti: Topplista<Partirad>
+    reservationer_per_ledamot: Topplista<Personrad>
+    motioner_per_parti: Topplista<Partirad>
+    langsta_ledtid_motioner: Topplista<
+      Arenderad & { dagar: number; vackt: string; besvarad: string; utfall: Motionsutfall | null }
+    >
+    jamnaste_voteringar: Topplista<{
+      plats: number
+      behandling: Topplistebehandling
+      votering: number
+      antal_voteringar: number
+      ja: number
+      nej: number
+      skillnad: number
+      /** Skillnaden i procent av ja- och nejrösterna. */
+      skillnad_procent: number
+      ja_forslag: string | null
+      nej_forslag: string | null
+    }>
+    yrkanden_per_ledamot: Topplista<Personrad>
+  }
+}
+
+/** ar är ett år, eller "mandatperiod" med periodens valår. Utan ar väljs det senaste året. */
+export function hamtaTopplistor(ar?: string, period?: string): Promise<Topplistor> {
+  const p = new URLSearchParams()
+  if (ar) p.set('ar', ar)
+  if (period) p.set('period', period)
+  return hamta<Topplistor>(`/api/topplistor?${p}`)
+}

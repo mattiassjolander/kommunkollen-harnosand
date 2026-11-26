@@ -141,19 +141,7 @@ def berakna(conn: psycopg.Connection, rader: list[dict]) -> dict[int, list[dict]
             "SELECT behandling_id, personer, partier FROM reservation WHERE behandling_id = ANY(%s) ORDER BY ordning",
             (ids,)):
         reservationer[r["behandling_id"]].append(r)
-    voteringar: dict[int, list[dict]] = defaultdict(list)
-    for v in conn.execute(
-            "SELECT id, behandling_id, ordning, ja, nej FROM votering WHERE behandling_id = ANY(%s) ORDER BY ordning",
-            (ids,)):
-        voteringar[v["behandling_id"]].append(v)
-    # Voteringar utan siffror i texten räknas ur voteringslistan, med publicerade rättelser av rösterna.
-    utan_siffror = [v["id"] for vs in voteringar.values() for v in vs if v["ja"] is None or v["nej"] is None]
-    roster: dict[int, list[dict]] = defaultdict(list)
-    if utan_siffror:
-        for r in conn.execute("SELECT votering_id, namn, rost FROM rost WHERE votering_id = ANY(%s) ORDER BY ordning",
-                              (utan_siffror,)):
-            roster[r["votering_id"]].append(dict(r))
-    pub = Publicerade(conn, sammantraden) if utan_siffror else None
+    voteringar = voteringsresultat(conn, rader)
     jav: set[tuple[int, int]] = {
         (n["sammantrade_id"], p) for n in conn.execute(
             "SELECT sammantrade_id, jav FROM narvaro WHERE sammantrade_id = ANY(%s) AND cardinality(jav) > 0",
@@ -165,17 +153,8 @@ def berakna(conn: psycopg.Connection, rader: list[dict]) -> dict[int, list[dict]
         m: list[dict] = []
         vs = voteringar.get(b["id"], [])
         if vs:
-            resultat: list[tuple[int, int] | None] = []
-            for v in vs:
-                if v["ja"] is not None and v["nej"] is not None:
-                    resultat.append((v["ja"], v["nej"]))
-                elif roster.get(v["id"]):
-                    lista = [pub.rost(b["sammantrade_id"], b["paragraf"], v["ordning"] + 1, dict(r))["rost"]
-                             for r in roster[v["id"]]]
-                    resultat.append((lista.count("ja"), lista.count("nej")))
-                else:
-                    resultat.append(None)
-            m.append({"id": "votering", "text": _votering_text(resultat)})
+            m.append({"id": "votering", "text": _votering_text(
+                [(v["ja"], v["nej"]) if v["ja"] is not None else None for v in vs])})
         rs = reservationer.get(b["id"], [])
         if rs:
             m.append(_reservation(rs))
@@ -188,6 +167,46 @@ def berakna(conn: psycopg.Connection, rader: list[dict]) -> dict[int, list[dict]
         if b.get("typ") in _TYPMARKNINGAR:
             m.append({"id": b["typ"], "text": BEHANDLING[b["typ"]]})
         ut[b["id"]] = m
+    return ut
+
+
+def voteringsresultat(conn: psycopg.Connection, rader: list[dict]) -> dict[int, list[dict]]:
+    """Voteringarna per behandlings-id, i ordning, med antal ja och nej.
+
+    Siffrorna tas ur protokollets text. Anger texten dem inte räknas de ur voteringslistan, med publicerade
+    rättelser av rösterna. Saknas båda är ja och nej None. Varje votering är en dict med `ordning` (från 1),
+    `ja`, `nej`, `ja_forslag` och `nej_forslag`.
+    """
+    ids = [r["id"] for r in rader]
+    if not ids:
+        return {}
+    voteringar: dict[int, list[dict]] = defaultdict(list)
+    for v in conn.execute(
+            "SELECT id, behandling_id, ordning, ja, nej, ja_forslag, nej_forslag FROM votering "
+            "WHERE behandling_id = ANY(%s) ORDER BY ordning", (ids,)):
+        voteringar[v["behandling_id"]].append(dict(v))
+    utan_siffror = [v["id"] for vs in voteringar.values() for v in vs if v["ja"] is None or v["nej"] is None]
+    roster: dict[int, list[dict]] = defaultdict(list)
+    if utan_siffror:
+        for r in conn.execute("SELECT votering_id, namn, rost FROM rost WHERE votering_id = ANY(%s) ORDER BY ordning",
+                              (utan_siffror,)):
+            roster[r["votering_id"]].append(dict(r))
+    pub = Publicerade(conn, list({r["sammantrade_id"] for r in rader})) if utan_siffror else None
+    ut: dict[int, list[dict]] = {}
+    for b in rader:
+        resultat = []
+        for v in voteringar.get(b["id"], []):
+            ja, nej = v["ja"], v["nej"]
+            if (ja is None or nej is None) and roster.get(v["id"]):
+                lista = [pub.rost(b["sammantrade_id"], b["paragraf"], v["ordning"] + 1, dict(r))["rost"]
+                         for r in roster[v["id"]]]
+                ja, nej = lista.count("ja"), lista.count("nej")
+            elif ja is None or nej is None:
+                ja = nej = None
+            resultat.append({"ordning": v["ordning"] + 1, "ja": ja, "nej": nej,
+                             "ja_forslag": v["ja_forslag"], "nej_forslag": v["nej_forslag"]})
+        if resultat:
+            ut[b["id"]] = resultat
     return ut
 
 
