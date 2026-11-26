@@ -44,6 +44,13 @@
   --seq-2: #7fb2ee;
   --seq-3: #2f6fc0;
   --seq-4: #0d366b;
+  /* Organfärger (design.md, Organfärger): palettplats 1–5 i fast ordning, bara som kantlinje eller prick bredvid
+     förkortningen. De pekar på serietokens och får därför mörka lägets värden när serierna byter värde. */
+  --organ-kf: var(--series-1);
+  --organ-ks: var(--series-2);
+  --organ-sam: var(--series-3);
+  --organ-soc: var(--series-4);
+  --organ-skol: var(--series-5);
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;

@@ -3,10 +3,11 @@
 // Inställda sammanträden är överstrukna. Flödena går att prenumerera på i telefonen, i Google Kalender eller
 // med en kopierad länk, och varje sammanträde går att ladda ner som en .ics-fil.
 // Organ, vy, månad och valt sammanträde står i URL:en (design.md, Filter).
-import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { EjInloggad, hamtaKalender, type Kalender, type Kalenderhandelse } from '../api'
 import { sammantradesdatum } from '../format'
+import { organfarg, organforkortning } from '../organ'
 
 const route = useRoute()
 const router = useRouter()
@@ -80,23 +81,49 @@ async function kopiera() {
   }
 }
 
-// Månadsvyn: måndag först, veckor som rader.
+// Månadsvyn: måndag först, veckor som rader. På bred skärm visas 2 eller 3 månader sida vid sida (#166).
+// `manad` i URL:en är den första månaden som visas, och pilarna flyttar en månad i taget.
 const manad = computed(() => valdManad.value || idag.value.slice(0, 7))
-function flytta(steg: number) {
-  const [a, m] = manad.value.split('-').map(Number)
-  const d = new Date(Date.UTC(a, m - 1 + steg, 1))
-  valdManad.value = d.toISOString().slice(0, 7)
+function plus(manad: string, steg: number): string {
+  const [a, m] = manad.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1 + steg, 1)).toISOString().slice(0, 7)
 }
-const veckor = computed(() => {
-  const [a, m] = manad.value.split('-').map(Number)
+function flytta(steg: number) {
+  valdManad.value = plus(manad.value, steg)
+}
+const bredd2 = window.matchMedia('(min-width: 900px)')
+const bredd3 = window.matchMedia('(min-width: 1400px)')
+const antalManader = ref(1)
+function mat() {
+  antalManader.value = bredd3.matches ? 3 : bredd2.matches ? 2 : 1
+}
+mat()
+onMounted(() => {
+  bredd2.addEventListener('change', mat)
+  bredd3.addEventListener('change', mat)
+})
+onUnmounted(() => {
+  bredd2.removeEventListener('change', mat)
+  bredd3.removeEventListener('change', mat)
+})
+const visadeManader = computed(() => Array.from({ length: antalManader.value }, (_, i) => plus(manad.value, i)))
+function veckor(manad: string): (string | null)[][] {
+  const [a, m] = manad.split('-').map(Number)
   const forsta = new Date(Date.UTC(a, m - 1, 1))
   const dagar = new Date(Date.UTC(a, m, 0)).getUTCDate()
   const fore = (forsta.getUTCDay() + 6) % 7
   const celler: (string | null)[] = Array(fore).fill(null)
-  for (let d = 1; d <= dagar; d++) celler.push(`${manad.value}-${String(d).padStart(2, '0')}`)
+  for (let d = 1; d <= dagar; d++) celler.push(`${manad}-${String(d).padStart(2, '0')}`)
   while (celler.length % 7) celler.push(null)
   return Array.from({ length: celler.length / 7 }, (_, i) => celler.slice(i * 7, i * 7 + 7))
-})
+}
+// Teckenförklaringen: ett klick filtrerar på organet, ett nytt klick på samma organ tar bort filtret.
+function vaxla(organ: string) {
+  valtOrgan.value = valtOrgan.value === organ ? '' : organ
+}
+function handelsetitel(h: Kalenderhandelse): string {
+  return `${h.organ.namn}${h.starttid ? ` kl. ${h.starttid.replace(':', '.')}` : ''}${installt(h) ? ' (inställt)' : ''}`
+}
 const perDag = computed(() => {
   const m = new Map<string, Kalenderhandelse[]>()
   for (const h of handelser.value) m.set(h.datum, [...(m.get(h.datum) ?? []), h])
@@ -193,45 +220,86 @@ watch(valt, async (id) => {
       </p>
     </section>
 
-    <section v-if="vy === 'manad'" class="manadsvy" aria-labelledby="manad-rubrik" data-testid="manadsvy">
+    <section v-if="vy === 'manad'" class="manadsvy" aria-label="Månadsvy" data-testid="manadsvy">
+      <ul class="teckenforklaring" aria-label="Organ" data-testid="teckenforklaring">
+        <li v-for="f in k.floden" :key="f.organ">
+          <button
+            type="button"
+            class="organknapp"
+            :class="{ vald: valtOrgan === f.organ }"
+            :style="{ '--organ': organfarg(f.organ) }"
+            :aria-pressed="valtOrgan === f.organ"
+            :data-organ="f.organ"
+            data-testid="teckenforklaring-organ"
+            @click="vaxla(f.organ)"
+          >
+            <strong>{{ organforkortning(f.organ) }}</strong> {{ f.namn }}
+          </button>
+        </li>
+      </ul>
       <div class="manadshuvud">
         <button type="button" class="knapp" :disabled="manad <= forstaManad" aria-label="Föregående månad" @click="flytta(-1)">
           ‹
         </button>
-        <h2 id="manad-rubrik" data-testid="manadsrubrik">{{ manadsnamn(manad) }}</h2>
-        <button type="button" class="knapp" :disabled="manad >= sistaManad" aria-label="Nästa månad" @click="flytta(1)">
+        <button
+          type="button"
+          class="knapp"
+          :disabled="visadeManader.at(-1)! >= sistaManad"
+          aria-label="Nästa månad"
+          @click="flytta(1)"
+        >
           ›
         </button>
       </div>
-      <table class="manad">
-        <thead>
-          <tr>
-            <th v-for="d in ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön']" :key="d" scope="col">{{ d }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(vecka, i) in veckor" :key="i">
-            <td v-for="(dag, j) in vecka" :key="j" :class="{ tom: !dag, idag: dag === idag }" :data-dag="dag ?? undefined">
-              <template v-if="dag">
-                <span class="dagnummer">{{ Number(dag.slice(8)) }}</span>
-                <a
-                  v-for="h in perDag.get(dag) ?? []"
-                  :key="h.id"
-                  :href="`#sammantrade-${h.id}`"
-                  class="manadshandelse"
-                  :class="{ installt: installt(h) }"
-                  data-testid="manadshandelse"
-                  :data-status="h.status"
-                  @click.prevent="router.replace({ query: { ...route.query, vy: undefined, sammantrade: h.id } })"
+      <div
+        class="manader"
+        :class="{ kompakt: antalManader > 1 }"
+        :style="{ '--antal': antalManader }"
+        :data-antal="antalManader"
+      >
+        <div v-for="m in visadeManader" :key="m" class="manadsblock" data-testid="manadsblock" :data-manad="m">
+          <h2 data-testid="manadsrubrik">{{ manadsnamn(m) }}</h2>
+          <table class="manad">
+            <thead>
+              <tr>
+                <th v-for="d in ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön']" :key="d" scope="col">{{ d }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(vecka, i) in veckor(m)" :key="i">
+                <td
+                  v-for="(dag, j) in vecka"
+                  :key="j"
+                  :class="{ tom: !dag, idag: dag === idag }"
+                  :data-dag="dag ?? undefined"
                 >
-                  {{ h.organ.namn }}{{ h.starttid ? ` ${h.starttid.replace(':', '.')}` : '' }}
-                  <span v-if="installt(h)" class="visually-hidden">(inställt)</span>
-                </a>
-              </template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                  <template v-if="dag">
+                    <span class="dagnummer">{{ Number(dag.slice(8)) }}</span>
+                    <a
+                      v-for="h in perDag.get(dag) ?? []"
+                      :key="h.id"
+                      :href="`#sammantrade-${h.id}`"
+                      class="manadshandelse"
+                      :class="{ installt: installt(h) }"
+                      :style="{ '--organ': organfarg(h.organ.id) }"
+                      :title="handelsetitel(h)"
+                      data-testid="manadshandelse"
+                      :data-organ="h.organ.id"
+                      :data-status="h.status"
+                      @click.prevent="router.replace({ query: { ...route.query, vy: undefined, sammantrade: h.id } })"
+                    >
+                      <span aria-hidden="true">{{ organforkortning(h.organ.id) }}</span>
+                      <span class="visually-hidden">{{ h.organ.namn }}</span>
+                      {{ h.starttid ? h.starttid.replace(':', '.') : '' }}
+                      <span v-if="installt(h)" class="visually-hidden">(inställt)</span>
+                    </a>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <template v-else>
@@ -257,7 +325,7 @@ watch(valt, async (id) => {
                 <span class="tid">{{ tid(h) }}</span>
               </div>
               <div class="vad">
-                <strong>{{ h.organ.namn }}</strong>
+                <strong class="organnamn" :style="{ '--organ': organfarg(h.organ.id) }">{{ h.organ.namn }}</strong>
                 <span v-if="installt(h)" class="statusetikett">{{ STATUS[h.status] }}</span>
                 <span v-if="h.plats && !installt(h)" class="plats" data-testid="plats" :data-kalla="h.plats_kalla">
                   {{ h.plats }}<template v-if="h.plats_antagen"> (enligt senaste protokollet)</template>
@@ -317,7 +385,7 @@ watch(valt, async (id) => {
               <span class="tid">{{ tid(h) }}</span>
             </div>
             <div class="vad">
-              <strong>{{ h.organ.namn }}</strong>
+              <strong class="organnamn" :style="{ '--organ': organfarg(h.organ.id) }">{{ h.organ.namn }}</strong>
               <span v-if="installt(h)" class="statusetikett">{{ STATUS[h.status] }}</span>
               <span v-if="h.plats && !installt(h)" class="plats">{{ h.plats }}</span>
             </div>
@@ -506,21 +574,59 @@ h2 {
   cursor: pointer;
   font-size: 14px;
 }
+/* Organfärgen visas bara som kantlinje eller prick bredvid förkortningen eller namnet (design.md, Organfärger). */
+.teckenforklaring {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.organknapp {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--organ);
+  border-radius: var(--radius-mark);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.organknapp:hover {
+  border-color: var(--line-strong);
+  border-left-color: var(--organ);
+}
+.organknapp.vald {
+  background: var(--accent-wash);
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.organnamn {
+  border-left: 4px solid var(--organ);
+  padding-left: 8px;
+}
 .manadshuvud {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
-.manadshuvud h2 {
-  min-width: 180px;
+.manader {
+  display: grid;
+  grid-template-columns: repeat(var(--antal, 1), minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 12px;
+}
+.manadsblock h2 {
+  font-size: 15px;
   text-align: center;
-  margin: 0;
+  margin: 0 0 6px;
 }
 .manad {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  margin-top: 12px;
   font-size: 12px;
 }
 .manad th {
@@ -550,17 +656,38 @@ h2 {
   color: var(--ink-secondary);
   margin-bottom: 2px;
 }
+/* Händelserna ser inte ut som länkar: text i --ink, understruken vid hover och fokus. */
 .manadshandelse {
   display: block;
   margin-bottom: 4px;
+  padding-left: 4px;
+  border-left: 3px solid var(--organ);
   line-height: 1.3;
+  color: var(--ink);
+  text-decoration: none;
   overflow-wrap: anywhere;
+}
+.manadshandelse:hover,
+.manadshandelse:focus-visible {
+  text-decoration: underline;
 }
 .manadshandelse.installt {
   text-decoration: line-through;
   color: var(--ink-muted);
 }
+/* Flermånadsläget: lägre celler med en rad per sammanträde. En dag med fler sammanträden växer på höjden. */
+.kompakt .manad td {
+  height: 44px;
+  padding: 3px;
+}
+.kompakt .dagnummer {
+  margin-bottom: 0;
+}
+.kompakt .manadshandelse {
+  margin: 2px 0 0;
+}
 .visually-hidden {
+  white-space: nowrap;
   position: absolute;
   width: 1px;
   height: 1px;
