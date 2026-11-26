@@ -19,7 +19,8 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import arenden, avvikelser, ledamoter, markningar, partier, protokollavvikelser, sammantradesplan
+from . import (arenden, avvikelser, ledamoter, markningar, partier, protokollavvikelser, protokollgranskning,
+               kalender, sammantradesplan)
 from .kallelsepunkter import Kallelsenummer, efter_rattelser
 from .partitillhorighet import Gallande
 from .rattelser import Publicerade
@@ -167,6 +168,8 @@ def _lagra_tolkning(conn: psycopg.Connection, d: Dokument, dokument_id: int, t: 
         _lagra_behandling(conn, sammantrade_id, i, b)
     ledamoter.registrera(conn, (n.namn for n in t.narvaro if n.kategori != "ovrig"))
     protokollavvikelser.lagra(conn, sammantrade_id, dokument_id, d.typ, t.kontroller, tolkad)
+    # En granskning upphör om tolkningen ändrade någon uppgift (#176).
+    protokollgranskning.efter_tolkning(conn, sammantrade_id, tolkad)
 
 
 def _lagra_behandling(conn: psycopg.Connection, sammantrade_id: int, ordning: int, b: Behandling) -> None:
@@ -225,7 +228,9 @@ _SAMMANTRADE = """
            (SELECT min(paragraf) FROM behandling b WHERE b.sammantrade_id = s.id) AS forsta_paragraf,
            (SELECT max(paragraf) FROM behandling b WHERE b.sammantrade_id = s.id) AS sista_paragraf,
            (SELECT count(*) FROM rattelse r WHERE r.sammantrade_id = s.id AND r.status = 'publicerad'
-              AND r.felet_i = 'protokollet') AS felaktigheter
+              AND r.felet_i = 'protokollet') AS felaktigheter,
+           (SELECT g.granskad FROM protokollgranskning g
+            WHERE g.sammantrade_id = s.id AND g.status = 'gallande') AS granskad
     FROM sammantrade s
     JOIN dokument d ON d.id = s.dokument_id
     JOIN datakalla k ON k.id = d.datakalla_id
@@ -249,6 +254,8 @@ def _sammantrade(rad: dict) -> dict:
         "paragrafer": [rad["forsta_paragraf"], rad["sista_paragraf"]] if rad["forsta_paragraf"] is not None else None,
         # Publicerade rättelser av fel i själva protokollet (#74): protokollet "Innehåller felaktigheter".
         "felaktigheter": rad["felaktigheter"],
+        # Datumet då redaktionen granskade protokollet (#176), eller None. Vem som granskade visas inte.
+        "granskad": rad["granskad"].astimezone(kalender.TZ).date() if rad["granskad"] else None,
         "protokoll": {
             "dokument_id": rad["dokument_id"],
             "url": rad["dokument_url"],

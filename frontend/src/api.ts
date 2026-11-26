@@ -437,6 +437,8 @@ export interface Sammantradesrad {
   paragrafer: [number, number] | null
   /** Publicerade rättelser av fel i själva protokollet (#74). Fler än 0: "Innehåller felaktigheter". */
   felaktigheter: number
+  /** Datumet då redaktionen granskade protokollet (#176), eller null. Vem som granskade visas inte. */
+  granskad: string | null
   protokoll: Protokollkalla
 }
 
@@ -1240,6 +1242,49 @@ export const nyVersionAvRattelse = (id: number, data: { nytt?: unknown; motiveri
 /** En utgivare återkallar en publicerad rättelse direkt. Tolkningen gäller igen. */
 export const aterkallaRattelse = (id: number, motivering: string) =>
   skrivRattelse(`/api/rattelser/${id}/aterkallelse`, 'POST', { motivering }) as Promise<Rattelse>
+
+// Granskade protokoll (#176): en redaktör eller utgivare granskar hela protokollet.
+
+export interface Protokollgranskningsrad {
+  id: number
+  /** gallande, andrad (en omtolkning ändrade någon uppgift) eller aterkallad (togs tillbaka). */
+  status: 'gallande' | 'andrad' | 'aterkallad'
+  granskad_av: string
+  granskad: string
+  andrad: string | null
+  aterkallad_av: string | null
+  aterkallad: string | null
+  aterkallelse: string | null
+}
+export interface Protokollgranskning {
+  gallande: Protokollgranskningsrad | null
+  /** Den senaste granskningen upphörde för att en omtolkning ändrade någon uppgift. */
+  andrad_efter_granskning: boolean
+  kan_granskas: boolean
+  /** Rättelser som är utkast eller väntar på publicering. De spärrar granskningen. */
+  oppna_rattelser: { id: number; objekt: string; paragraf: number | null; namn: string; falt: string; status: string }[]
+  /** Avvikelser i protokollet. De ger en varning men stoppar inte granskningen. */
+  avvikelser: string[]
+  logg: Protokollgranskningsrad[]
+}
+
+async function granskningsanrop(url: string, metod = 'GET', data?: unknown): Promise<Protokollgranskning> {
+  const svar = await fetch(url, {
+    method: metod,
+    headers: data === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: data === undefined ? undefined : JSON.stringify(data),
+  })
+  if (svar.status === 401) throw new EjInloggad()
+  if (svar.status === 403) throw new Error('Kräver rollen redaktör eller utgivare.')
+  if (!svar.ok) throw new Error((await svar.json().catch(() => null))?.detail ?? `API-fel ${svar.status}`)
+  return svar.json()
+}
+export const hamtaProtokollgranskning = (sammantradeId: number) =>
+  granskningsanrop(`/api/sammantraden/${sammantradeId}/granskning`)
+export const granskaProtokoll = (sammantradeId: number) =>
+  granskningsanrop(`/api/sammantraden/${sammantradeId}/granskning`, 'POST')
+export const taTillbakaGranskning = (sammantradeId: number, motivering: string) =>
+  granskningsanrop(`/api/sammantraden/${sammantradeId}/granskning/aterkallelse`, 'POST', { motivering })
 
 // Partiernas budgetförslag (#48) mot gemensamma planförutsättningar (#58)
 

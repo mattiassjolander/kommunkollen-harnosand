@@ -1,14 +1,26 @@
 <script setup lang="ts">
 // Säkerhetsmarkering för automatiskt tolkade uppgifter (docs/design.md): plattformen har läst ut
 // uppgiften ur protokollet, men ingen redaktör har granskat den. Ett protokoll som bara innehåller
-// bilder läses med OCR (#52), och då kan även texten innehålla läsfel.
-defineProps<{ ejTolkad?: boolean; ocr?: boolean }>()
+// bilder läses med OCR (#52), och då kan även texten innehålla läsfel. Har redaktionen granskat
+// protokollet (#176) visas datumet för granskningen, men inte vem som granskade. I listor räcker `kort`.
+defineProps<{ ejTolkad?: boolean; ocr?: boolean; granskad?: string | null; kort?: boolean }>()
 </script>
 
 <template>
   <span v-if="ejTolkad" class="markering ej" data-testid="ej-tolkad" role="note">
     <span class="ikon" aria-hidden="true">!</span>
     Kunde inte tolkas automatiskt. Läs protokollet.
+  </span>
+  <span
+    v-else-if="granskad"
+    class="markering granskad"
+    data-testid="granskat-protokoll"
+    role="note"
+    :title="`Redaktionen har jämfört tolkningen med protokollet ${granskad} och inte hittat några fel.${ocr ? ' Protokollet är publicerat som bilder och texten är läst med OCR (textigenkänning).' : ''}`"
+  >
+    <span class="ikon" aria-hidden="true">✓</span>
+    <template v-if="kort">Granskad</template>
+    <template v-else>Granskad av redaktionen {{ granskad }}<template v-if="ocr"> · läst med OCR</template></template>
   </span>
   <span
     v-else-if="ocr"
@@ -47,6 +59,14 @@ defineProps<{ ejTolkad?: boolean; ocr?: boolean }>()
 .ikon {
   font-size: 11px;
   color: var(--ink-muted);
+}
+/* Granskad av en människa: hel kantlinje i stället för prickad. */
+.granskad {
+  border-style: solid;
+  color: var(--ink);
+}
+.granskad .ikon {
+  color: var(--ink-secondary);
 }
 .ej .ikon {
   display: inline-grid;

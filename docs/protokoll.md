@@ -266,6 +266,16 @@ Rättelsen sparas bredvid tolkningen och läggs på när uppgiften läses. Därf
 
 API:t: `GET /api/rattelser?status=` (redaktör eller utgivare), `POST /api/rattelser`, `PATCH` och `DELETE /api/rattelser/{id}` (redaktören som skrev utkastet), `POST /api/rattelser/{id}/granskning` och `/publicering` (utgivare). Testinloggningen tar flera roller, t.ex. `/api/auth/test/redaktor+utgivare`.
 
+## Granskade protokoll
+
+En redaktör eller utgivare kan markera ett helt protokoll som granskat (#176), efter att ha jämfört tolkningen med protokollet utan att hitta några fel. En person räcker, eftersom tolkningen är plattformens arbete och inte en människas. Läsaren ser *Granskad av redaktionen ÅÅÅÅ-MM-DD* i stället för *Automatiskt tolkad, ej granskad*, med *· läst med OCR* för ett protokoll läst med OCR. Listan över sammanträden visar *Granskad*. Vem som granskade visas bara för redaktionen.
+
+- Protokollet går inte att granska när det har rättelser som är utkast eller väntar på publicering. Avvikelserna i protokollet visas som en varning men stoppar inte granskningen. Ett protokoll som inte kunde tolkas kan inte granskas.
+- En redaktör eller utgivare kan ta tillbaka granskningen med en motivering.
+- Granskningen upphör om en omtolkning ändrar någon uppgift. Regeln är ett fingeravtryck (sha256) av tolkningen: det sparas när protokollet granskas och räknas om efter varje tolkning. Fingeravtrycket täcker sammanträdets datum, tider, plats och tolkningsstatus, sittningarna, närvarolistan och behandlingarna med yrkanden, reservationer, hänvisningar, voteringar och röster. Avvikelserna, tidpunkten för tolkningen och rättelserna ingår inte. Redaktionen ser då *Tolkningen har ändrats efter granskningen*. Ändrar omtolkningen ingenting ligger granskningen kvar.
+
+Varje granskning är en rad i `protokollgranskning`, och raderna är loggen med person och datum för granskningen, återtagandet och motiveringen. API: `GET`/`POST /api/sammantraden/{id}/granskning` och `POST /api/sammantraden/{id}/granskning/aterkallelse`, bara för redaktör och utgivare. `granskad` i API:t för sammanträdena är datumet, eller null.
+
 ## Statistik
 
 Fliken Statistik visar hur många behandlingar protokollen innehåller per år, organ och behandlingstyp, för ett valt organ och årsintervall (till exempel 2024–2025 eller 2025–2025). Organ och år speglas i adressen. Diagrammet staplar typerna per år, tabellen visar år och organ, och tabellen går att ladda ned som CSV.

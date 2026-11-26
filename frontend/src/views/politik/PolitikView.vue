@@ -96,8 +96,8 @@ const paragrafer = (s: Sammantradesrad) =>
     <h1>Sammanträden</h1>
     <p class="ingress">
       Sammanträden i kommunens beslutande organ, med närvaro och de ärenden som behandlades. Uppgifterna är automatiskt
-      lästa ur de justerade protokollen på harnosand.se och inte granskade av redaktionen. Varje uppgift länkar till
-      protokollet.
+      lästa ur de justerade protokollen på harnosand.se. Protokoll som redaktionen har jämfört med tolkningen är
+      märkta "Granskad". Varje uppgift länkar till protokollet.
     </p>
   </header>
 
@@ -199,7 +199,7 @@ const paragrafer = (s: Sammantradesrad) =>
           <td class="tal hoger">{{ s.antal_behandlingar }}</td>
           <td>
             <span class="underlag">
-              <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" />
+              <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" :granskad="s.granskad" kort />
               <Felaktighetsmarkering :sammantrade="s" />
             </span>
           </td>

@@ -102,7 +102,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
         ><template v-if="b.sittning.plats"> · {{ b.sittning.plats }}</template>
       </p>
       <p v-if="b.markningar.length" class="markningsrad"><Markningar :markningar="b.markningar" /></p>
-      <p class="markering"><Tolkningsmarkering :ocr="b.sammantrade.ocr" /></p>
+      <p class="markering"><Tolkningsmarkering :ocr="b.sammantrade.ocr" :granskad="b.sammantrade.granskad" /></p>
       <Protokollkalla :protokoll="b.sammantrade.protokoll" :paragraf="b.paragraf" />
     </header>
 
