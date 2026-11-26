@@ -19,6 +19,7 @@ import Rattelseformular from '../../components/Rattelseformular.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
+import Protokollgranskning from '../../components/Protokollgranskning.vue'
 import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
 import Avvikelsetext from '../../components/Avvikelsetext.vue'
 import Markningar from '../../components/Markningar.vue'
@@ -29,6 +30,8 @@ const router = useRouter()
 const utloggad = inject<() => void>('utloggad', () => {})
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
 const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
+// Granskningen av protokollet (#176) gör en redaktör eller utgivare.
+const kanGranska = computed(() => arRedaktor.value || (jag.value?.roller.includes('utgivare') ?? false))
 
 const s = ref<Sammantrade | null>(null)
 const laddar = ref(true)
@@ -47,6 +50,15 @@ async function ladda() {
   }
 }
 watch(() => route.params.id, ladda, { immediate: true })
+
+// Efter en granskning hämtas sammanträdet om, utan att sidan laddas om.
+async function granskningenAndrad() {
+  try {
+    s.value = await hamtaSammantrade(String(route.params.id))
+  } catch {
+    /* markeringen uppdateras vid nästa laddning */
+  }
+}
 
 const GRUPPER: { kategori: Person['kategori']; titel: string }[] = [
   { kategori: 'beslutande', titel: 'Beslutande' },
@@ -111,11 +123,13 @@ const delegation = computed(
         </template>
       </p>
       <p class="markering">
-        <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" />
+        <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" :granskad="s.granskad" />
         <Felaktighetsmarkering :sammantrade="s" />
       </p>
       <Protokollkalla :protokoll="s.protokoll" />
     </header>
+
+    <Protokollgranskning v-if="kanGranska" :sammantrade-id="s.id" @andrat="granskningenAndrad" />
 
     <section v-if="s.avvikelser.length" class="kort avvikelser" data-testid="avvikelser" aria-labelledby="avv-rubrik">
       <h2 id="avv-rubrik">Avvikelser vid tolkningen</h2>

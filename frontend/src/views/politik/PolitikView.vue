@@ -199,7 +199,7 @@ const paragrafer = (s: Sammantradesrad) =>
           <td class="tal hoger">{{ s.antal_behandlingar }}</td>
           <td>
             <span class="underlag">
-              <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" />
+              <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" :granskad="s.granskad" kort />
               <Felaktighetsmarkering :sammantrade="s" />
             </span>
           </td>

@@ -404,8 +404,12 @@ En person som godkänner en redaktörs registrering för publicering. Ingen godk
 _Avoid_: Granskare, godkännare
 
 **Automatiskt tolkad uppgift**:
-En uppgift som plattformen har läst ut ur ett protokoll utan att någon redaktör har granskat den. Den visas för läsare med en markering om att den inte är granskad.
+En uppgift som plattformen har läst ut ur ett protokoll utan att någon redaktör har granskat den. Den visas för läsare med en markering om att den inte är granskad. När redaktionen har granskat hela protokollet är det ett **granskat protokoll**, och uppgifterna visas då med datumet för granskningen.
 _Avoid_: Ogranskad uppgift, maskinuppgift
+
+**Granskat protokoll**:
+Ett protokoll där en person i redaktionen har jämfört tolkningen med protokollet och inte hittat några fel. Läsaren ser "Granskad av redaktionen" med datumet, men inte vem. En person räcker, eftersom tolkningen är plattformens arbete och inte en människas (ADR-0002). Granskningen upphör om en omtolkning ändrar någon uppgift, och den kan tas tillbaka med en motivering (#176).
+_Avoid_: Verifierat
 
 **Läst med OCR**:
 En uppgift som plattformen har läst med textigenkänning ur ett protokoll som bara innehåller bilder. Den kan innehålla läsfel utöver dem som tolkningen kan ge.

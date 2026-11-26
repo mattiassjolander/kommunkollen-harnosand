@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, motstridigheter, namnvarianter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, markningar, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, topplistor, undersokningar, uppfoljning
+from . import arenden, aterkommande, protokollgranskning, krockar, motstridigheter, namnvarianter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, markningar, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, topplistor, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -601,6 +601,34 @@ def create_app(
     def aterkalla_rattelse(rattelse_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         """Återkalla en publicerad rättelse direkt: {motivering}. Tolkningen gäller igen."""
         return _rattelse(rattelser.aterkalla, rattelse_id, data, anv.epost)
+
+    # Granskade protokoll (#176): en redaktör eller utgivare granskar hela protokollet. En person räcker.
+
+    def _granskning(steg, *args):
+        with db.connect(database_url) as conn:
+            try:
+                return steg(conn, *args)
+            except LookupError as e:
+                raise HTTPException(404, str(e)) from e
+            except protokollgranskning.Ogiltig as e:
+                raise HTTPException(422, str(e)) from e
+            except protokollgranskning.Konflikt as e:
+                raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/sammantraden/{sammantrade_id}/granskning", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
+    def las_granskning(sammantrade_id: int) -> dict:
+        """Granskningen med loggen, rättelserna som spärrar och avvikelserna att varna för."""
+        return _granskning(protokollgranskning.las, sammantrade_id)
+
+    @app.post("/api/sammantraden/{sammantrade_id}/granskning")
+    def granska_protokoll(sammantrade_id: int, anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
+        return _granskning(protokollgranskning.granska, sammantrade_id, anv.epost)
+
+    @app.post("/api/sammantraden/{sammantrade_id}/granskning/aterkallelse")
+    def ta_tillbaka_granskning(sammantrade_id: int, data: dict,
+                               anv: Anvandare = Depends(krav_roll("redaktor", "utgivare"))) -> dict:
+        """Tar tillbaka granskningen: {motivering}."""
+        return _granskning(protokollgranskning.ta_tillbaka, sammantrade_id, data, anv.epost)
 
     # Fastställd partitillhörighet per period (#100, ADR-0006): redaktören skriver, en annan person med rollen
     # utgivare granskar och publicerar. Ändras genom en ny version och kan återkallas, som en rättelse.
