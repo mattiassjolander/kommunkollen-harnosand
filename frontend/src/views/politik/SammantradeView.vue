@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch, type Ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { EjInloggad, hamtaSammantrade, Saknas, type Jag, type Person, type Sammantrade } from '../../api'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  EjInloggad,
+  hamtaSammantrade,
+  Saknas,
+  type Jag,
+  type Markningsid,
+  type Person,
+  type Sammantrade,
+} from '../../api'
 import { tidsintervall, paragraftext, parti, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
 import Kallelsemarkering from '../../components/Kallelsemarkering.vue'
@@ -13,8 +21,11 @@ import Protokollkalla from '../../components/Protokollkalla.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
 import Avvikelsetext from '../../components/Avvikelsetext.vue'
+import Markningar from '../../components/Markningar.vue'
+import Markningsfilter from '../../components/Markningsfilter.vue'
 
 const route = useRoute()
+const router = useRouter()
 const utloggad = inject<() => void>('utloggad', () => {})
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
 const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
@@ -58,6 +69,19 @@ function anteckning(p: Person): string {
   if (p.jav.length) delar.push(`Jäv ${paragraftext(p.jav)}`)
   return delar.join(' · ')
 }
+// Filtret på märkning (#162) speglas i URL:en.
+const markning = computed<Markningsid | ''>({
+  get: () => (typeof route.query.markning === 'string' ? (route.query.markning as Markningsid) : ''),
+  set: (v) => router.replace({ query: { ...route.query, markning: v || undefined }, hash: route.hash }),
+})
+const markningsantal = computed(() => {
+  const antal: Partial<Record<Markningsid, number>> = {}
+  for (const b of s.value?.behandlingar ?? []) for (const m of b.markningar) antal[m.id] = (antal[m.id] ?? 0) + 1
+  return antal
+})
+const visade = computed(
+  () => s.value?.behandlingar.filter((b) => !markning.value || b.markningar.some((m) => m.id === markning.value)) ?? [],
+)
 const tid = computed(() => (s.value ? tidsintervall(s.value.starttid, s.value.sluttid) : null))
 // Paragrafer som en sittning beslutade på delegation (#85).
 const delegation = computed(
@@ -128,8 +152,14 @@ const delegation = computed(
     <section class="kort" aria-labelledby="beh-rubrik">
       <h2 id="beh-rubrik">Behandlingar</h2>
       <p v-if="!s.behandlingar.length" class="ingress">Inga behandlingar kunde läsas ur protokollet.</p>
+      <div v-else class="filterrad">
+        <Markningsfilter v-model="markning" :antal="markningsantal" />
+        <p v-if="markning" class="antal-visade" data-testid="antal-visade">
+          {{ visade.length }} av {{ s.behandlingar.length }} behandlingar
+        </p>
+      </div>
       <ol class="behandlingar" data-testid="behandlingar">
-        <li v-for="b in s.behandlingar" :key="b.paragraf" data-testid="behandling" :data-paragraf="b.paragraf">
+        <li v-for="b in visade" :key="b.paragraf" data-testid="behandling" :data-paragraf="b.paragraf">
           <RouterLink :to="`/politik/sammantraden/${s.id}/paragraf/${b.paragraf}`" class="paragraf">
             <span class="nr">§ {{ b.paragraf }}</span>
             <span class="rubrik">{{ b.rubrik || 'Rubrik saknas' }}</span>
@@ -139,10 +169,7 @@ const delegation = computed(
           </span>
           <span v-if="b.diarienummer.length" class="dnr">{{ b.diarienummer.join(', ') }}</span>
           <Kallelsemarkering v-if="b.diarienummer_kallelse" :kalla="b.diarienummer_kallelse" />
-          <span v-if="b.antal_voteringar" class="etikett" data-testid="har-votering">
-            {{ b.antal_voteringar > 1 ? `${b.antal_voteringar} voteringar` : 'Votering' }}
-          </span>
-          <span v-if="b.antal_reservationer" class="etikett" data-testid="har-reservation">Reservation</span>
+          <Markningar :markningar="b.markningar" class="chips" />
           <span v-if="delegation.has(b.paragraf)" class="etikett" data-testid="pa-delegation">
             Beslut av {{ delegation.get(b.paragraf) }} på delegation
           </span>
@@ -251,6 +278,20 @@ const delegation = computed(
   margin: 12px 0 0;
   padding-left: 20px;
   font-size: 13px;
+}
+.filterrad {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.antal-visade {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.chips {
+  margin-left: 8px;
 }
 .behandlingar {
   list-style: none;

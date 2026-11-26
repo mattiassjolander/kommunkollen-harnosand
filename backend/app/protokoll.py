@@ -19,7 +19,7 @@ from datetime import date, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import arenden, avvikelser, ledamoter, partier, protokollavvikelser, sammantradesplan
+from . import arenden, avvikelser, ledamoter, markningar, partier, protokollavvikelser, sammantradesplan
 from .kallelsepunkter import Kallelsenummer, efter_rattelser
 from .partitillhorighet import Gallande
 from .rattelser import Publicerade
@@ -379,6 +379,9 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
     pub = Publicerade(conn, [sammantrade_id])
     kn = Kallelsenummer(conn, [sammantrade_id])
     gal = Gallande(conn, [x for n in narvaro for x in (n.namn, n.tjanstgor_for)])
+    rattade = [efter_rattelser(pub.behandling(sammantrade_id, kn.satt(sammantrade_id, _behandling(b))))
+               for b in behandlingar]
+    _med_markningar(conn, sammantrade_id, behandlingar, rattade)
     return _sammantrade(rad) | {
         "narvaro": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal, [_person(n, personer) for n in narvaro]),
         # Bara när protokollet har flera sittningar (#85): var och en med sina beslutande.
@@ -388,9 +391,17 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
                 [_person(n, personer) for n in beslutande_i(narvaro, x["paragrafer"])])}
             for i, x in enumerate(_las_sittningar(conn, sammantrade_id))
         ],
-        "behandlingar": [efter_rattelser(pub.behandling(sammantrade_id, kn.satt(sammantrade_id, _behandling(b))))
-                         for b in behandlingar],
+        "behandlingar": rattade,
     }
+
+
+def _med_markningar(conn: psycopg.Connection, sammantrade_id: int, rader: list[dict], rattade: list[dict]) -> None:
+    """Märkningarna (#162) på de rättade behandlingarna, räknade med de rättade besluten och typerna."""
+    per = markningar.berakna(conn, [
+        {"id": b["id"], "sammantrade_id": sammantrade_id, "paragraf": r["paragraf"], "beslut": r["beslut"],
+         "typ": r.get("typ")} for b, r in zip(rader, rattade)])
+    for b, r in zip(rader, rattade):
+        r["markningar"] = per.get(b["id"], [])
 
 
 def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int) -> dict | None:
@@ -418,6 +429,7 @@ def las_behandling(conn: psycopg.Connection, sammantrade_id: int, paragraf: int)
     gal = Gallande(conn, [x for n in narvaro for x in (n.namn, n.tjanstgor_for)])
     behandling = efter_rattelser(pub.behandling(
         sammantrade_id, Kallelsenummer(conn, [sammantrade_id]).satt(sammantrade_id, _behandling(b))))
+    _med_markningar(conn, sammantrade_id, [b], [behandling])
     return behandling | _yrkanden_och_voteringar(conn, b, pub, rad["datum"]) | {
         "sammantrade": _sammantrade(rad),
         "beslutande": _med_parti(conn, sammantrade_id, rad["datum"], pub, gal,

@@ -329,6 +329,8 @@ def _beh(r: dict) -> dict:
     }
     if "rattelser" in r:
         b["rattelser"] = r["rattelser"]
+    if "markningar" in r:
+        b["markningar"] = r["markningar"]  # (#162)
     return b
 
 
@@ -346,10 +348,18 @@ def arende_for(conn: psycopg.Connection, sammantrade_id: int, paragraf: int) -> 
 _FORESLAR = re.compile(r"föreslår\s+(kommunfullmäktige|kommunstyrelsen)|förslag till (kommunfullmäktige|kommunstyrelsen)", re.I)
 
 
+def slutligt_beslut(beslut: str | None) -> bool:
+    """Ärendets senaste beslut är slutligt: det finns och är inte ett förslag till ett annat organ."""
+    return bool(beslut) and not _FORESLAR.search(beslut)
+
+
 def las_arende(conn: psycopg.Connection, arende_id: int) -> dict | None:
     if not conn.execute("SELECT 1 FROM arende WHERE id = %s", (arende_id,)).fetchone():
         return None
-    behandlingslista = [_beh(r) for r in behandlingar.las(conn, arende=arende_id)]
+    from . import markningar  # markningar läser SAMLING och slutligt_beslut härifrån
+
+    rader = markningar.las(conn, arende=arende_id)
+    behandlingslista = [_beh(r) for r in rader]
     # Alla kopplingar som rör ärendets behandlingar, också förslag och avvisade kopplingar till andra ärenden.
     medlem = "IN (SELECT sammantrade_id, paragraf FROM arende_behandling WHERE arende_id = %(a)s)"
     kopplingar = _kopplingar(
@@ -358,13 +368,15 @@ def las_arende(conn: psycopg.Connection, arende_id: int) -> dict | None:
     diarienummer = list(dict.fromkeys(d for b in behandlingslista for d in b["diarienummer"]))
     # Slutligt beslut: det senaste beslutet, om det inte är ett förslag till ett annat organ.
     sista = behandlingslista[-1] if behandlingslista else None
-    slutligt = sista if sista and sista["beslut"] and not _FORESLAR.search(sista["beslut"]) else None
+    slutligt = sista if sista and slutligt_beslut(sista["beslut"]) else None
     return {
         "id": arende_id,
         "rubrik": sista["rubrik"] if sista else None,
         "diarienummer": diarienummer,
         "behandlingar": behandlingslista,
         "kopplingar": kopplingar,
+        # Summan av behandlingarnas märkningar, lång beredning och återkommande (#162).
+        "markningar": markningar.for_arende(rader),
         "slutligt_beslut": {"sammantrade_id": slutligt["sammantrade"]["id"], "paragraf": slutligt["paragraf"],
                             "organ": slutligt["sammantrade"]["organ"], "datum": slutligt["sammantrade"]["datum"],
                             "beslut": slutligt["beslut"]} if slutligt else None,

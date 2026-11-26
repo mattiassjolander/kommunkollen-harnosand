@@ -8,6 +8,7 @@ import { sammantradesdatum } from '../../format'
 import Kallelsemarkering from '../../components/Kallelsemarkering.vue'
 import Kopplingsmarkering from '../../components/Kopplingsmarkering.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
+import Markningar from '../../components/Markningar.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -81,6 +82,9 @@ const ovriga = computed(() =>
         Ett ärende kan få nya diarienummer när det går vidare till ett annat organ. Behandlingarna kopplas ihop via
         diarienummer och via hänvisningar i beslutsunderlaget.
       </p>
+      <p v-if="a.markningar.length" class="markningsrad" data-testid="arendets-markningar">
+        <Markningar :markningar="a.markningar" />
+      </p>
       <p class="markering"><Tolkningsmarkering /></p>
     </header>
 
@@ -127,6 +131,7 @@ const ovriga = computed(() =>
           <RouterLink :to="lank(b.sammantrade, b.paragraf)" class="stegrubrik">
             § {{ b.paragraf }} {{ b.rubrik }}
           </RouterLink>
+          <Markningar :markningar="b.markningar" class="stegchips" />
           <p v-if="b.diarienummer.length" class="anteckning">
             Diarienummer {{ b.diarienummer.join(', ') }}
             <Kallelsemarkering v-if="b.diarienummer_kallelse" :kalla="b.diarienummer_kallelse" />
@@ -161,6 +166,12 @@ const ovriga = computed(() =>
 </template>
 
 <style scoped>
+.markningsrad {
+  margin: 8px 0 0;
+}
+.stegchips {
+  margin-left: 8px;
+}
 .beslutslank {
   font-size: 12px;
   margin-left: 8px;

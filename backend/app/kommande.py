@@ -26,7 +26,7 @@ from datetime import date, timedelta
 
 import psycopg
 
-from . import motioner
+from . import markningar, motioner
 from .arenden import NIVA, SAMLING, las_arende
 from .aterkommande import handelse
 from .protokoll import protokoll_for
@@ -92,7 +92,7 @@ def _ref(b: dict) -> dict:
 
 def kommande(conn: psycopg.Connection, manader: int = MANADER, idag: date | None = None) -> dict:
     idag = idag or date.today()
-    rader = motioner.daterade(conn)
+    rader = markningar.satt(conn, motioner.daterade(conn))
     return berakna(rader, manader, idag)
 
 
@@ -163,15 +163,21 @@ def berakna(rader: list[dict], manader: int, idag: date) -> dict:
             "diarienummer": list(dict.fromkeys(d for b in bs for d in b["diarienummer"])),
             "antal_behandlingar": len(bs),
             "senaste": _ref(senaste),
+            # Summan av behandlingarnas märkningar, med lång beredning och återkommande (#162).
+            "markningar": markningar.for_arende(bs),
         })
     ut.sort(key=lambda p: p["senaste"]["sammantrade"]["datum"], reverse=True)
     antal = {s: 0 for s in STATUS}
     for p in ut:
         antal[p["status"]] += 1
+    finns = {m["id"] for p in ut for m in p["markningar"]}
     return {
         "idag": idag,
         "manader": manader,
         "statusar": [{"id": s, "namn": n, "antal": antal[s]} for s, n in STATUS.items()],
+        # Märkningarna som finns bland ärendena, för filtret (#162).
+        "markningar": [{"id": m, "namn": n, "antal": sum(1 for p in ut if any(x["id"] == m for x in p["markningar"]))}
+                       for m, n in markningar.MARKNINGAR.items() if m in finns],
         "arenden": ut,
     }
 

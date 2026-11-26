@@ -490,6 +490,46 @@ export interface Diarienummerkallelse {
   sida: number | null
 }
 
+// Märkningar (#162): regelbaserade uppgifter om en behandling eller ett ärende, utlästa ur protokollet.
+
+export type Markningsid =
+  | 'votering'
+  | 'reservation'
+  | 'oenighet'
+  | 'aterremitterad'
+  | 'bordlagd'
+  | 'jav'
+  | 'motion'
+  | 'medborgarforslag'
+  | 'interpellation'
+  | 'lang_beredning'
+  | 'aterkommande'
+
+export interface Markning {
+  id: Markningsid
+  /** Det som står på chipet, t.ex. "Votering 26–24" eller "Reservation C, M". */
+  text: string
+  /** Reservationens partier, alfabetiskt efter förkortning. */
+  partier?: string[]
+  /** På ett ärende: antalet behandlingar med märkningen. */
+  antal?: number
+}
+
+/** Märkningarna i visningsordning. Lång beredning och Återkommande finns bara på ärenden. */
+export const MARKNINGAR: { id: Markningsid; namn: string; arende?: true }[] = [
+  { id: 'votering', namn: 'Votering' },
+  { id: 'reservation', namn: 'Reservation' },
+  { id: 'oenighet', namn: 'Oenighet' },
+  { id: 'aterremitterad', namn: 'Återremitterad' },
+  { id: 'bordlagd', namn: 'Bordlagd' },
+  { id: 'jav', namn: 'Jäv' },
+  { id: 'motion', namn: 'Motion' },
+  { id: 'medborgarforslag', namn: 'Medborgarförslag' },
+  { id: 'interpellation', namn: 'Interpellation eller fråga' },
+  { id: 'lang_beredning', namn: 'Lång beredning', arende: true },
+  { id: 'aterkommande', namn: 'Återkommande', arende: true },
+]
+
 export interface Behandlingsrad {
   paragraf: number
   rubrik: string
@@ -508,6 +548,8 @@ export interface Behandlingsrad {
   antal_reservationer?: number
   /** Publicerade rättelser av rubrik, beslut, diarienummer och typ. */
   rattelser?: Rattelser
+  /** Votering, reservation, oenighet m.fl. (#162), med publicerade rättelser pålagda. */
+  markningar: Markning[]
 }
 
 export type Behandlingstyp =
@@ -963,6 +1005,8 @@ export interface Ledamot {
     nej_forslag: string | null
     vinnare: 'ja' | 'nej' | null
     resultat: string | null
+    /** Behandlingens märkningar (#162). */
+    markningar: Markning[]
   }[]
 }
 
@@ -1023,8 +1067,11 @@ export interface Arende {
     diarienummer: string[]
     diarienummer_kallelse?: Diarienummerkallelse | null
     beslut: string | null
+    markningar: Markning[]
   })[]
   kopplingar: Koppling[]
+  /** Summan av behandlingarnas märkningar, med Lång beredning och Återkommande (#162). */
+  markningar: Markning[]
   /** Det senaste beslutet, om det inte är ett förslag till ett annat organ. */
   slutligt_beslut: { sammantrade_id: number; paragraf: number; organ: Organ; datum: string | null; beslut: string } | null
 }
@@ -1598,12 +1645,16 @@ export interface Kommandearende {
   diarienummer: string[]
   antal_behandlingar: number
   senaste: Behandlingsref & { beslut: string | null }
+  /** Ärendets märkningar (#162). */
+  markningar: Markning[]
 }
 
 export interface Kommande {
   idag: string
   manader: number
   statusar: { id: Kommandestatus; namn: string; antal: number }[]
+  /** Märkningarna bland ärendena, med antal ärenden (#162). */
+  markningar: { id: Markningsid; namn: string; antal: number }[]
   arenden: Kommandearende[]
 }
 
@@ -2115,6 +2166,8 @@ export interface Soktraff {
   dokument: string | null
   sida: number | null
   markeringar: Sokmarkering[]
+  /** Behandlingens eller ärendets märkningar (#162). Tom för andra träffar. */
+  markningar: Markning[]
   utdrag: { text: string; markerad: boolean }[]
   /** Träffen kommer bara från vektorsökningen (#69): den innehåller inte sökorden. */
   betydelse: boolean
@@ -2138,6 +2191,8 @@ export interface Sokfilter {
   typ?: Soktyp
   sortering?: Soksortering
   sida?: number
+  /** Bara behandlingar och ärenden med märkningen (#162). Söktexten får då vara tom. */
+  markning?: Markningsid
 }
 
 export class ForManga extends Error {}
@@ -2149,6 +2204,7 @@ export async function sok(f: Sokfilter): Promise<Soksvar> {
   if (f.typ) p.set('typ', f.typ)
   if (f.sortering && f.sortering !== 'relevans') p.set('sortering', f.sortering)
   if (f.sida && f.sida > 1) p.set('sida', String(f.sida))
+  if (f.markning) p.set('markning', f.markning)
   const svar = await fetch(`/api/sok?${p}`)
   if (svar.status === 401) throw new EjInloggad()
   if (svar.status === 429) throw new ForManga('För många sökningar på kort tid. Vänta en stund och försök igen.')

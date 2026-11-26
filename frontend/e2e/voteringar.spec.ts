@@ -13,9 +13,9 @@ test('votering per parti och per ledamot, med yrkanden och reservationer', async
   await page.goto('/politik?organ=KF')
   await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('rowheader').getByRole('link').click()
   const rad = page.locator('[data-testid="behandling"][data-paragraf="5"]')
-  await expect(rad.getByTestId('har-votering')).toHaveText('Votering')
-  await expect(rad.getByTestId('har-reservation')).toBeVisible()
-  await rad.getByRole('link').click()
+  await expect(rad.locator('[data-markning="votering"]')).toHaveText('Votering 37–6')
+  await expect(rad.locator('[data-markning="reservation"]')).toBeVisible()
+  await rad.getByRole('link').first().click()
   await expect(page).toHaveURL(/\/paragraf\/5$/)
 
   await expect(page.getByTestId('yrkande').first()).toBeVisible()

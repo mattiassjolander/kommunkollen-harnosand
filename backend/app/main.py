@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import arenden, aterkommande, krockar, motstridigheter, namnvarianter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
+from . import arenden, aterkommande, krockar, motstridigheter, namnvarianter, partiforslag, processer, partitillhorighet, auth, avvikelser, protokollavvikelser, budgetforslag, db, planforutsattningar, rankningar, rattelser, ekonomi, floden, ledamoter, motionarer, motioner, kalender, kommande, markningar, protokoll, resultatbro, sammansattning, sammantradesplan, serier, skatteunderlag, sokindex, sokvektorer, statistik, status, styrande_dokument, undersokningar, uppfoljning
 from .behandlingstyper import TYPER
 from .auth import Anvandare, Inloggning, krav_roll
 from .insamling import InsamlingPagar, kor_insamling
@@ -309,14 +309,18 @@ def create_app(
     @app.get("/api/sok", dependencies=[Depends(krav_roll("lasare"))])
     def sok(
         request: Request,
-        q: str,
+        q: str = "",
         organ: str | None = None,
         ar: int | None = None,
         typ: str | None = Query(None, pattern=f"^({'|'.join(sokindex.TYPER)})$"),
         sortering: str = Query("relevans", pattern="^(relevans|datum)$"),
         sida: int = Query(1, ge=1, le=50),
+        markning: str | None = Query(None, pattern=f"^({'|'.join(markningar.MARKNINGAR)})$"),
     ) -> dict:
         """Sök i behandlingar, protokollsidor, budgetförslag, ärenden, ledamöter och kallelsepunkter.
+
+        Med `markning` bara behandlingar och ärenden med märkningen (#162). Då kan söktexten vara tom, och
+        svaret är alla med märkningen, t.ex. alla behandlingar med votering ett år.
 
         Högst 30 frågor per minut och IP-adress. Svaret är träffar i källorna, aldrig ett genererat svar (ADR-0002).
         """
@@ -324,13 +328,14 @@ def create_app(
         if vanta is not None:
             raise HTTPException(429, "För många sökningar på kort tid. Vänta en stund och försök igen.",
                                 headers={"Retry-After": str(max(1, math.ceil(vanta)))})
-        if len(q.strip()) < 2:
+        if len(q.strip()) < 2 and not (markning and not q.strip()):
             raise HTTPException(422, "Söktexten behöver vara minst två tecken")
         if organ is not None and organ not in ORGAN:
             raise HTTPException(422, f"Organet {organ} finns inte")
         start = time.perf_counter()
         with db.connect(database_url) as conn:
-            svar = sokindex.sok(conn, q, organ=organ, ar=ar, typ=typ, sortering=sortering, sida=sida)
+            svar = sokindex.sok(conn, q, organ=organ, ar=ar, typ=typ, sortering=sortering, sida=sida,
+                                markning=markning)
         soklogg.info("Sökning: %d träffar på %.0f ms", svar["antal"], (time.perf_counter() - start) * 1000)
         return svar
 
@@ -853,6 +858,9 @@ def create_app(
     def ledamot(ledamot_id: int) -> dict:
         with db.connect(database_url) as conn:
             resultat = ledamoter.las(conn, ledamot_id)
+            if resultat is not None:
+                # Märkningarna på behandlingarna där ledamoten röstade (#162).
+                markningar.satt_pa_paragrafer(conn, resultat["roster"])
         if resultat is None:
             raise HTTPException(404, f"Ledamoten {ledamot_id} finns inte")
         return resultat

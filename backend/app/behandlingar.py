@@ -40,13 +40,14 @@ def las(
     till: int | None = None,
     organ: str | None = None,
     arende: int | None = None,
+    arenden: list[int] | None = None,
     rubrik: str | None = None,
     sammantraden: list[int] | None = None,
 ) -> list[dict]:
     """Behandlingarna med publicerade rättelser.
 
     fran och till är år (båda inräknade) och utesluter sammanträden utan datum. organ är organets id,
-    arende ett ärendes id, rubrik ett reguljärt uttryck (skiftlägesokänsligt) för den tolkade rubriken
+    arende ett ärendes id, arenden en lista med ärendens id, rubrik ett reguljärt uttryck (skiftlägesokänsligt) för den tolkade rubriken
     och sammantraden en lista med sammanträdens id.
     """
     villkor = []
@@ -60,6 +61,8 @@ def las(
         villkor.append("s.organ = %(organ)s")
     if arende is not None:
         villkor.append("a.arende_id = %(arende)s")
+    if arenden is not None:
+        villkor.append("a.arende_id = ANY(%(arenden)s)")
     if rubrik is not None:
         villkor.append("b.rubrik ~* %(rubrik)s")
     where = f"WHERE {' AND '.join(villkor)}" if villkor else ""
@@ -73,7 +76,7 @@ def las(
         {where}
         ORDER BY b.sammantrade_id, b.paragraf, b.ordning
         """,
-        {"fran": fran, "till": till, "organ": organ, "arende": arende, "rubrik": rubrik,
+        {"fran": fran, "till": till, "organ": organ, "arende": arende, "arenden": arenden, "rubrik": rubrik,
          "sammantraden": sammantraden},
     ).fetchall()
     sammantraden = list({r["sammantrade_id"] for r in rader})

@@ -206,6 +206,16 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 | Ofullständigt underlag | Grå skraffering och texten "Ofullständigt underlag" |
 | Saknas | Tomt med texten "Uppgift saknas", aldrig noll |
 
+## Märkningar
+
+Märkningar (#162) är regelbaserade uppgifter om en behandling eller ett ärende, till exempel votering eller reservation (se GLOSSARY.md). De visas som små chips där behandlingar och ärenden listas: på sammanträdet, behandlingen, ärendet, ledamotens röster, Kommande ärenden och träffarna i Sök.
+
+- Chipet är 11 px text med hörnradie 4 px. Texten står alltid på chipet, t.ex. "Votering 26–24" eller "Reservation C, M", så färgen bär aldrig betydelse ensam.
+- **Votering**, **Reservation** och **Oenighet** har var sin dämpade, neutrala ton (`--markning-votering`, `--markning-reservation`, `--markning-oenighet`) med texten i `--ink`. Övriga märkningar (Återremitterad, Bordlagd, Jäv, behandlingstypen, Lång beredning och Återkommande) är konturchips med `--line-strong` och texten i `--ink-secondary`.
+- Inga partifärger, inte heller när reservationen anger partier. Partierna står som förkortningar, alfabetiskt.
+- På ett ärende har en märkning som finns vid flera behandlingar antalet, "Votering (2)".
+- Filtret *Märkning* ligger i filterraden ovanför listan och speglas i URL:en (`markning=`).
+
 ## Ton i text
 
 - Saklig och beskrivande. Skriv vad datan visar, inte vad läsaren ska tycka.

@@ -54,6 +54,10 @@
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;
+  /* Märkningar (design.md, Märkningar, #162): dämpade, neutrala toner bakom texten. Inga partifärger. */
+  --markning-votering: #e6e4dc;
+  --markning-reservation: #e1e5ea;
+  --markning-oenighet: #ede4d8;
 
   /* Partifärger: bara som liten markering bredvid förkortningen (design.md, Partifärger). */
   --parti-s: #e8112d;
@@ -105,6 +109,9 @@
     --seq-3: #5a9be0;
     --seq-4: #a9cdf5;
     --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --markning-votering: #302f2b;
+    --markning-reservation: #2a2e33;
+    --markning-oenighet: #342e27;
   }
 }
 
@@ -141,6 +148,9 @@
   --seq-3: #5a9be0;
   --seq-4: #a9cdf5;
   --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --markning-votering: #302f2b;
+  --markning-reservation: #2a2e33;
+  --markning-oenighet: #342e27;
 }
 
 *,

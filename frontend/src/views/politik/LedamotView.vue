@@ -11,6 +11,7 @@ import {
   type Jag,
   type Ledamot,
   type Ledamotsrad,
+  type Markningsid,
 } from '../../api'
 import { namnOchParti, paragraftext, rosttext, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
@@ -19,6 +20,8 @@ import Partimarkering from '../../components/Partimarkering.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Periodformular from '../../components/Periodformular.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
+import Markningar from '../../components/Markningar.vue'
+import Markningsfilter from '../../components/Markningsfilter.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +30,20 @@ const jag = inject<Ref<Jag | null>>('jag', ref(null))
 const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
 
 const l = ref<Ledamot | null>(null)
+
+// Filtret på behandlingarnas märkning (#162) speglas i URL:en.
+const markning = computed<Markningsid | ''>({
+  get: () => (typeof route.query.markning === 'string' ? (route.query.markning as Markningsid) : ''),
+  set: (v) => router.replace({ query: { ...route.query, markning: v || undefined } }),
+})
+const markningsantal = computed(() => {
+  const antal: Partial<Record<Markningsid, number>> = {}
+  for (const r of l.value?.roster ?? []) for (const m of r.markningar) antal[m.id] = (antal[m.id] ?? 0) + 1
+  return antal
+})
+const roster = computed(
+  () => l.value?.roster.filter((r) => !markning.value || r.markningar.some((m) => m.id === markning.value)) ?? [],
+)
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 
@@ -293,7 +310,11 @@ const delaUpp = (namn: { id: number; namn: string }) =>
       <h2 id="rost-rubrik">Röster i voteringar <span class="antal">({{ l.roster.length }})</span></h2>
       <p class="ingress">Som voteringslistorna i protokollen anger det. Beslut utan votering syns inte här.</p>
       <p v-if="!l.roster.length" class="anteckning">Personen finns inte i någon voteringslista.</p>
-      <table v-else class="tabell">
+      <div v-else class="filterrad">
+        <Markningsfilter v-model="markning" :antal="markningsantal" />
+        <p v-if="markning" class="anteckning" data-testid="antal-visade">{{ roster.length }} av {{ l.roster.length }} röster</p>
+      </div>
+      <table v-if="l.roster.length" class="tabell">
         <thead>
           <tr>
             <th scope="col">Sammanträde</th>
@@ -305,7 +326,7 @@ const delaUpp = (namn: { id: number; namn: string }) =>
         </thead>
         <tbody>
           <tr
-            v-for="(r, i) in l.roster"
+            v-for="(r, i) in roster"
             :key="i"
             data-testid="ledamotens-rost"
             :data-datum="r.sammantrade.datum"
@@ -320,6 +341,7 @@ const delaUpp = (namn: { id: number; namn: string }) =>
                 § {{ r.paragraf }} {{ r.rubrik }}
               </RouterLink>
               <span v-if="r.antal_voteringar > 1" class="anteckning"> · votering {{ r.votering }} av {{ r.antal_voteringar }}</span>
+              <Markningar :markningar="r.markningar" class="chips" />
             </th>
             <td><Partimarkering :parti="r.parti" /><Periodmarkering v-if="r.partitillhorighet" :period="r.partitillhorighet" /></td>
             <td>
@@ -366,6 +388,20 @@ const delaUpp = (namn: { id: number; namn: string }) =>
 </template>
 
 <style scoped>
+.filterrad {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin: 12px 0;
+}
+.filterrad .anteckning {
+  margin: 0;
+}
+.chips {
+  display: flex;
+  margin-top: 4px;
+  font-weight: 400;
+}
 .brodsmulor {
   display: flex;
   gap: 8px;

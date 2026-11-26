@@ -16,7 +16,8 @@ källa: en funktion som ger enheterna med deras text. En ny typ läggs till med 
   sidan (#63). Texten lästes när versionen lagrades. Ett borttaget dokument har inga sidor i indexet.
 
 Enheterna innehåller den gällande versionen: behandlingar och ärenden läses med de publicerade rättelserna
-pålagda (`behandlingar.las`). Varje enhet har markeringarna som sidan den länkar till visar.
+pålagda (`behandlingar.las`). Varje enhet har markeringarna som sidan den länkar till visar. Behandlingar och
+ärenden har också sina märkningar (#162, `markningar`), som sökningen kan filtrera på.
 
 En enhet skrivs bara om när dess text eller visning ändrats (`sha256` på texten). Indexet uppdateras i
 insamlingen, efter omtolkning och när rättelser publiceras eller återkallas. Kommandot bygger ut indexet
@@ -45,8 +46,9 @@ from typing import Callable, Iterable, Iterator
 from xml.etree import ElementTree
 
 import psycopg
+from psycopg.types.json import Jsonb
 
-from . import behandlingar, protokolltolkning, sokvektorer
+from . import markningar as markningsregler, protokolltolkning, sokvektorer
 from .sources.harnosand import ORGAN
 
 logger = logging.getLogger(__name__)
@@ -77,6 +79,7 @@ class Enhet:
     sida: int | None = None
     markeringar: list[str] = field(default_factory=list)
     exakt: list[str] = field(default_factory=list)
+    markningar: list[dict] = field(default_factory=list)
 
     @property
     def sha256(self) -> str:
@@ -84,7 +87,7 @@ class Enhet:
 
     def visning(self) -> tuple:
         return (self.sammantrade_id, self.rubrik, self.undertitel, self.organ, self.datum, self.ar, self.lank,
-                self.dokument, self.sida, list(self.markeringar), list(self.exakt))
+                self.dokument, self.sida, list(self.markeringar), list(self.exakt), list(self.markningar))
 
 
 @dataclass
@@ -212,7 +215,7 @@ def _sammantraden(conn: psycopg.Connection, omf: Omfang) -> dict[int, dict]:
 
 def _behandlingar(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
     sammantraden = _sammantraden(conn, omf)
-    rader = behandlingar.las(conn, sammantraden=omf.sammantraden)
+    rader = markningsregler.las(conn, sammantraden=omf.sammantraden)
     extra = {r["id"]: r for r in conn.execute(
         """
         SELECT b.id, b.paragraftext,
@@ -248,7 +251,7 @@ def _behandlingar(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
             text_c=x.get("paragraftext") or "",
             sammantrade_id=b["sammantrade_id"], organ=b["organ"], datum=b["datum"], ar=_ar(b["datum"]),
             dokument=f"/api/dokument/{s['dokument_id']}" + (f"#page={sida}" if sida else ""), sida=sida,
-            markeringar=markeringar, exakt=[normalisera(d) for d in b["diarienummer"]],
+            markeringar=markeringar, exakt=[normalisera(d) for d in b["diarienummer"]], markningar=b["markningar"],
         ))
     yield Grupp("", enheter)
 
@@ -310,7 +313,7 @@ def _budgetforslag(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
 
 def _arenden(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
     per_arende: dict[int, list[dict]] = {}
-    for b in behandlingar.las(conn):  # i ärendeordning
+    for b in markningsregler.las(conn):  # i ärendeordning
         if b["arende_id"] is not None:
             per_arende.setdefault(b["arende_id"], []).append(b)
     enheter = []
@@ -322,7 +325,7 @@ def _arenden(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
             undertitel=f"{len(beh)} {'behandling' if len(beh) == 1 else 'behandlingar'}",
             lank=f"/politik/arenden/{arende_id}", text_a=" ".join([sista["rubrik"], *diarienummer]),
             organ=sista["organ"], datum=sista["datum"], ar=_ar(sista["datum"]),
-            exakt=[normalisera(d) for d in diarienummer],
+            exakt=[normalisera(d) for d in diarienummer], markningar=markningsregler.for_arende(beh),
         ))
     yield Grupp("", enheter)
 
@@ -422,7 +425,7 @@ KALLOR: dict[str, Kalla] = {
 # Indexering
 
 _KOLUMNER = ("sammantrade_id", "rubrik", "undertitel", "organ", "datum", "ar", "lank", "dokument", "sida",
-             "markeringar", "exakt")
+             "markeringar", "exakt", "markningar")
 
 
 def indexera(conn: psycopg.Connection, typer: Iterable[str] | None = None, sammantraden: list[int] | None = None,
@@ -492,7 +495,7 @@ def _skriv(conn: psycopg.Connection, e: Enhet, befintlig: dict | None,
             sha256 = EXCLUDED.sha256, andrad = now()
         RETURNING id
         """,
-        {"typ": e.typ, "nyckel": e.nyckel, **{k: getattr(e, k) for k in _KOLUMNER},
+        {"typ": e.typ, "nyckel": e.nyckel, **{k: getattr(e, k) for k in _KOLUMNER}, "markningar": Jsonb(e.markningar),
          "text_a": _rensa(e.text_a), "text_b": _rensa(e.text_b), "text_c": _rensa(e.text_c), "sha256": sha},
     ).fetchone()
     return ("nya" if befintlig is None else "andrade"), rad["id"]
@@ -582,21 +585,29 @@ _TYPNAMN = {"behandling": "Behandling", "protokollsida": "Protokollsida", "budge
 
 
 def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | None = None, typ: str | None = None,
-        sortering: str = "relevans", sida: int = 1) -> dict:
+        sortering: str = "relevans", sida: int = 1, markning: str | None = None) -> dict:
     """Träffarna för frågan, en sida i taget, och antalet per typ (utan typfiltret).
 
     Hybridsök (#69): fulltextlistan och vektorlistan slås ihop med reciprocal rank fusion, där en enhet får
     1 / (60 + placeringen) från varje lista den finns i. Exakta träffar på diarienummer och namn ligger först.
     En fråga som är ett diarienummer söks bara exakt och i fulltext.
+
+    Med `markning` (#162) bara enheter med märkningen, alltså behandlingar och ärenden. En tom fråga ger då
+    alla med märkningen.
     """
-    tsq = fraga(conn, q)
-    exakt = exakt_fraga(q) or None
-    fragevektor, vektortraffar = (None, []) if _DNR.fullmatch(q.strip()) else sokvektorer.sok(conn, q, organ, ar)
+    utan_fraga = not q.strip()
+    tsq = None if utan_fraga else fraga(conn, q)
+    exakt = None if utan_fraga else exakt_fraga(q) or None
+    fragevektor, vektortraffar = ((None, []) if utan_fraga or _DNR.fullmatch(q.strip())
+                                  else sokvektorer.sok(conn, q, organ, ar))
     param = {"q": tsq, "exakt": exakt, "organ": organ, "ar": ar, "typ": typ,
+             "markning": Jsonb([{"id": markning}]) if markning else None,
              "vid": [v["id"] for v in vektortraffar],
              "grans": SIDSTORLEK, "fran": (max(sida, 1) - 1) * SIDSTORLEK}
-    villkor = """
-        (e.sokvektor @@ %(q)s::tsquery OR e.exakt @> ARRAY[%(exakt)s::text] OR e.id = ANY(%(vid)s::bigint[]))
+    textvillkor = ("TRUE" if utan_fraga else
+                   "(e.sokvektor @@ %(q)s::tsquery OR e.exakt @> ARRAY[%(exakt)s::text] OR e.id = ANY(%(vid)s::bigint[]))")
+    villkor = textvillkor + """
+        AND (%(markning)s::jsonb IS NULL OR e.markningar @> %(markning)s::jsonb)
         AND (%(organ)s::text IS NULL OR e.organ = %(organ)s)
         AND (%(ar)s::int IS NULL OR e.ar = %(ar)s)
     """
@@ -631,7 +642,7 @@ def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | No
             SELECT * FROM rangordnade ORDER BY {ordning} LIMIT %(grans)s OFFSET %(fran)s
         )
         SELECT t.id, t.typ, t.nyckel, t.rubrik, t.undertitel, t.organ, t.datum, t.ar, t.lank, t.dokument, t.sida,
-               t.markeringar, t.sammantrade_id, t.niva = 0 AND NOT t.i_text AS bara_betydelse,
+               t.markeringar, t.markningar, t.sammantrade_id, t.niva = 0 AND NOT t.i_text AS bara_betydelse,
                CASE WHEN %(q)s::tsquery IS NULL THEN left(u.text, 200)
                     ELSE ts_headline('swedish', u.text, %(q)s::tsquery,
                                      'MaxFragments=2, MaxWords=24, MinWords=8, ShortWord=2, '
@@ -670,6 +681,7 @@ def sok(conn: psycopg.Connection, q: str, organ: str | None = None, ar: int | No
                 "organ": {"id": r["organ"], "namn": _organnamn(r["organ"])} if r["organ"] else None,
                 "datum": r["datum"], "ar": r["ar"], "lank": r["lank"], "dokument": r["dokument"], "sida": r["sida"],
                 "markeringar": r["markeringar"],
+                "markningar": r["markningar"],
                 "utdrag": ([{"text": meningar[r["id"]], "markerad": False}] if r["id"] in meningar
                            else _utdrag(r["utdrag"])),
                 "betydelse": r["bara_betydelse"],
