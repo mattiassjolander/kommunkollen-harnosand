@@ -118,6 +118,13 @@ ul {
   color: var(--ink);
   font-weight: 600;
 }
+/* Från 1280 px är sidomenyn 248 px bred (App.vue) och ingen huvudvy bryts över två rader (#175).
+   Typsnittets bredd skiljer lite mellan system, så radbrytningen stängs av i stället för att bero på marginalen. */
+@media (min-width: 1280px) {
+  .navlank {
+    white-space: nowrap;
+  }
+}
 /* En huvudvy utan undervyer markeras som vald, en med undervyer markerar i stället undervyn. */
 .navlank.aktiv[aria-current='page'] {
   background: var(--accent-wash);
