@@ -330,4 +330,14 @@ def test_word_dokumentets_rubriker():
 
 def test_normalisering():
     assert sokindex.normalisera("  KS / 2026 - 386 ") == "ks/2026-386"
+    assert sokindex.normalisera("KS\t/\n2026  -  386") == "ks/2026-386"
+
+
+def test_normalisering_tar_inte_kvadratisk_tid():
+    # Långa rader blanktecken utan / eller - fick tidigare reguljära uttrycket att backa (ReDoS).
+    import time
+
+    start = time.perf_counter()
+    assert sokindex.normalisera(" \t" * 50_000 + "x") == "x"
+    assert time.perf_counter() - start < 1
     assert sokindex.exakt_fraga('"Anna  Karin"') == "anna karin"
