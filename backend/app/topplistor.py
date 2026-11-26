@@ -12,7 +12,9 @@ räknas till urvalet:
 - Ledtiden för en motion räknas till datumet då motionen besvarades, och en motion per parti till datumet då
   den väcktes.
 - Ett pågående ärende räknas när någon av dess behandlingar ligger i urvalet. Tiden räknas från den första
-  behandlingen fram till i dag.
+  behandlingen fram till i dag. Pågående är ett ärende utan slutligt beslut: en obesvarad motion eller ett
+  obesvarat medborgarförslag, ett återremitterat eller bordlagt ärende, eller ett förslag till ett annat organ
+  (kommande.py). Ett pågående uppdrag är inte med, eftersom beslutet som ger uppdraget är slutligt.
 
 Listor per parti visar alla partier i kommunfullmäktige under mandatperioden, också de med noll, med antal och
 antal per mandat. Mandaten är fördelningen i kommunfullmäktige vid mandatperiodens början enligt Valmyndigheten.
@@ -192,11 +194,12 @@ def berakna(conn: psycopg.Connection, valt: dict, idag: date | None = None) -> d
                               "fran": bs[0]["datum"], "till": sista["datum"], "behandlingar": [_ref(b) for b in bs]})
     beredning.sort(key=lambda r: (-r["dagar"], r["till"]))
 
-    # Längst pågående: ärenden som inte är avslutade enligt Kommande, med en behandling i urvalet.
+    # Längst pågående: ärenden utan slutligt beslut enligt Kommande, med en behandling i urvalet. Ett pågående
+    # uppdrag har ett slutligt beslut och står i stället i Längsta beredning.
     pagaende = []
     for a in kommande.berakna(rader, kommande.MANADER, idag)["arenden"]:
         bs = per_arende.get(a["arende_id"]) or []
-        if not bs or not any(inom(b["datum"]) for b in bs):
+        if a["status"] == "uppdrag" or not bs or not any(inom(b["datum"]) for b in bs):
             continue
         pagaende.append({"arende_id": a["arende_id"], "rubrik": a["rubrik"], "status": kommande.STATUS[a["status"]],
                          "dagar": (idag - bs[0]["datum"]).days, "fran": bs[0]["datum"],
