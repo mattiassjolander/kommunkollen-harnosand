@@ -80,6 +80,7 @@ const UTFALL: Record<string, string> = {
   annat: 'annat beslut',
 }
 const perMandat = (v: number | null) => (v === null ? '–' : v.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+const procent = (v: number) => `${v.toLocaleString('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
 const fler = (totalt: number, visade: number) => (totalt > visade ? `De ${visade} första av ${tal(totalt)}.` : '')
 </script>
 
@@ -167,28 +168,6 @@ const fler = (totalt: number, visade: number) => (totalt > visade ? `De ${visade
           </table>
         </div>
         <p class="kallrad">{{ fler(t.listor.langst_pagaende.totalt, t.listor.langst_pagaende.rader.length) }} {{ kallrad }}</p>
-      </section>
-
-      <section class="kort" aria-labelledby="flest-aterremisser" data-testid="topplista" data-lista="flest_aterremisser">
-        <h2 id="flest-aterremisser">Flest återremisser</h2>
-        <p class="regel">Ärenden med flest behandlingar under perioden där beslutet var att återremittera ärendet.</p>
-        <p v-if="!t.listor.flest_aterremisser.rader.length" class="saknas">Inga återremisser under perioden.</p>
-        <div v-else class="rulla">
-          <table class="tabell">
-            <thead>
-              <tr><th scope="col" class="num">Plats</th><th scope="col">Ärende</th><th scope="col" class="num">Återremisser</th><th scope="col">Räknade</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="r in t.listor.flest_aterremisser.rader" :key="r.arende_id" data-testid="topplisterad">
-                <td class="num">{{ r.plats }}</td>
-                <td><RouterLink :to="`/politik/arenden/${r.arende_id}`">{{ r.rubrik }}</RouterLink></td>
-                <td class="num">{{ tal(r.antal) }}</td>
-                <td><Raknade :behandlingar="r.behandlingar" /></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="kallrad">{{ fler(t.listor.flest_aterremisser.totalt, t.listor.flest_aterremisser.rader.length) }} {{ kallrad }}</p>
       </section>
 
       <!-- Partier: alla partier, med antal och antal per mandat -->
@@ -353,8 +332,8 @@ const fler = (totalt: number, visade: number) => (totalt > visade ? `De ${visade
       <section class="kort" aria-labelledby="jamnaste-voteringar" data-testid="topplista" data-lista="jamnaste_voteringar">
         <h2 id="jamnaste-voteringar">Jämnaste voteringar</h2>
         <p class="regel">
-          Voteringar under perioden med minst skillnad mellan ja och nej. Står siffrorna inte i protokollets text räknas
-          de ur voteringslistan.
+          Voteringar under perioden med minst skillnad mellan ja och nej, i procent av ja- och nejrösterna. Står
+          siffrorna inte i protokollets text räknas de ur voteringslistan.
         </p>
         <p v-if="!t.listor.jamnaste_voteringar.rader.length" class="saknas">Inga voteringar under perioden.</p>
         <div v-else class="rulla">
@@ -379,7 +358,7 @@ const fler = (totalt: number, visade: number) => (totalt > visade ? `De ${visade
                   </span>
                 </td>
                 <td class="num">{{ r.ja }}–{{ r.nej }}</td>
-                <td class="num">{{ r.marginal }}</td>
+                <td class="num" data-testid="skillnad">{{ procent(r.skillnad_procent) }}</td>
               </tr>
             </tbody>
           </table>

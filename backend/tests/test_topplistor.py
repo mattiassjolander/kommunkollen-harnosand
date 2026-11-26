@@ -97,8 +97,12 @@ def test_underlag_som_statistiken(api):
     assert listor(api, ar="mandatperiod", period=2022)["underlag"]["sammantraden"] == t["underlag"]["sammantraden"] - len(efter)
 
 
-def test_ingen_lista_over_narvaro(api):
-    assert not [k for k in listor(api)["listor"] if "narvaro" in k or "franvaro" in k]
+def test_ingen_lista_over_narvaro_eller_aterremisser(api):
+    # Ingen närvaro per person (frånvaro kan bero på sjukdom), och inga återremisser per ärende (ett ärende
+    # återremitteras sällan mer än en gång, så listan säger inget).
+    assert list(listor(api)["listor"]) == [
+        "langsta_beredning", "langst_pagaende", "reservationer_per_parti", "reservationer_per_ledamot",
+        "motioner_per_parti", "langsta_ledtid_motioner", "jamnaste_voteringar", "yrkanden_per_ledamot"]
 
 
 # Per parti och per mandat
@@ -204,35 +208,27 @@ def test_reservationer_och_yrkanden_per_ledamot(api, database_url):
 
 def test_jamnaste_voteringar_med_rattelse_av_rosterna(api, database_url):
     t = listor(api)["listor"]["jamnaste_voteringar"]
-    marginaler = [r["marginal"] for r in t["rader"]]
-    assert marginaler == sorted(marginaler) and t["totalt"] == len(t["rader"])
-    assert all(r["marginal"] == abs(r["ja"] - r["nej"]) for r in t["rader"])
+    # Skillnaden i procent av ja- och nejrösterna, minst först.
+    procent = [r["skillnad_procent"] for r in t["rader"]]
+    assert procent == sorted(procent) and t["totalt"] == len(t["rader"])
+    for r in t["rader"]:
+        assert r["skillnad"] == abs(r["ja"] - r["nej"])
+        assert r["skillnad_procent"] == round(100 * r["skillnad"] / (r["ja"] + r["nej"]), 1)
     # KF 2026-02-23 § 5: 37–6. Utan siffror i texten räknas listan, med publicerade rättelser (36–7).
     s = next(x for x in kf_sammantraden(api) if x["datum"] == "2026-02-23")
     rad = lambda lista: next(r for r in lista["rader"] if r["behandling"]["sammantrade"]["id"] == s["id"]  # noqa: E731
                              and r["behandling"]["paragraf"] == 5)
-    assert (rad(t)["ja"], rad(t)["nej"], rad(t)["marginal"]) == (37, 6, 31)
+    assert (rad(t)["ja"], rad(t)["nej"], rad(t)["skillnad_procent"]) == (37, 6, 72.1)
     with db.connect(database_url) as conn:
         conn.execute("UPDATE votering SET ja = NULL, nej = NULL WHERE behandling_id = "
                      "(SELECT id FROM behandling WHERE sammantrade_id = %s AND paragraf = 5)", (s["id"],))
     publicerad(api, sammantrade_id=s["id"], objekt="rost", paragraf=5, votering=1, namn="Lennart Molin", falt="rost",
                nytt="nej", motivering="Rösten står fel i listan.")
     t = listor(api)["listor"]["jamnaste_voteringar"]
-    assert (rad(t)["ja"], rad(t)["nej"], rad(t)["marginal"]) == (36, 7, 29)
+    assert (rad(t)["ja"], rad(t)["nej"], rad(t)["skillnad_procent"]) == (36, 7, 67.4)
 
 
 # Ärenden och årsavgränsningen
-
-def test_aterremisser_raknas_med_publicerad_rattelse(api, database_url):
-    s = kf_sammantraden(api)[0]
-    b = med_arende(api, database_url, s)[0]
-    assert listor(api)["listor"]["flest_aterremisser"]["rader"] == []
-    publicerad(api, sammantrade_id=s["id"], objekt="behandling", paragraf=b["paragraf"], falt="beslut",
-               nytt="Kommunfullmäktige beslutar att återremittera ärendet.", motivering="Beslutet lästes fel.")
-    [r] = listor(api)["listor"]["flest_aterremisser"]["rader"]
-    assert (r["plats"], r["antal"], r["arende_id"]) == (1, 1, b["arende_id"])
-    assert nycklar(r) == {(s["id"], b["paragraf"])}
-
 
 def test_beredning_raknas_till_aret_for_det_slutliga_beslutet(api, database_url):
     alla = kf_sammantraden(api)

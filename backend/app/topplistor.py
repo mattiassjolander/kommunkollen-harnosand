@@ -1,4 +1,4 @@
-"""Topplistor per år eller mandatperiod (#163): beredning, återremisser, reservationer, motioner, voteringar m.fl.
+"""Topplistor per år eller mandatperiod (#163): beredning, reservationer, motioner, voteringar m.fl.
 
 Listorna räknas ur de tolkade protokollen med publicerade rättelser pålagda (behandlingar.las), med samma regler
 som märkningarna (markningar.py), kommande ärenden (kommande.py) och motionerna (motioner.py). Varje rad har de
@@ -203,15 +203,6 @@ def berakna(conn: psycopg.Connection, valt: dict, idag: date | None = None) -> d
                          "behandlingar": [_ref(b) for b in bs]})
     pagaende.sort(key=lambda r: (-r["dagar"], r["arende_id"]))
 
-    # Flest återremisser: behandlingar i urvalet med märkningen återremitterad, per ärende.
-    remisser: dict[int, list[dict]] = defaultdict(list)
-    for r in i_urvalet:
-        if r["arende_id"] is not None and any(m["id"] == "aterremitterad" for m in r["markningar"]):
-            remisser[r["arende_id"]].append(r)
-    aterremisser = [{"arende_id": a, "rubrik": bs[-1]["rubrik"], "antal": len(bs),
-                     "behandlingar": [_ref(b) for b in bs]} for a, bs in remisser.items()]
-    aterremisser.sort(key=lambda r: (-r["antal"], -r["behandlingar"][-1]["sammantrade"]["datum"].toordinal()))
-
     ids = {r["id"]: r for r in i_urvalet}
     reservationer = conn.execute(
         "SELECT behandling_id, personer, partier FROM reservation WHERE behandling_id = ANY(%s) ORDER BY ordning",
@@ -269,7 +260,8 @@ def berakna(conn: psycopg.Connection, valt: dict, idag: date | None = None) -> d
                                             for b in x["behandlingar"]]})
     ledtid.sort(key=lambda r: (-r["dagar"], r["besvarad"]))
 
-    # Jämnaste voteringar: minst skillnad mellan ja och nej.
+    # Jämnaste voteringar: minst skillnad mellan ja och nej, i procent av ja- och nejrösterna. Ett fullmäktige med
+    # 43 ledamöter och en nämnd med 11 jämförs då på samma sätt.
     jamna = []
     resultat = markningar.voteringsresultat(conn, i_urvalet)
     for bid, vs in resultat.items():
@@ -278,9 +270,10 @@ def berakna(conn: psycopg.Connection, valt: dict, idag: date | None = None) -> d
             if v["ja"] is None or v["ja"] + v["nej"] == 0:
                 continue
             jamna.append({"behandling": _ref(b), "votering": v["ordning"], "antal_voteringar": len(vs),
-                          "ja": v["ja"], "nej": v["nej"], "marginal": abs(v["ja"] - v["nej"]),
+                          "ja": v["ja"], "nej": v["nej"], "skillnad": abs(v["ja"] - v["nej"]),
+                          "skillnad_procent": round(100 * abs(v["ja"] - v["nej"]) / (v["ja"] + v["nej"]), 1),
                           "ja_forslag": v["ja_forslag"], "nej_forslag": v["nej_forslag"]})
-    jamna.sort(key=lambda r: (r["marginal"], -(r["ja"] + r["nej"]),
+    jamna.sort(key=lambda r: (r["skillnad_procent"], -(r["ja"] + r["nej"]),
                               -r["behandling"]["sammantrade"]["datum"].toordinal(), r["behandling"]["paragraf"]))
 
     return {
@@ -293,12 +286,11 @@ def berakna(conn: psycopg.Connection, valt: dict, idag: date | None = None) -> d
         "listor": {
             "langsta_beredning": _topp(beredning, lambda r: r["dagar"]),
             "langst_pagaende": _topp(pagaende, lambda r: r["dagar"]),
-            "flest_aterremisser": _topp(aterremisser, lambda r: r["antal"]),
             "reservationer_per_parti": _per_parti({p: list(bs.values()) for p, bs in res_parti.items()}, mandatet),
             "reservationer_per_ledamot": _topp(res_personer, lambda r: r["antal"]),
             "motioner_per_parti": _per_parti(mot_parti, mandatet),
             "langsta_ledtid_motioner": _topp(ledtid, lambda r: r["dagar"]),
-            "jamnaste_voteringar": _topp(jamna, lambda r: r["marginal"]),
+            "jamnaste_voteringar": _topp(jamna, lambda r: r["skillnad_procent"]),
             "yrkanden_per_ledamot": _topp(yrk_personer, lambda r: r["antal"]),
         },
     }

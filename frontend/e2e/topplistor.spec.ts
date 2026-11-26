@@ -21,11 +21,17 @@ test('topplistor i menyn, med alla partier och antal per mandat, och räknade be
   await expect(page.getByRole('heading', { name: 'Topplistor', level: 1 })).toBeVisible()
   await expect(page).toHaveTitle('Topplistor · Politik och beslut · Kommunkollen Härnösand')
 
-  // Det senaste året är förvalt. Alla nio listor, och ingen lista över närvaro.
+  // Det senaste året är förvalt. Åtta listor, och ingen lista över närvaro eller återremisser.
   const t = await (await request.get(`${api}/api/topplistor`)).json()
   await expect(page.getByTestId('topplisteurval')).toHaveValue(String(t.urval.ar))
-  await expect(page.getByTestId('topplista')).toHaveCount(9)
-  await expect(page.getByRole('heading', { level: 2, name: /närvaro/i })).toHaveCount(0)
+  await expect(page.getByTestId('topplista')).toHaveCount(8)
+  await expect(page.getByRole('heading', { level: 2, name: /närvaro|återremiss/i })).toHaveCount(0)
+  // Jämnaste voteringar: skillnaden i procent, minst först.
+  const skillnad = await page.locator('[data-lista="jamnaste_voteringar"] [data-testid="skillnad"]').allTextContents()
+  expect(skillnad.length).toBeGreaterThan(0)
+  for (const s of skillnad) expect(s).toMatch(/^\d+,\d %$/)
+  const v = skillnad.map((s) => Number(s.replace(' %', '').replace(',', '.')))
+  expect(v).toEqual([...v].sort((a, b) => a - b))
 
   // Reservationer per parti: alla partier i fullmäktige, med mandat och antal per mandat.
   const lista = page.locator('[data-lista="reservationer_per_parti"]')

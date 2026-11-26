@@ -2509,7 +2509,6 @@ export interface Topplistor {
   listor: {
     langsta_beredning: Topplista<Arenderad & { dagar: number; fran: string; till: string }>
     langst_pagaende: Topplista<Arenderad & { dagar: number; fran: string; status: string }>
-    flest_aterremisser: Topplista<Arenderad & { antal: number }>
     reservationer_per_parti: Topplista<Partirad>
     reservationer_per_ledamot: Topplista<Personrad>
     motioner_per_parti: Topplista<Partirad>
@@ -2523,7 +2522,9 @@ export interface Topplistor {
       antal_voteringar: number
       ja: number
       nej: number
-      marginal: number
+      skillnad: number
+      /** Skillnaden i procent av ja- och nejrösterna. */
+      skillnad_procent: number
       ja_forslag: string | null
       nej_forslag: string | null
     }>
