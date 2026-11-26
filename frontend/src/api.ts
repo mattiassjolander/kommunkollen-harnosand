@@ -2302,9 +2302,19 @@ export const taStallningTillMotstridighet = (id: number) =>
 
 // Processer ur reglementen och delegationsordningar (#152)
 
+export interface Overgang {
+  /** Stegets id. */
+  till: number
+  villkor: string | null
+}
+
 export interface Processteg {
   id: number
   ordning: number
+  /** Kort namn som bestämmer stegets bana i processdiagrammet (#158). Saknas för steg inlästa före #158. */
+  aktor: string | null
+  /** Stegen som följer. Tom lista: steget avslutar processen. Flera: ett vägval, med villkor. */
+  overgangar: Overgang[]
   vem: string
   vad: string
   /** När, eller inom vilken tidsfrist, om dokumentet anger det. */

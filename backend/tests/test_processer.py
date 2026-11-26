@@ -24,10 +24,12 @@ REDAKTOR = "test-redaktor@kommunkollen.test"
 KALLELSE = {
     "process": "Kallelse till sammanträde",
     "steg": [
-        {"vem": "Ordföranden", "vad": "Ansvarar för att kallelsen utfärdas digitalt, med tid och plats.",
+        {"aktor": "Ordföranden", "vem": "Ordföranden",
+         "vad": "Ansvarar för att kallelsen utfärdas digitalt, med tid och plats.", "overgangar": [{"till": 2}],
          "kalla": {"dokument": GEMENSAMT_ID, "sida": 4, "paragraf": "§ 12",
                    "text": "Ordförande ansvarar för att kallelse i digital form utfärdas till sammanträdena."}},
-        {"vem": "Ordföranden", "vad": "Kallelsen skickas digitalt till varje ledamot och ersättare.",
+        {"aktor": "Ordföranden", "vem": "Ordföranden",
+         "vad": "Kallelsen skickas digitalt till varje ledamot och ersättare.", "overgangar": [],
          "nar": "Senast fem dagar före sammanträdesdagen",
          "kalla": {"dokument": GEMENSAMT_ID, "sida": 4, "paragraf": "§ 13",
                    "text": "Kallelsen ska digitalt tillsändas varje ledamot och ersättare senast fem dagar före "
@@ -37,7 +39,8 @@ KALLELSE = {
 JUSTERING = {
     "process": "Justering av protokoll",
     "steg": [
-        {"vem": "Ordföranden och en ledamot", "vad": "Justerar protokollet.",
+        {"aktor": "Ordföranden och justeraren", "vem": "Ordföranden och en ledamot", "vad": "Justerar protokollet.",
+         "overgangar": [],
          "nar": "Senast 14 dagar efter sammanträdet",
          "kalla": {"dokument": GEMENSAMT_ID, "sida": 5, "paragraf": "§ 26",
                    "text": "Protokoll justeras senast 14 dagar efter sammanträdet av ordförande och en ledamot."}},
@@ -46,7 +49,8 @@ JUSTERING = {
 DELEGATION = {
     "process": "Anmälan av delegationsbeslut",
     "steg": [
-        {"vem": "Ordföranden", "vad": "Anmäler beslut i brådskande ärenden till nämnden.",
+        {"aktor": "Ordföranden", "vem": "Ordföranden", "vad": "Anmäler beslut i brådskande ärenden till nämnden.",
+         "overgangar": [],
          "nar": "Vid nämndens nästkommande sammanträde",
          "kalla": {"dokument": SAMHALLSNAMNDEN_ID, "sida": 5, "paragraf": "Registrering och anmälan av delegationsbeslut",
                    "text": "beslut anmälas till nämnden vid dess nästkommande sammanträde"}},
@@ -151,6 +155,12 @@ STEG = JUSTERING["steg"][0]
     (utan(STEG, "vem"), "vem som gör något saknas"),
     (utan(STEG, "vad"), "vad som görs saknas"),
     (STEG | {"hur": "Digitalt"}, "okända fält"),
+    (utan(STEG, "aktor"), "aktören .* saknas"),
+    (STEG | {"aktor": "Ordföranden och en ledamot som utses vid sammanträdets början"}, "längre än 40 tecken"),
+    (utan(STEG, "overgangar"), "övergångarna saknas"),
+    (STEG | {"overgangar": [{"till": 2}]}, "går till steg 2, som inte finns"),
+    (STEG | {"overgangar": [{"till": 1}]}, "kan inte gå till sig självt"),
+    (STEG | {"overgangar": [{"steg": 1}]}, "en övergång ska vara"),
 ])
 def test_inlasningen_avvisar_ett_steg_utan_kalla_eller_utanfor_de_25(api, database_url, steg, fel):
     with pytest.raises(processer.Ogiltig, match=fel) as e:
@@ -158,6 +168,32 @@ def test_inlasningen_avvisar_ett_steg_utan_kalla_eller_utanfor_de_25(api, databa
     assert str(e.value).startswith("Process 2 (Justering av protokoll), steg 1")
     # Ingenting läses in när något avvisas.
     assert all(p["steg"] == [] for p in redaktionen(api).values())
+
+
+def kallelse_med(*overgangar: list[dict], aktorer: tuple[str, str] = ("Ordföranden", "Ordföranden")) -> dict:
+    return KALLELSE | {"steg": [s | {"overgangar": o, "aktor": a}
+                                for s, o, a in zip(KALLELSE["steg"], overgangar, aktorer)]}
+
+
+def test_skillen_laser_in_aktorer_och_overgangar_for_processdiagrammet(api, database_url):
+    # Steg 2 går tillbaka till steg 1 under ett villkor (en slinga), och steg 1 avslutar processen eller går vidare.
+    fil = kallelse_med([{"till": 2, "villkor": "Sammanträdet hålls"}, {"till": 2, "villkor": "Igen"}], [])
+    with pytest.raises(processer.Ogiltig, match="övergången till steg 2 finns två gånger"):
+        las_in(database_url, fil)
+    tre = KALLELSE | {"steg": [*KALLELSE["steg"], STEG]}
+    tre["steg"][0] = tre["steg"][0] | {"overgangar": [{"till": 2, "villkor": "Digitalt"}, {"till": 3}]}
+    with pytest.raises(processer.Ogiltig, match="steg 1: steget är ett vägval .* varje övergång ska ha ett villkor"):
+        las_in(database_url, tre)
+    with pytest.raises(processer.Ogiltig, match="steg 2: aktören ordföranden stavas Ordföranden"):
+        las_in(database_url, kallelse_med([{"till": 2}], [], aktorer=("Ordföranden", "ordföranden")))
+    assert las_in(database_url, kallelse_med([{"till": 2}], [{"till": 1, "villkor": "Sammanträdet flyttas"}])) == {
+        "nya": 1, "oforandrade": 0}
+    ett, tva = redaktionen(api)["Kallelse till sammanträde"]["steg"]
+    assert (ett["aktor"], ett["overgangar"]) == ("Ordföranden", [{"till": tva["id"], "villkor": None}])
+    assert tva["overgangar"] == [{"till": ett["id"], "villkor": "Sammanträdet flyttas"}]
+    # En ändrad övergång är nya steg, inte samma fil igen.
+    assert las_in(database_url, KALLELSE) == {"nya": 1, "oforandrade": 0}
+    assert [s["overgangar"] for s in redaktionen(api)["Kallelse till sammanträde"]["steg"]][1] == []
 
 
 def test_inlasningen_avvisar_en_process_som_inte_finns_pa_listan(api, database_url):

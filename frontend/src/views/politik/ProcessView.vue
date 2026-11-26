@@ -50,7 +50,7 @@ watch(
       </p>
     </header>
     <section class="kort" aria-label="Steg">
-      <Processkort :p="p" />
+      <Processkort :p="p" diagram />
     </section>
   </template>
 </template>

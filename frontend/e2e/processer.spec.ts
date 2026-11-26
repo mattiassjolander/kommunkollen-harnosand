@@ -7,22 +7,37 @@ import { API_PORT } from '../playwright.config'
 
 const api = `http://127.0.0.1:${API_PORT}`
 const ATTEST = '18.580e43d7163221b2781b73fc'
+const KALLA = {
+  dokument: ATTEST,
+  sida: 3,
+  paragraf: '1 Reglementets omfattning',
+  text: 'Attestreglementet gäller för kommunens samtliga interna och externa ekonomiska transaktioner.',
+}
+// Tre aktörer, ett vägval efter det första steget och en övergång tillbaka (#158).
 const STEG = {
   processer: [
     {
       process: 'Attest av ekonomiska transaktioner',
       steg: [
         {
+          aktor: 'Attestanten',
           vem: 'Attestanten',
           vad: 'Intygar att kontroll har genomförts.',
           nar: 'Innan transaktionen bokförs',
-          kalla: {
-            dokument: ATTEST,
-            sida: 3,
-            paragraf: '1 Reglementets omfattning',
-            text: 'Attestreglementet gäller för kommunens samtliga interna och externa ekonomiska transaktioner.',
-          },
+          overgangar: [
+            { till: 2, villkor: 'Kontrollen visar fel' },
+            { till: 3, villkor: 'Kontrollen stämmer' },
+          ],
+          kalla: KALLA,
         },
+        {
+          aktor: 'Beslutsattestanten',
+          vem: 'Beslutsattestanten',
+          vad: 'Begär rättelse av transaktionen.',
+          overgangar: [{ till: 1 }],
+          kalla: KALLA,
+        },
+        { aktor: 'Ekonomienheten', vem: 'Ekonomienheten', vad: 'Bokför transaktionen.', overgangar: [], kalla: KALLA },
       ],
     },
   ],
@@ -60,7 +75,9 @@ test('en redaktör lägger till en process, en utgivare publicerar den och läsa
   await page.request.post('/api/auth/test/utgivare')
   await page.goto('/redaktion/processer')
   await expect(forslag).toContainText('Tillagd av test-redaktor@kommunkollen.test')
-  await expect(forslag.getByTestId('steg')).toHaveCount(1)
+  await expect(forslag.getByTestId('steg')).toHaveCount(3)
+  // Granskaren ser processdiagrammet ovanför stegen.
+  await expect(forslag.getByTestId('processdiagram').getByTestId('bana')).toHaveCount(3)
   await forslag.getByTestId('granska').click()
   await expect(forslag.getByTestId('granskning')).toContainText('Granskad')
   await forslag.getByTestId('publicera').click()
@@ -73,14 +90,14 @@ test('en redaktör lägger till en process, en utgivare publicerar den och läsa
   await expect(rad.getByTestId('antal-processer')).toHaveText('1 Analys')
   await rad.getByRole('link', { name: 'Attestreglemente' }).click()
   const avsnitt = page.getByTestId('processer')
-  await expect(avsnitt.getByTestId('process')).toHaveText('Attest av ekonomiska transaktioner · 1 steg ur dokumentet')
+  await expect(avsnitt.getByTestId('process')).toHaveText('Attest av ekonomiska transaktioner · 3 steg ur dokumentet')
   await avsnitt.getByRole('link', { name: 'Attest av ekonomiska transaktioner' }).click()
 
   await expect(page.getByRole('heading', { name: 'Attest av ekonomiska transaktioner', level: 1 })).toBeVisible()
   const process = page.getByTestId('process')
   await expect(process).toContainText('Analys')
   await expect(process).toHaveCSS('border-top-style', 'dashed')
-  const steg = process.getByTestId('steg')
+  const steg = process.getByTestId('steg').first()
   await expect(steg.getByTestId('vem')).toHaveText('Attestanten')
   await expect(steg.getByTestId('nar')).toHaveText('Innan transaktionen bokförs')
   await expect(steg.getByTestId('citat')).toContainText('”Attestreglementet gäller för kommunens samtliga')
@@ -89,8 +106,24 @@ test('en redaktör lägger till en process, en utgivare publicerar den och läsa
     /^\/api\/styrande-dokument\/\d+\/versioner\/1#page=3$/,
   )
 
+  // Processdiagrammet: en bana per aktör i den ordning de först förekommer, ett vägval med villkor, en start och ett
+  // slut. Ett steg som väljs i diagrammet markeras i listan.
+  const diagram = process.getByTestId('processdiagram')
+  await expect(diagram.getByTestId('bana')).toHaveText(['Attestanten', 'Beslutsattestanten', 'Ekonomienheten'])
+  await expect(diagram.getByTestId('vagval')).toHaveCount(1)
+  await expect(diagram.getByTestId('villkor')).toHaveText(['Kontrollen visar fel', 'Kontrollen stämmer'])
+  await expect(diagram.getByTestId('start')).toHaveCount(1)
+  await expect(diagram.getByTestId('slut')).toHaveCount(1)
+  const bokfor = diagram.getByRole('button', { name: /^Steg 3, Ekonomienheten: Bokför transaktionen/ })
+  await bokfor.focus()
+  await page.keyboard.press('Enter')
+  const tredje = process.getByTestId('steg').nth(2)
+  await expect(tredje).toHaveClass(/valt/)
+  await expect(tredje).toBeFocused()
+  await process.screenshot({ path: 'test-results/processdiagram.png' })
+
   await page.getByRole('link', { name: '‹ Processer' }).click()
   await expect(page.getByTestId('processrad').filter({ hasText: 'Attest av ekonomiska transaktioner' })).toContainText(
-    '1 steg',
+    '3 steg',
   )
 })
