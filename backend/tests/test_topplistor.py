@@ -263,6 +263,25 @@ def test_langst_pagaende_raknas_fran_forsta_behandlingen_till_i_dag(api):
     assert (motion["plats"], motion["status"], motion["fran"]) == (1, "Obesvarad motion", "2026-02-23")
 
 
+def test_langst_pagaende_har_inget_slutligt_beslut(api, database_url):
+    # Ett uppdrag är ett slutligt beslut: på Kommande ärenden som pågående uppdrag, men inte i Längst pågående.
+    kommande = {a["arende_id"]: a["status"] for a in api.get("/api/kommande").json()["arenden"]}
+    uppdrag = {a for a, status in kommande.items() if status == "uppdrag"}
+    assert uppdrag, "protokollen ska ha pågående uppdrag"
+    t = listor(api)["listor"]["langst_pagaende"]
+    assert t["totalt"] == sum(1 for status in kommande.values() if status != "uppdrag")
+    assert not uppdrag & {r["arende_id"] for r in t["rader"]}
+    assert "Pågående uppdrag" not in {r["status"] for r in t["rader"]}
+
+    # Ett återremitterat ärende har inget slutligt beslut och kommer med.
+    s = kf_sammantraden(api)[-1]
+    b = next(b for b in med_arende(api, database_url, s) if b["arende_id"] not in kommande)
+    with db.connect(database_url) as conn:
+        conn.execute("UPDATE behandling SET beslut = 'Kommunfullmäktige beslutar att återremittera ärendet.' "
+                     "WHERE sammantrade_id = %s AND paragraf = %s", (s["id"], b["paragraf"]))
+    assert listor(api)["listor"]["langst_pagaende"]["totalt"] == t["totalt"] + 1
+
+
 def test_ledtid_for_motion_raknas_till_aret_den_besvarades(api, database_url):
     pagaende = listor(api)["listor"]["langst_pagaende"]["rader"]
     motion = next(r for r in pagaende if r["rubrik"] == "Motion - Översyn av taxor och avgifter")

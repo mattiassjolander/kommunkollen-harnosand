@@ -145,8 +145,9 @@ const fler = (totalt: number, visade: number) => (totalt > visade ? `De ${visade
       <section class="kort" aria-labelledby="langst-pagaende" data-testid="topplista" data-lista="langst_pagaende">
         <h2 id="langst-pagaende">Längst pågående</h2>
         <p class="regel">
-          Ärenden som inte är avslutade, som på Kommande ärenden, med längst tid från första behandlingen till i dag
-          ({{ datum(t.idag) }}). Ett ärende är med när någon av dess behandlingar ligger i perioden.
+          Ärenden utan slutligt beslut, med längst tid från första behandlingen till i dag ({{ datum(t.idag) }}): obesvarade
+          motioner och medborgarförslag, återremitterade och bordlagda ärenden och förslag som väntar på beslut i ett
+          annat organ. Ett ärende är med när någon av dess behandlingar ligger i perioden.
         </p>
         <p v-if="!t.listor.langst_pagaende.rader.length" class="saknas">Inga pågående ärenden.</p>
         <div v-else class="rulla">
