@@ -144,4 +144,12 @@ jobs:
       - name: Kontrollera att appen svarar
         run: curl -fsS --retry 30 --retry-all-errors --retry-delay 2 http://127.0.0.1/api/halsa
       - name: Städa bort oanvända images
-        run: docker image prune -af --filter "until=168h"
+        # Varje image-par är ca 2,5 GB. Behåll den som körs och den förra, så att det går att rulla
+        # tillbaka. Äldre versioner finns kvar i ghcr.io. docker images listar den nyaste först.
+        run: |
+          for repo in ghcr.io/mattiassjolander/kommunkollen-backend ghcr.io/mattiassjolander/kommunkollen-frontend; do
+            docker images "$repo" --format '{{.Tag}}' | grep -vx '${{ github.sha }}' | tail -n +2 \
+              | while read -r tag; do docker rmi "$repo:$tag" || true; done
+          done
+          docker image prune -f
+          docker builder prune -af
