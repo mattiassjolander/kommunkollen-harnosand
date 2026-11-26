@@ -99,7 +99,8 @@ class Grupp:
 
 def normalisera(text: str) -> str:
     """Form för exakta jämförelser: gemener, ett mellanslag, inga mellanslag kring / och -."""
-    return re.sub(r"\s*([/-])\s*", r"\1", " ".join(text.split())).lower()
+    # Blanktecknen är redan ett enda mellanslag, så " ?" räcker (CodeQL py/polynomial-redos).
+    return re.sub(r" ?([/-]) ?", r"\1", " ".join(text.split())).lower()
 
 
 def _ar(d: date | None) -> int | None:
