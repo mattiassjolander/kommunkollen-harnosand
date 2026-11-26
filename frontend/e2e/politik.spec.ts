@@ -31,7 +31,7 @@ test('från sammanträdeslistan till ett sammanträde och en behandling, med kä
   await expect(rad).toContainText('§§ 1–14')
   await expect(rad.getByTestId('automatiskt-tolkad')).toBeVisible()
 
-  await rad.getByRole('link').click()
+  await rad.getByRole('link').first().click()
   await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+$/)
   await expect(page.getByRole('heading', { name: 'Kommunfullmäktige', level: 1 })).toBeVisible()
   await expect(page.getByTestId('sammantradesinfo')).toContainText('23 februari 2026')
@@ -48,7 +48,7 @@ test('från sammanträdeslistan till ett sammanträde och en behandling, med kä
   await expect(beslutande.getByRole('row', { name: /Carl-Fredrik Edgren/ })).toContainText('Beslutande vid')
   await expect(page.getByTestId('narvaro-franvarande').getByRole('row', { name: /Nina Skyttberg/ })).toBeVisible()
 
-  await page.locator('[data-testid="behandling"][data-paragraf="3"]').getByRole('link').click()
+  await page.locator('[data-testid="behandling"][data-paragraf="3"]').getByRole('link').first().click()
   await expect(page).toHaveURL(/\/paragraf\/3$/)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Allmänhetens frågestund i kommunfullmäktige 2026')
   await expect(page.getByTestId('beslut')).toContainText('att anse frågan besvarad')
@@ -64,12 +64,12 @@ test('från sammanträdeslistan till ett sammanträde och en behandling, med kä
 
 test('en paragraf utan beslut visar sin text under rubriken ur ärendelistan', async ({ page }) => {
   await page.goto('/politik?organ=KF')
-  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('link').click()
+  await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('link').first().click()
   const rad = page.locator('[data-testid="behandling"][data-paragraf="10"]')
   await expect(rad.locator('.rubrik')).toHaveText('Inkomna frågor 2026')
   await expect(rad.getByTestId('paragraftext')).toHaveText('Inga frågor har inkommit till dagens sammanträde.')
 
-  await rad.getByRole('link').click()
+  await rad.getByRole('link').first().click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inkomna frågor 2026')
   await expect(page.getByTestId('paragraftext')).toHaveText('Inga frågor har inkommit till dagens sammanträde.')
   await expect(page.getByTestId('beslut')).toHaveText('Protokollet anger inget beslut för paragrafen.')
@@ -106,7 +106,7 @@ test('sökning på diarienummer hittar ärendet i flera organ', async ({ page })
 
   await page.reload()
   await expect(page.getByTestId('sok')).toHaveValue('2024-000533')
-  await traffar.nth(0).getByRole('link').click()
+  await traffar.nth(0).getByRole('link').first().click()
   await expect(page).toHaveURL(/\/paragraf\/23$/)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Hemställan om godkännande av budgetavvikelse')
 
@@ -180,7 +180,7 @@ test('ett protokoll med två sittningar visar dem var för sig, med presidiets b
   const p15 = page.locator('[data-testid="behandling"][data-paragraf="15"]')
   await expect(p15.getByTestId('pa-delegation')).toBeVisible()
 
-  await p15.getByRole('link').click()
+  await p15.getByRole('link').first().click()
   await expect(page.getByTestId('sittning')).toContainText('Beslut av kommunstyrelsens presidium på delegation.')
   await expect(page.getByTestId('sittning')).toContainText('Sittning 2, kl. 14:10–14:30 · Kommunstyrelsesalen')
   await expect(page.getByTestId('beslutande').getByTestId('person')).toHaveCount(3)

@@ -47,7 +47,7 @@ test('behandlingens typ visas och kan rättas av en redaktör', async ({ page })
   await page.request.post('/api/auth/test/redaktor')
   await page.goto('/politik?organ=KF')
   await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
-  await page.getByTestId('behandling').first().getByRole('link').click()
+  await page.getByTestId('behandling').first().getByRole('link').first().click()
   await expect(page.getByTestId('typ')).toContainText('Typ:')
   const nu = (await page.getByTestId('typ').textContent()) ?? ''
   const formular = page.getByTestId('rattelseformular')
@@ -67,7 +67,7 @@ test('typerna i statistiken går att välja och visar behandlingarna', async ({ 
   const lista = page.getByTestId('typlista')
   await expect(lista).toContainText('Motion')
   await expect(page.getByTestId('typbehandling').first()).toContainText(/motion/i)
-  await page.getByTestId('typbehandling').first().getByRole('link').click()
+  await page.getByTestId('typbehandling').first().getByRole('link').first().click()
   await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+\/paragraf\/\d+/)
 })
 

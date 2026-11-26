@@ -191,7 +191,7 @@ const lank = (sammantradeId: number, paragraf: number) => `/politik/sammantraden
           <span class="etikett" :class="a.status">{{ statusnamn[a.status] }}</span>
           <span class="text">
             <span class="rubrik">{{ a.rubrik }}</span>
-            <Markningar :markningar="a.markningar" class="chips" />
+            <Markningar :markningar="a.markningar" :lankar="false" class="chips" />
             <span class="lage">
               {{ lage(a) }}
               <span v-if="a.over_ett_ar" class="varning" title="En motion ska besvaras inom ett år (KL 5 kap. 35 §)">

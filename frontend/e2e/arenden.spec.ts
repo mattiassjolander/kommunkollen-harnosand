@@ -14,7 +14,7 @@ test.beforeAll(async ({ request }) => {
 test('från behandling till ärende till ärendets väg genom organen', async ({ page }) => {
   await page.goto('/politik?organ=KF')
   await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
-  await page.locator('[data-testid="behandling"][data-paragraf="38"]').getByRole('link').click()
+  await page.locator('[data-testid="behandling"][data-paragraf="38"]').getByRole('link').first().click()
   await expect(page).toHaveURL(/\/paragraf\/38$/)
 
   const arende = page.getByTestId('arende')
@@ -34,7 +34,7 @@ test('från behandling till ärende till ärendets väg genom organen', async ({
   await expect(koppling).toContainText('Automatisk koppling via samma diarienummer KS/2026-113')
   await expect(page.getByTestId('slutligt-beslut')).toContainText('Kommunfullmäktige')
 
-  await steg.nth(0).getByRole('link').click()
+  await steg.nth(0).getByRole('link').first().click()
   await expect(page).toHaveURL(/\/paragraf\/31$/)
   await expect(page.getByRole('heading', { name: 'Borgenstak från 2026', level: 1 })).toBeVisible()
 })

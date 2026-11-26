@@ -211,10 +211,12 @@ Visuellt språk för hur säker en uppgift är. Det används konsekvent i tabell
 Märkningar (#162) är regelbaserade uppgifter om en behandling eller ett ärende, till exempel votering eller reservation (se GLOSSARY.md). De visas som små chips där behandlingar och ärenden listas: på sammanträdet, behandlingen, ärendet, ledamotens röster, Kommande ärenden och träffarna i Sök.
 
 - Chipet är 11 px text med hörnradie 4 px. Texten står alltid på chipet, t.ex. "Votering 26–24" eller "Reservation C, M", så färgen bär aldrig betydelse ensam.
-- **Votering**, **Reservation** och **Oenighet** har var sin dämpade, neutrala ton (`--markning-votering`, `--markning-reservation`, `--markning-oenighet`) med texten i `--ink`. Övriga märkningar (Återremitterad, Bordlagd, Jäv, behandlingstypen, Lång beredning och Återkommande) är konturchips med `--line-strong` och texten i `--ink-secondary`.
+- **Votering**, **Reservation** och **Oenighet** har var sin ljusa fyllning med mörk text i samma kulör (#174): Votering violett, Reservation turkos och Oenighet sandbrun. Tokens: `--markning-votering`, `--markning-reservation` och `--markning-oenighet` för fyllningen och `--markning-votering-text`, `--markning-reservation-text` och `--markning-oenighet-text` för texten, med egna värden i mörkt läge (mörk fyllning, ljus text). Texten har minst 4,5:1 mot fyllningen i båda lägena. Kulörerna ligger långt från partifärgerna (röd, blå, grön, gul) och organfärgerna (palettplats 1–5).
+- Övriga märkningar (Återremitterad, Bordlagd, Jäv, behandlingstypen, Lång beredning och Återkommande) är konturchips med `--line-strong` och texten i `--ink`.
+- Varje chip länkar till Sök med märkningen förvald, `/sok?markning=<id>`, så att läsaren får alla behandlingar och ärenden med märkningen. Vid hover blir kantlinjen textens färg och texten understruken, och fokus har den vanliga fokusringen. Där chipet står i en knapp eller en annan länk (raderna i Kommande ärenden) är det text utan länk.
 - Inga partifärger, inte heller när reservationen anger partier. Partierna står som förkortningar, alfabetiskt.
 - På ett ärende har en märkning som finns vid flera behandlingar antalet, "Votering (2)".
-- Filtret *Märkning* ligger i filterraden ovanför listan och speglas i URL:en (`markning=`).
+- Filtret *Märkning* ligger i filterraden ovanför listan och speglas i URL:en (`markning=`). Det har samma etikett, kontroll och höjd som de andra filtren i raden. I Sök står hjälptexten "Välj en märkning och lämna sökrutan tom för att se alla." under filterraden så länge sökrutan är tom.
 
 ## Ton i text
 

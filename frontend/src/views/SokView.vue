@@ -187,7 +187,7 @@ const sammantrade = (t: Soktraff) => ({
 
     </template>
 
-      <div class="filter" role="group" aria-label="Filter">
+      <div class="filter" role="group" aria-label="Filter" data-testid="filterrad">
         <Markningsfilter v-model="valdMarkning" arenden />
         <label>
           Organ
@@ -212,6 +212,9 @@ const sammantrade = (t: Soktraff) => ({
           </select>
         </label>
       </div>
+      <p v-if="!q" class="hjalp filterhjalp" data-testid="markningshjalp">
+        Välj en märkning och lämna sökrutan tom för att se alla.
+      </p>
 
     <template v-if="aktiv">
 
@@ -364,9 +367,13 @@ h1 {
 }
 .filter {
   display: flex;
+  align-items: flex-end;
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+}
+.filterhjalp {
+  margin: -8px 0 16px;
 }
 .filter label {
   display: grid;

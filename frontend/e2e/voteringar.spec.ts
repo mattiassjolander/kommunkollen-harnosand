@@ -50,7 +50,7 @@ test('votering per parti och per ledamot, med yrkanden och reservationer', async
   const rost = page.locator('[data-testid="ledamotens-rost"][data-datum="2026-02-23"][data-paragraf="5"]')
   await expect(rost).toHaveAttribute('data-rost', 'ja')
   await expect(rost).toContainText('ersättare för Nina Skyttberg')
-  await rost.getByRole('link').click()
+  await rost.getByRole('link').first().click()
   await expect(page).toHaveURL(/\/paragraf\/5$/)
   await expect(page.getByTestId('votering')).toBeVisible()
 })
@@ -58,7 +58,7 @@ test('votering per parti och per ledamot, med yrkanden och reservationer', async
 test('avstår enligt voteringslistan, med ankare till voteringen', async ({ page }) => {
   await page.goto('/politik?organ=KF')
   await page.locator('[data-testid="sammantrade"][data-datum="2026-03-23"]').getByRole('rowheader').getByRole('link').click()
-  await page.locator('[data-testid="behandling"][data-paragraf="39"]').getByRole('link').click()
+  await page.locator('[data-testid="behandling"][data-paragraf="39"]').getByRole('link').first().click()
   const v = page.getByTestId('votering')
   await expect(v).toHaveCount(1)
   await expect(v).toHaveAttribute('id', 'votering-1')
