@@ -23,7 +23,8 @@ test('statusindikatorn syns i sidhuvudet på alla sidor', async ({ page }) => {
 
 test('vyn Datakällor visar status per källa och körningsloggen', async ({ page }) => {
   await page.goto('/ekonomi')
-  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Datakällor' }).click()
+  // Datakällor står under den diskreta raden Om Kommunkollen (#160).
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Om Kommunkollen' }).click()
   await expect(page.getByRole('heading', { name: 'Datakällor och uppdateringsstatus' })).toBeVisible()
 
   const kolada = page.getByTestId('datakallor').locator('tr[data-kalla="kolada"]')

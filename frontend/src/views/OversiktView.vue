@@ -32,7 +32,7 @@ const GENVAGAR = [
     text: 'Alla ekonomiska nyckeltal över tid, med jämförelse mellan år, mandatperioder och export.',
   },
   {
-    till: '/floden',
+    till: '/ekonomi/floden',
     namn: 'Ekonomiska flöden – Sankey',
     text: 'Hur intäkterna fördelas på verksamhetsområden, och vad varje område kostar.',
   },

@@ -22,6 +22,7 @@ const router = useRouter()
 const utloggad = inject<() => void>('utloggad', () => {})
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
 const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
+const redaktionen = computed(() => !!jag.value?.roller.some((r) => r === 'redaktor' || r === 'utgivare'))
 
 function fraga(namn: string) {
   return computed<string>({
@@ -113,9 +114,12 @@ const csvLank = computed(() => `data:text/csv;charset=utf-8,${encodeURIComponent
     <p class="ingress">
       Protokoll där tolkningen hittade något som inte stämmer, eller där redaktionen har publicerat rättelser. En del
       avvikelser finns i själva protokollet och kan lämnas till kommunen. Andra beror på att plattformen inte kunde läsa
-      protokollet. Kontrollera alltid mot originalet innan du hör av dig till kommunen. Uppgifter i protokollen som inte
-      stämmer med varandra, till exempel röster som inte går ihop med närvarolistan, finns under
-      <RouterLink to="/politik/protokollavvikelser">Att anmäla</RouterLink>.
+      protokollet. Kontrollera alltid mot originalet innan du hör av dig till kommunen.
+      <!-- Att anmäla är redaktionens verktyg (#160). -->
+      <template v-if="redaktionen">
+        Uppgifter i protokollen som inte stämmer med varandra, till exempel röster som inte går ihop med närvarolistan,
+        finns under <RouterLink to="/redaktion/att-anmala" data-testid="att-anmala">Att anmäla</RouterLink>.
+      </template>
     </p>
   </header>
 

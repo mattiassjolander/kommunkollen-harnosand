@@ -12,10 +12,10 @@ test.beforeAll(async ({ request }) => {
 })
 
 test('kommande ärenden: lista, filter och underlag', async ({ page }) => {
-  await page.goto('/')
-  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Kommande' }).click()
-  await expect(page).toHaveURL(/\/kommande$/)
-  await expect(page.getByRole('heading', { name: 'Kommande', level: 1 })).toBeVisible()
+  await page.goto('/politik')
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Kommande ärenden' }).click()
+  await expect(page).toHaveURL(/\/politik\/kommande$/)
+  await expect(page.getByRole('heading', { name: 'Kommande ärenden', level: 1 })).toBeVisible()
 
   const rader = page.getByTestId('kommande-arende')
   await expect(rader.first()).toBeVisible()

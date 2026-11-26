@@ -120,7 +120,7 @@ const lank = (sammantradeId: number, paragraf: number) => `/politik/sammantraden
 
 <template>
   <header class="vyhuvud">
-    <h1>Kommande</h1>
+    <h1>Kommande ärenden</h1>
     <p class="ingress">
       Ärenden som inte är avslutade: obesvarade motioner och medborgarförslag, ärenden som återremitterats eller
       bordlagts, förslag som väntar på beslut i ett annat organ och pågående uppdrag. Uppgifterna är automatiskt lästa
