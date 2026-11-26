@@ -9,7 +9,9 @@ import {
   EjInloggad,
   ForManga,
   hamtaOrgan,
+  MARKNINGAR,
   sok,
+  type Markningsid,
   type Organ,
   type Soksortering,
   type Soksvar,
@@ -19,6 +21,8 @@ import {
 import { datum } from '../format'
 import Felaktighetsmarkering from '../components/Felaktighetsmarkering.vue'
 import Tolkningsmarkering from '../components/Tolkningsmarkering.vue'
+import Markningar from '../components/Markningar.vue'
+import Markningsfilter from '../components/Markningsfilter.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,6 +58,10 @@ const valtOrgan = fraga('organ')
 const valtAr = fraga('ar')
 const valdTyp = fraga('typ')
 const sortering = fraga('sortering')
+// Märkningen (#162) ger bara behandlingar och ärenden, och kan sökas utan sökord: "alla med votering 2026".
+const valdMarkning = fraga('markning')
+const aktiv = computed(() => q.value.length >= 2 || !!valdMarkning.value)
+const markningsnamn = computed(() => MARKNINGAR.find((m) => m.id === valdMarkning.value)?.namn.toLowerCase() ?? '')
 const sida = computed(() => Math.max(1, Number(route.query.sida) || 1))
 
 const text = ref(q.value)
@@ -63,7 +71,7 @@ const laddar = ref(false)
 const fel = ref<string | null>(null)
 
 async function ladda() {
-  if (q.value.length < 2) {
+  if (!aktiv.value) {
     svar.value = null
     return
   }
@@ -77,6 +85,7 @@ async function ladda() {
       typ: (valdTyp.value || undefined) as Soktyp | undefined,
       sortering: (sortering.value || 'relevans') as Soksortering,
       sida: sida.value,
+      markning: (valdMarkning.value || undefined) as Markningsid | undefined,
     })
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
@@ -89,8 +98,8 @@ async function ladda() {
 
 function sokNu() {
   const ny = text.value.trim()
-  if (ny.length < 2) return
-  router.push({ query: { ...route.query, q: ny, sida: undefined } })
+  if (ny.length < 2 && !(valdMarkning.value && !ny)) return
+  router.push({ query: { ...route.query, q: ny || undefined, sida: undefined } })
 }
 
 function valjTyp(typ: Soktyp | '') {
@@ -158,7 +167,7 @@ const sammantrade = (t: Soktraff) => ({
       till källorna. Ord böjs ("skolan" hittar "skolor"). Ett diarienummer ger ärendet först.
     </p>
 
-    <template v-if="q.length >= 2">
+    <template v-if="aktiv">
       <div v-if="svar" class="typer" role="group" aria-label="Typ" data-testid="typfilter">
         <button type="button" :aria-pressed="!valdTyp" data-typ="" @click="valjTyp('')">
           Alla <span class="antal">{{ totalt }}</span>
@@ -176,7 +185,10 @@ const sammantrade = (t: Soktraff) => ({
         </button>
       </div>
 
+    </template>
+
       <div class="filter" role="group" aria-label="Filter">
+        <Markningsfilter v-model="valdMarkning" arenden />
         <label>
           Organ
           <select v-model="valtOrgan" data-testid="filter-organ">
@@ -201,11 +213,14 @@ const sammantrade = (t: Soktraff) => ({
         </label>
       </div>
 
+    <template v-if="aktiv">
+
       <p v-if="fel" class="fel" role="alert">{{ fel }}</p>
       <p v-else-if="laddar && !svar" class="tom">Söker …</p>
       <template v-else-if="svar">
         <p class="sammanfattning" data-testid="antal-traffar" aria-live="polite">
-          {{ svar.antal }} {{ svar.antal === 1 ? 'träff' : 'träffar' }} för ”{{ q }}”
+          {{ svar.antal }} {{ svar.antal === 1 ? 'träff' : 'träffar' }}<template v-if="q"> för ”{{ q }}”</template
+          ><template v-if="valdMarkning"> med märkningen {{ markningsnamn }}</template>
         </p>
         <p v-if="!svar.antal" class="tom">Inga träffar. Pröva ett annat ord eller ta bort ett filter.</p>
         <ol class="traffar" :class="{ laddar }">
@@ -221,6 +236,7 @@ const sammantrade = (t: Soktraff) => ({
                 <template v-else>{{ d.text }}</template>
               </template>
             </p>
+            <Markningar v-if="t.markningar?.length" :markningar="t.markningar" class="chips" />
             <div class="rad3">
               <Tolkningsmarkering v-if="t.markeringar.includes('ocr')" ocr />
               <Tolkningsmarkering v-else-if="t.markeringar.includes('automatiskt_tolkad')" />
@@ -268,6 +284,10 @@ const sammantrade = (t: Soktraff) => ({
 </template>
 
 <style scoped>
+.chips {
+  display: flex;
+  margin-top: 4px;
+}
 h1 {
   font-size: 24px;
   font-weight: 600;

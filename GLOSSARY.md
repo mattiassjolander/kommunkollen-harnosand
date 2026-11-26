@@ -158,6 +158,16 @@ _Avoid_: Omröstning (som begrepp), röstning
 **Reservation**:
 En ledamots eller ett partis anmälan i protokollet om att de inte står bakom beslutet vid en behandling.
 
+**Märkning**:
+En regelbaserad uppgift om en behandling eller ett ärende, utläst ur protokollet, t.ex. votering eller reservation. Märkningen sitter på behandlingen. Ett ärende har summan av sina behandlingars märkningar, plus lång beredning och återkommande. Märkningarna räknas med publicerade rättelser pålagda. Det finns ingen märkning för enighet, eftersom ett protokoll utan yrkanden eller reservationer inte bevisar att alla var eniga.
+_Avoid_: Tagg, etikett
+
+**Oenighet**:
+En behandling med minst två yrkanden som går isär, eller med votering eller reservation. Yrkandena går isär när protokollets propositionsordning anger två eller fler förslag till beslut, eller när ett yrkande gäller avslag, återremiss, bordläggning eller ändring och ett annat bifall.
+
+**Lång beredning**:
+Ett ärende där det har gått mer än 12 månader från första behandlingen till det slutliga beslutet.
+
 ## Ekonomiska nyckeltal
 
 **Nyckeltal**:

@@ -12,6 +12,7 @@ import Protokollkalla from '../../components/Protokollkalla.vue'
 import Rattelseformular from '../../components/Rattelseformular.vue'
 import Rattelsemarkering from '../../components/Rattelsemarkering.vue'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
+import Markningar from '../../components/Markningar.vue'
 
 const route = useRoute()
 const utloggad = inject<() => void>('utloggad', () => {})
@@ -100,6 +101,7 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
           >, {{ tidsintervall(b.sittning.starttid, b.sittning.sluttid) }}</template
         ><template v-if="b.sittning.plats"> · {{ b.sittning.plats }}</template>
       </p>
+      <p v-if="b.markningar.length" class="markningsrad"><Markningar :markningar="b.markningar" /></p>
       <p class="markering"><Tolkningsmarkering :ocr="b.sammantrade.ocr" /></p>
       <Protokollkalla :protokoll="b.sammantrade.protokoll" :paragraf="b.paragraf" />
     </header>
@@ -320,6 +322,9 @@ const voteringsrubrik = (v: Votering, antal: number) => (antal > 1 ? `Votering $
 </template>
 
 <style scoped>
+.markningsrad {
+  margin: 8px 0 0;
+}
 .brodsmulor {
   display: flex;
   gap: 8px;

@@ -12,9 +12,12 @@ import {
   type Kommande,
   type Kommandearende,
   type Kommandestatus,
+  type Markningsid,
 } from '../api'
 import { parti, sammantradesdatum, tabelldatum, tal } from '../format'
 import Tolkningsmarkering from '../components/Tolkningsmarkering.vue'
+import Markningar from '../components/Markningar.vue'
+import Markningsfilter from '../components/Markningsfilter.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,6 +37,10 @@ function fraga(namn: string) {
 const valdStatus = fraga('status')
 const valtOrgan = fraga('organ')
 const valt = fraga('arende')
+const valdMarkning = fraga('markning')
+const markningsantal = computed(
+  () => Object.fromEntries((data.value?.markningar ?? []).map((m) => [m.id, m.antal])) as Partial<Record<Markningsid, number>>,
+)
 const sokning = ref('')
 
 async function ladda() {
@@ -62,6 +69,7 @@ const visade = computed(() => {
     (a) =>
       (!valdStatus.value || a.status === valdStatus.value) &&
       (!valtOrgan.value || a.senaste.sammantrade.organ.id === valtOrgan.value) &&
+      (!valdMarkning.value || a.markningar.some((m) => m.id === valdMarkning.value)) &&
       (!q || a.rubrik.toLowerCase().includes(q) || a.diarienummer.some((d) => d.toLowerCase().includes(q))),
   )
 })
@@ -157,6 +165,7 @@ const lank = (sammantradeId: number, paragraf: number) => `/politik/sammantraden
           <option v-for="[id, namn] in organ" :key="id" :value="id">{{ namn }}</option>
         </select>
       </label>
+      <Markningsfilter v-model="valdMarkning" :antal="markningsantal" arenden />
       <label>
         Sök
         <input v-model="sokning" type="search" placeholder="Rubrik eller diarienummer" data-testid="sok" />
@@ -182,6 +191,7 @@ const lank = (sammantradeId: number, paragraf: number) => `/politik/sammantraden
           <span class="etikett" :class="a.status">{{ statusnamn[a.status] }}</span>
           <span class="text">
             <span class="rubrik">{{ a.rubrik }}</span>
+            <Markningar :markningar="a.markningar" class="chips" />
             <span class="lage">
               {{ lage(a) }}
               <span v-if="a.over_ett_ar" class="varning" title="En motion ska besvaras inom ett år (KL 5 kap. 35 §)">
@@ -273,6 +283,10 @@ const lank = (sammantradeId: number, paragraf: number) => `/politik/sammantraden
 </template>
 
 <style scoped>
+.chips {
+  display: flex;
+  margin: 2px 0;
+}
 .vyhuvud {
   margin-bottom: 24px;
 }
