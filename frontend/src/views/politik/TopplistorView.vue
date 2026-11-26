@@ -118,7 +118,8 @@ const fler = (totalt: number, visade: number) => (totalt > visade ? `De ${visade
         <h2 id="langsta-beredning">Längsta beredning</h2>
         <p class="regel">
           Avgjorda ärenden med längst tid från första behandlingen till det slutliga beslutet. Ett ärende räknas till
-          perioden då det slutliga beslutet fattades.
+          perioden då det slutliga beslutet fattades. Ärenden som pågår, som en motion som ännu inte är besvarad, är
+          inte med.
         </p>
         <p v-if="!t.listor.langsta_beredning.rader.length" class="saknas">Inga avgjorda ärenden med flera behandlingar.</p>
         <div v-else class="rulla">
