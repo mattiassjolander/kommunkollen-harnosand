@@ -2,11 +2,25 @@
 // SKR:s skatteunderlagsprognoser för Härnösand (#61): den senaste prognosen per år i en tabell och
 // summa intäkter för varje cirkulär i ett linjediagram, så att det syns hur prognosen för samma år har
 // ändrats. Beloppen lagras i tkr och visas i mnkr. Varje värde har källhänvisning till cirkuläret.
+// Revideringarna är små mot nivån, så en värmekarta visar ändringen mellan cirkulären och ett stapeldiagram
+// visar vilka rader som drev en ändring (#161).
 import { computed, inject, onMounted, ref } from 'vue'
 import { EjInloggad, hamtaSkatteunderlagsprognoser, type Skatteunderlagsprognoser } from '../api'
-import { datum, tal } from '../format'
+import { datum, tal, talforandring } from '../format'
 import { laddaNer } from '../analys'
 import Linjediagram from '../components/Linjediagram.vue'
+import Revideringskarta from '../components/Revideringskarta.vue'
+import Drivkraftsdiagram from '../components/Drivkraftsdiagram.vue'
+import {
+  andring,
+  budgetar,
+  budgetjamforelse,
+  cirkularAr,
+  cirkularAren,
+  drivkrafter,
+  revideringar,
+  SUMMARAD,
+} from '../revideringar'
 
 const utloggad = inject<() => void>('utloggad', () => {})
 const data = ref<Skatteunderlagsprognoser | null>(null)
@@ -16,6 +30,7 @@ const fel = ref<string | null>(null)
 onMounted(async () => {
   try {
     data.value = await hamtaSkatteunderlagsprognoser()
+    forval()
   } catch (e) {
     if (e instanceof EjInloggad) return utloggad()
     fel.value = e instanceof Error ? e.message : String(e)
@@ -58,6 +73,74 @@ function exportera() {
   }
   laddaNer('skatteunderlagsprognoser-2280.csv', rader.join('\n'))
 }
+
+// Värmekartan (B): cirkulären från ett år i taget, det senaste året förvalt.
+const prognoser = computed(() => data.value?.prognoser ?? [])
+const karta = ref(0)
+const kartaAren = computed(() => cirkularAren(prognoser.value).filter((a) => revideringar(prognoser.value, a).length))
+const kartrader = computed(() => revideringar(prognoser.value, karta.value))
+function exporteraRevideringar() {
+  const rader = ['Från cirkulär;Till cirkulär;Publicerad;Rad;År;Ändring tkr;Ändring procent;Källa']
+  for (const r of kartrader.value) {
+    for (const a of new Set([...r.fran.ar, ...r.till.ar])) {
+      const c = andring(r.fran, r.till, SUMMARAD, a)
+      if (!c) continue
+      const pct = c.procent === null ? '' : c.procent.toFixed(4)
+      rader.push([r.fran.cirkular, r.till.cirkular, r.till.publicerad, SUMMARAD, a, c.tkr.toFixed(3), pct, r.till.url].join(';'))
+    }
+  }
+  laddaNer(`skatteunderlagsprognos-revideringar-${karta.value}.csv`, rader.join('\n'))
+}
+
+// Raden om budgeten: budgetåret, från årets första cirkulär till det senaste.
+const manad = new Intl.DateTimeFormat('sv-SE', { month: 'long', timeZone: 'Europe/Stockholm' })
+const budget = computed(() => {
+  const j = budgetjamforelse(prognoser.value)
+  if (!j) return null
+  const ar = budgetar()
+  if (j.fran === j.till) {
+    return `Bara ett cirkulär (${j.till.cirkular}) har kommit i år, så prognosen för ${ar} har inte reviderats än.`
+  }
+  const c = andring(j.fran, j.till, SUMMARAD, ar)
+  if (!c) return `Cirkulär ${j.fran.cirkular} och ${j.till.cirkular} har inte båda en prognos för ${ar}.`
+  const mnkr = Math.round(c.tkr / 100) / 10 || 0
+  const hur = mnkr > 0 ? `har höjts med ${tal(mnkr, 'mnkr')}` : mnkr < 0 ? `har sänkts med ${tal(-mnkr, 'mnkr')}` : 'är oförändrad'
+  return `Prognosen för ${ar} ${hur} sedan ${manad.format(new Date(j.fran.publicerad))} (${j.fran.cirkular} → ${j.till.cirkular}).`
+})
+
+// Drivkrafterna (D): budgetåret och de två senaste cirkulären är förvalda.
+const dAr = ref(0)
+const dFran = ref('')
+const dTill = ref('')
+const allaPrognosAr = computed(() => [...new Set(prognoser.value.flatMap((p) => p.ar))].sort((a, b) => a - b))
+function forval() {
+  const p = prognoser.value
+  const sista = p.at(-1)
+  if (!sista) return
+  karta.value = kartaAren.value.at(-1) ?? cirkularAr(sista)
+  dTill.value = sista.cirkular
+  dFran.value = (p.at(-2) ?? sista).cirkular
+  const b = budgetar()
+  dAr.value = allaPrognosAr.value.includes(b) ? b : sista.ar[0]
+}
+const prognos = (cirkular: string) => prognoser.value.find((p) => p.cirkular === cirkular) ?? null
+const dPar = computed(() => {
+  const fran = prognos(dFran.value)
+  const till = prognos(dTill.value)
+  return fran && till ? { fran, till } : null
+})
+const dSumma = computed(() => (dPar.value ? andring(dPar.value.fran, dPar.value.till, SUMMARAD, dAr.value) : null))
+const dRader = computed(() => (dPar.value && dSumma.value ? drivkrafter(dPar.value.fran, dPar.value.till, dAr.value) : []))
+const valdRad = computed(() => kartrader.value.findIndex((r) => r.fran.cirkular === dFran.value && r.till.cirkular === dTill.value))
+const drivkraftsrubrik = ref<HTMLElement | null>(null)
+function valjRuta(i: number, a: number) {
+  const r = kartrader.value[i]
+  dFran.value = r.fran.cirkular
+  dTill.value = r.till.cirkular
+  dAr.value = a
+  drivkraftsrubrik.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+const mnkrAndring = (tkr: number) => talforandring(Math.round(tkr / 100) / 10 || 0, 'mnkr')
 </script>
 
 <template>
@@ -77,6 +160,68 @@ function exportera() {
   </p>
 
   <template v-else>
+    <section v-if="kartaAren.length" class="kort" aria-labelledby="revidering-rubrik" data-testid="revideringar">
+      <div class="rubrikrad">
+        <h2 id="revidering-rubrik">Så har prognosen ändrats mellan cirkulären</h2>
+        <button type="button" data-testid="exportera-revideringar" @click="exporteraRevideringar">Ladda ner CSV</button>
+      </div>
+      <p class="forklaring">
+        Ändringen av summa intäkter inklusive avräkning och fastighetsavgift mot föregående cirkulär, i mnkr. En rad per
+        cirkulär och en kolumn per prognosår. Årets första cirkulär jämförs med det sista från året före.
+      </p>
+      <div v-if="kartaAren.length > 1" class="val">
+        <label for="karta-ar">Cirkulär från</label>
+        <select id="karta-ar" v-model.number="karta" data-testid="karta-ar">
+          <option v-for="a in kartaAren" :key="a" :value="a">{{ a }}</option>
+        </select>
+      </div>
+      <Revideringskarta :revideringar="kartrader" :vald-rad="valdRad" :valt-ar="dAr" @valj="valjRuta" />
+      <p v-if="budget" class="budgetrad" data-testid="budgetrad">{{ budget }}</p>
+      <p class="kallrad">Källa: SKR, prognosunderlag till varje cirkulär, omräknat för kommunkod 2280.</p>
+    </section>
+
+    <section v-if="prognoser.length > 1" class="kort" aria-labelledby="drivkraft-rubrik" data-testid="drivkrafter">
+      <h2 id="drivkraft-rubrik" ref="drivkraftsrubrik">Vad som drev ändringen</h2>
+      <p class="forklaring">
+        Ändringen per rad i prognosunderlaget mellan två cirkulär för ett år, i mnkr. Rader som inte ändrades visas inte.
+      </p>
+      <div class="val">
+        <label for="drivkraft-ar">År</label>
+        <select id="drivkraft-ar" v-model.number="dAr" data-testid="drivkraft-ar">
+          <option v-for="a in allaPrognosAr" :key="a" :value="a">{{ a }}</option>
+        </select>
+        <label for="drivkraft-fran">Från cirkulär</label>
+        <select id="drivkraft-fran" v-model="dFran" data-testid="drivkraft-fran">
+          <option v-for="p in prognoser" :key="p.cirkular" :value="p.cirkular">{{ p.cirkular }}</option>
+        </select>
+        <label for="drivkraft-till">Till cirkulär</label>
+        <select id="drivkraft-till" v-model="dTill" data-testid="drivkraft-till">
+          <option v-for="p in prognoser" :key="p.cirkular" :value="p.cirkular">{{ p.cirkular }}</option>
+        </select>
+      </div>
+      <p v-if="!dPar || !dSumma" class="saknas" data-testid="drivkraft-saknas">
+        Cirkulär {{ dFran }} och {{ dTill }} har inte båda en prognos för {{ dAr }}.
+      </p>
+      <template v-else>
+        <Drivkraftsdiagram
+          v-if="dRader.length"
+          :rader="dRader"
+          :rubrik="`Ändring per rad i prognosunderlaget för ${dAr} från cirkulär ${dFran} till ${dTill}, mnkr`"
+          :kalla="`SKR, cirkulär ${dFran} och ${dTill}`"
+        />
+        <p v-else class="saknas" data-testid="inga-drivkrafter">Ingen rad i prognosunderlaget för {{ dAr }} ändrades.</p>
+        <p class="summarad" data-testid="drivkraftssumma">
+          Summa intäkter inklusive avräkning och fastighetsavgift {{ dAr }}:
+          <strong class="tal">{{ mnkrAndring(dSumma.tkr) }}</strong>
+        </p>
+      </template>
+      <p class="kallrad">
+        Källa: SKR, prognosunderlag till cirkulär
+        <a :href="dPar?.fran.url" rel="noopener" target="_blank">{{ dFran }}</a> och
+        <a :href="dPar?.till.url" rel="noopener" target="_blank">{{ dTill }}</a>.
+      </p>
+    </section>
+
     <section class="kort" aria-labelledby="senaste-rubrik" data-testid="senaste-prognos">
       <h2 id="senaste-rubrik">Senaste prognosen, cirkulär {{ senaste.cirkular }}</h2>
       <p class="forklaring">
@@ -208,6 +353,36 @@ function exportera() {
   font-weight: 600;
   border-top: 1px solid var(--line-strong);
 }
+.budgetrad {
+  font-size: 15px;
+  margin: 12px 0 0;
+  max-width: 70ch;
+}
+.val {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.val select {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.summarad {
+  font-size: 13px;
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-strong);
+}
+.tal {
+  font-variant-numeric: tabular-nums;
+}
 .tabellvy {
   margin-top: 12px;
   font-size: 13px;
@@ -218,6 +393,7 @@ function exportera() {
   margin: 8px 0 0;
 }
 button {
+  white-space: nowrap;
   font: inherit;
   font-size: 13px;
   padding: 4px 10px;
