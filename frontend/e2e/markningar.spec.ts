@@ -100,8 +100,85 @@ test('kommande ärenden: chips och filter på märkning', async ({ page, request
   test.skip(!m, 'inga märkningar bland de kommande ärendena')
   await page.goto('/politik/kommande')
   await expect(page.getByTestId('kommande-arende').first()).toBeVisible()
+  // Raden är en knapp, så chipsen är inte länkar där (#174).
+  await expect(page.getByTestId('kommande-arende').locator('a[data-testid="markning"]')).toHaveCount(0)
   await page.getByTestId('markningsfilter').selectOption(m.id)
   await expect(page).toHaveURL(new RegExp(`markning=${m.id}`))
   await expect(page.getByTestId('kommande-arende')).toHaveCount(m.antal)
   await allaHar(page.getByTestId('kommande-arende'), m.id)
+})
+
+// WCAG-kontrast mellan två färger som getComputedStyle ger dem, "rgb(r, g, b)".
+function kontrast(a: string, b: string): number {
+  const lum = (c: string) => {
+    const [r, g, bl] = (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map((x) => {
+      const v = Number(x) / 255
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl
+  }
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+test('färgade chips med kontrast i ljust och mörkt läge, och chippet länkar till Sök (#174)', async ({ page }) => {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme })
+    await page.goto('/politik?organ=KF')
+    await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('rowheader').getByRole('link').click()
+    const chips = page.locator('[data-testid="behandling"][data-paragraf="5"]').getByTestId('markning')
+    await expect(chips.nth(2)).toHaveText('Oenighet')
+    const farger = await chips.evaluateAll((el) =>
+      el.slice(0, 3).map((e) => ({ fg: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor })),
+    )
+    // Tre olika fyllningar och tre olika textfärger, och texten klarar 4,5:1 mot fyllningen.
+    expect(new Set(farger.map((f) => f.bg)).size).toBe(3)
+    expect(new Set(farger.map((f) => f.fg)).size).toBe(3)
+    for (const f of farger) expect(kontrast(f.fg, f.bg), `${colorScheme}: ${f.fg} på ${f.bg}`).toBeGreaterThanOrEqual(4.5)
+  }
+
+  // Ett konturchip har texten i --ink.
+  const ink = await page.evaluate(() => {
+    const p = document.createElement('p')
+    p.style.color = 'var(--ink)'
+    document.body.append(p)
+    return getComputedStyle(p).color
+  })
+  const kontur = page.locator('[data-testid="markning"].kontur').first()
+  if (await kontur.count()) await expect(kontur).toHaveCSS('color', ink)
+
+  // Klick på chippet öppnar Sök med märkningen förvald och listar alla träffar med den.
+  const votering = page.locator('[data-testid="behandling"][data-paragraf="5"]').locator('[data-markning="votering"]')
+  await votering.focus()
+  await expect(votering).toBeFocused()
+  await votering.click()
+  await expect(page).toHaveURL(/\/sok\?markning=votering$/)
+  await expect(page.getByTestId('markningsfilter')).toHaveValue('votering')
+  await expect(page.getByTestId('antal-traffar')).toContainText('med märkningen votering')
+  await allaHar(page.getByTestId('traff'), 'votering')
+})
+
+test('sök: hjälptext om märkningen och filtren på samma linje (#174)', async ({ page }) => {
+  await page.goto('/sok')
+  await expect(page.getByTestId('markningshjalp')).toHaveText('Välj en märkning och lämna sökrutan tom för att se alla.')
+  const kontroller = page.getByTestId('filterrad').locator('select')
+  await expect(kontroller).toHaveCount(4)
+  const lagen = await kontroller.evaluateAll((el) =>
+    el.map((e) => {
+      const r = e.getBoundingClientRect()
+      return { top: Math.round(r.top), hojd: Math.round(r.height) }
+    }),
+  )
+  expect(new Set(lagen.map((l) => l.top)).size, JSON.stringify(lagen)).toBe(1)
+  expect(new Set(lagen.map((l) => l.hojd)).size, JSON.stringify(lagen)).toBe(1)
+  const etiketter = await page
+    .getByTestId('filterrad')
+    .locator('label')
+    .evaluateAll((el) => el.map((e) => `${getComputedStyle(e).fontSize} ${getComputedStyle(e).color}`))
+  expect(new Set(etiketter).size).toBe(1)
+
+  // Med sökord försvinner hjälptexten.
+  await page.getByTestId('sokfalt').fill('budget')
+  await page.getByTestId('sokfalt').press('Enter')
+  await expect(page.getByTestId('markningshjalp')).toHaveCount(0)
 })

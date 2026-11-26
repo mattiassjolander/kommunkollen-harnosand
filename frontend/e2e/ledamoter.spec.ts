@@ -12,7 +12,7 @@ test.beforeAll(async ({ request }) => {
 test('från behandling till ledamot till ledamotens sammanträden', async ({ page }) => {
   await page.goto('/politik?organ=KF')
   await page.locator('[data-testid="sammantrade"][data-datum="2026-02-23"]').getByRole('rowheader').getByRole('link').click()
-  await page.locator('[data-testid="behandling"][data-paragraf="3"]').getByRole('link').click()
+  await page.locator('[data-testid="behandling"][data-paragraf="3"]').getByRole('link').first().click()
   await expect(page).toHaveURL(/\/paragraf\/3$/)
 
   const person = page.getByTestId('beslutande').getByTestId('person').filter({ hasText: 'Lennart Molin' })
@@ -27,7 +27,7 @@ test('från behandling till ledamot till ledamotens sammanträden', async ({ pag
 
   const rad = page.locator('[data-testid="ledamotens-sammantrade"][data-datum="2026-02-23"]')
   await expect(rad).toContainText('tjänstgör för Nina Skyttberg')
-  await rad.getByRole('link').click()
+  await rad.getByRole('link').first().click()
   await expect(page).toHaveURL(/\/politik\/sammantraden\/\d+$/)
   await expect(page.getByTestId('sammantradesinfo')).toContainText('23 februari 2026')
 })
@@ -44,7 +44,7 @@ test('registret visar parti enligt protokollen och ett partibyte', async ({ page
   await expect(edgren.getByTestId('parti').first()).toHaveText('partilös')
   await expect(edgren.getByTestId('flera-partier')).toContainText('tidigare även V')
 
-  await edgren.getByRole('link').click()
+  await edgren.getByRole('link').first().click()
   const perioder = page.getByTestId('partiperiod')
   await expect(perioder.first()).toContainText('partilös')
   await expect(perioder.last()).toContainText('V')
@@ -75,7 +75,7 @@ test('en redaktör slår ihop två namn för samma person och delar upp dem igen
 
   await page.goto('/politik/ledamoter?q=Mohamed')
   await expect(page.getByTestId('ledamot')).toHaveCount(1)
-  await page.getByTestId('ledamot').getByRole('link').click()
+  await page.getByTestId('ledamot').getByRole('link').first().click()
 
   await page.getByTestId('redaktor').getByTestId('namnvariant').filter({ hasText: 'Mohamed Mohamed' }).getByTestId('dela-upp').click()
   await expect(page.getByTestId('meddelande')).toContainText('är nu en egen person igen')

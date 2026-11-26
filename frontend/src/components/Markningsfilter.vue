@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Filter på märkning (#162): en lista med märkningarna, med antal när de är kända.
+// Filter på märkning (#162): en lista med märkningarna, med antal när de är kända. Etiketten och listan följer
+// filterraden den står i (#174), så klassen heter inte .filter och listan ärver teckenstorleken.
 import { computed } from 'vue'
 import { MARKNINGAR, type Markningsid } from '../api'
 
@@ -18,7 +19,7 @@ const val = computed(() =>
 </script>
 
 <template>
-  <label class="filter">
+  <label class="markningsfilter">
     Märkning
     <select
       :value="modelValue"
@@ -34,16 +35,14 @@ const val = computed(() =>
 </template>
 
 <style scoped>
-.filter {
-  display: inline-flex;
-  flex-direction: column;
+.markningsfilter {
+  display: grid;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-secondary);
 }
 select {
   font: inherit;
-  font-size: 13px;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line-strong);

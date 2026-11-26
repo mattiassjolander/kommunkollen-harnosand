@@ -54,10 +54,14 @@
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;
-  /* Märkningar (design.md, Märkningar, #162): dämpade, neutrala toner bakom texten. Inga partifärger. */
-  --markning-votering: #e6e4dc;
-  --markning-reservation: #e1e5ea;
-  --markning-oenighet: #ede4d8;
+  /* Märkningar (design.md, Märkningar, #162, #174): ljus fyllning med mörk text i samma kulör, violett, turkos och
+     sandbrun. Långt från partifärgerna och organfärgerna. Texten har minst 4,5:1 mot fyllningen i båda lägena. */
+  --markning-votering: #e4dcfa;
+  --markning-votering-text: #46309a;
+  --markning-reservation: #cdecec;
+  --markning-reservation-text: #0b5960;
+  --markning-oenighet: #ecdcc4;
+  --markning-oenighet-text: #6b4720;
 
   /* Partifärger: bara som liten markering bredvid förkortningen (design.md, Partifärger). */
   --parti-s: #e8112d;
@@ -109,9 +113,12 @@
     --seq-3: #5a9be0;
     --seq-4: #a9cdf5;
     --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.5);
-    --markning-votering: #302f2b;
-    --markning-reservation: #2a2e33;
-    --markning-oenighet: #342e27;
+    --markning-votering: #2c2545;
+    --markning-votering-text: #d2c8f6;
+    --markning-reservation: #163a3f;
+    --markning-reservation-text: #a3e0e2;
+    --markning-oenighet: #3b3023;
+    --markning-oenighet-text: #e6d2b2;
   }
 }
 
@@ -148,9 +155,12 @@
   --seq-3: #5a9be0;
   --seq-4: #a9cdf5;
   --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --markning-votering: #302f2b;
-  --markning-reservation: #2a2e33;
-  --markning-oenighet: #342e27;
+  --markning-votering: #2c2545;
+  --markning-votering-text: #d2c8f6;
+  --markning-reservation: #163a3f;
+  --markning-reservation-text: #a3e0e2;
+  --markning-oenighet: #3b3023;
+  --markning-oenighet-text: #e6d2b2;
 }
 
 *,
