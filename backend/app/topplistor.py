@@ -35,6 +35,7 @@ import psycopg
 
 from . import kommande, markningar, motioner
 from .arenden import NIVA, SAMLING, slutligt_beslut
+from .aterkommande import handelse
 from .partitillhorighet import Gallande
 from .sammansattning import PERIODER, periodnamn
 from .sources.harnosand import organ_ref
@@ -185,11 +186,20 @@ def berakna(conn: psycopg.Connection, valt: dict, idag: date | None = None) -> d
             per_arende[r["arende_id"]].append(r)
     mandatet = mandat(conn, valt["mandat_valar"])
 
-    # Längsta beredning: avgjorda ärenden, från första behandlingen till det slutliga beslutet.
+    # Ärenden som pågår enligt Kommande. Ett pågående uppdrag har ett slutligt beslut och räknas som avgjort.
+    kommande_arenden = kommande.berakna(rader, kommande.MANADER, idag)["arenden"]
+    pagar = {a["arende_id"] for a in kommande_arenden if a["status"] != "uppdrag"}
+
+    # Längsta beredning: avgjorda ärenden, från första behandlingen till det slutliga beslutet. Ett ärende som
+    # pågår (en obesvarad motion med ett remissvar från en nämnd, till exempel) eller vars senaste beslut är en
+    # återremiss eller bordläggning är inte avgjort, så ett ärende står aldrig i både den här listan och i
+    # Längst pågående.
     beredning = []
     for arende_id, bs in per_arende.items():
         sista = bs[-1]
-        if slutligt_beslut(sista["beslut"]) and inom(sista["datum"]) and (dagar := (sista["datum"] - bs[0]["datum"]).days):
+        if arende_id in pagar or handelse(sista["beslut"]) or not slutligt_beslut(sista["beslut"]):
+            continue
+        if inom(sista["datum"]) and (dagar := (sista["datum"] - bs[0]["datum"]).days):
             beredning.append({"arende_id": arende_id, "rubrik": sista["rubrik"], "dagar": dagar,
                               "fran": bs[0]["datum"], "till": sista["datum"], "behandlingar": [_ref(b) for b in bs]})
     beredning.sort(key=lambda r: (-r["dagar"], r["till"]))
@@ -197,9 +207,9 @@ def berakna(conn: psycopg.Connection, valt: dict, idag: date | None = None) -> d
     # Längst pågående: ärenden utan slutligt beslut enligt Kommande, med en behandling i urvalet. Ett pågående
     # uppdrag har ett slutligt beslut och står i stället i Längsta beredning.
     pagaende = []
-    for a in kommande.berakna(rader, kommande.MANADER, idag)["arenden"]:
+    for a in kommande_arenden:
         bs = per_arende.get(a["arende_id"]) or []
-        if a["status"] == "uppdrag" or not bs or not any(inom(b["datum"]) for b in bs):
+        if a["arende_id"] not in pagar or not bs or not any(inom(b["datum"]) for b in bs):
             continue
         pagaende.append({"arende_id": a["arende_id"], "rubrik": a["rubrik"], "status": kommande.STATUS[a["status"]],
                          "dagar": (idag - bs[0]["datum"]).days, "fran": bs[0]["datum"],

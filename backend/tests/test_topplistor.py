@@ -282,6 +282,35 @@ def test_langst_pagaende_har_inget_slutligt_beslut(api, database_url):
     assert listor(api)["listor"]["langst_pagaende"]["totalt"] == t["totalt"] + 1
 
 
+def test_ett_arende_star_aldrig_i_bade_beredning_och_pagaende(api, database_url):
+    # En obesvarad motion där en nämnd har antagit ett remissvar: nämndens beslut är inte ett förslag, men motionen
+    # är inte besvarad. Den pågår och har ingen avslutad beredning (som i produktionen, november 2026).
+    pagaende = listor(api)["listor"]["langst_pagaende"]["rader"]
+    motion = next(r for r in pagaende if r["rubrik"] == "Motion - Översyn av taxor och avgifter")
+    alla = kf_sammantraden(api)
+    remissvar, aterremiss = med_arende(api, database_url, alla[-1])[:2]
+    flytta_till_arende(database_url, motion["arende_id"], alla[-1]["id"], remissvar["paragraf"],
+                       "Samhällsnämnden beslutar att anta remissvaret gällande motionen som sitt eget, samt att "
+                       "översända svaret till kommunstyrelsen.")
+    # Remissvaret är samhällsnämndens: sammanträdet görs om till nämndens, så att svaret inte besvarar motionen.
+    with db.connect(database_url) as conn:
+        conn.execute("UPDATE sammantrade SET organ = 'SAM' WHERE id = %s", (alla[-1]["id"],))
+    # Ett ärende vars senaste beslut är en återremiss är inte avgjort.
+    forsta = med_arende(api, database_url, alla[0])[0]
+    flytta_till_arende(database_url, forsta["arende_id"], alla[-1]["id"], aterremiss["paragraf"],
+                       "Kommunfullmäktige beslutar att återremittera ärendet.")
+
+    t = listor(api)["listor"]
+    beredning = {r["arende_id"] for r in t["langsta_beredning"]["rader"]}
+    assert motion["arende_id"] in {r["arende_id"] for r in t["langst_pagaende"]["rader"]}
+    assert motion["arende_id"] not in beredning
+    assert forsta["arende_id"] not in beredning
+    for ar in ({}, {"ar": "mandatperiod", "period": 2022}):
+        x = listor(api, **ar)["listor"]
+        assert not ({r["arende_id"] for r in x["langsta_beredning"]["rader"]}
+                    & {r["arende_id"] for r in x["langst_pagaende"]["rader"]})
+
+
 def test_ledtid_for_motion_raknas_till_aret_den_besvarades(api, database_url):
     pagaende = listor(api)["listor"]["langst_pagaende"]["rader"]
     motion = next(r for r in pagaende if r["rubrik"] == "Motion - Översyn av taxor och avgifter")
