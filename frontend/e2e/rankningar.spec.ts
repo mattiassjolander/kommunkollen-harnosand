@@ -106,3 +106,111 @@ test('en redaktör registrerar ett metodbyte som bryter linjen i diagrammet', as
   await metodbyten.getByRole('button', { name: 'Ta bort' }).click()
   await expect(page.getByTestId('metodbyte')).toHaveCount(0)
 })
+
+// #177: förändringen mot föregående år visas med ▲, ▼ eller = framför texten, i den divergerande paletten.
+
+/** Färgen som en token ger i det aktuella läget, för jämförelse med ikonens beräknade färg. */
+async function tokenfarg(page: import('@playwright/test').Page, token: string): Promise<string> {
+  return page.evaluate((t) => {
+    const prov = document.createElement('span')
+    prov.style.color = `var(${t})`
+    document.body.append(prov)
+    const farg = getComputedStyle(prov).color
+    prov.remove()
+    return farg
+  }, token)
+}
+
+for (const lage of ['light', 'dark'] as const) {
+  test(`rankningskorten har ikon och färg för förändringen (${lage === 'light' ? 'ljust' : 'mörkt'} läge)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: lage })
+    // Placeringarna i de inspelade källsvaren förbättras båda, så de andra fallen läggs in i svaret.
+    await page.route('**/api/rankningar', async (route) => {
+      const svar = await route.fetch()
+      const rankningar = await svar.json()
+      const mall = rankningar[0]
+      const variant = (id: string, titel: string, foregaende: number | null) => ({
+        ...mall,
+        id,
+        titel,
+        senaste: {
+          ...mall.senaste,
+          placering: 100,
+          foregaende: foregaende === null ? null : { ar: mall.senaste.ar - 1, placering: foregaende },
+          andring: foregaende === null ? null : 100 - foregaende,
+          metodbyte: false,
+        },
+      })
+      await route.fulfill({
+        response: svar,
+        json: [
+          ...rankningar,
+          variant('lagre', 'Exempel högre platsnummer', 90),
+          variant('samma', 'Exempel samma plats', 100),
+          variant('utan', 'Exempel utan föregående år', null),
+        ],
+      })
+    })
+    await page.goto('/rankningar')
+    const kort = page.getByTestId('rankningskort')
+
+    const fk = kort.filter({ hasText: 'Lokalt företagsklimat' })
+    const upp = fk.getByTestId('placeringsikon')
+    await expect(upp).toHaveText('▲')
+    await expect(upp).toHaveAttribute('aria-hidden', 'true')
+    await expect(fk.getByTestId('forandring')).toContainText('Förändring i placering: −18')
+    await expect(upp).toHaveCSS('color', await tokenfarg(page, '--diverg-hogre'))
+
+    const ned = kort.filter({ hasText: 'Exempel högre platsnummer' })
+    await expect(ned.getByTestId('placeringsikon')).toHaveText('▼')
+    await expect(ned.getByTestId('placeringsikon')).toHaveCSS('color', await tokenfarg(page, '--diverg-lagre'))
+    await expect(ned.getByTestId('forandring')).toContainText('Förändring i placering: +10')
+
+    const samma = kort.filter({ hasText: 'Exempel samma plats' })
+    await expect(samma.getByTestId('placeringsikon')).toHaveText('=')
+    await expect(samma.getByTestId('placeringsikon')).toHaveCSS('color', await tokenfarg(page, '--ink-muted'))
+    await expect(samma.getByTestId('forandring')).toContainText('Samma placering')
+
+    const utan = kort.filter({ hasText: 'Exempel utan föregående år' })
+    await expect(utan.getByTestId('placering')).toHaveText('Plats 100 av 290')
+    await expect(utan.getByTestId('placeringsikon')).toHaveCount(0)
+  })
+}
+
+test('delmåtten har ikon för förändringen i placering, och ingen pil vid metodbyte', async ({ page }) => {
+  await page.goto('/rankningar/foretagsklimat')
+  const omdome = page
+    .getByTestId('delmatt')
+    .getByRole('row')
+    .filter({ hasText: 'Vilket sammanfattande omdöme vill du ge företagsklimatet i kommunen?' })
+  // Plats 236 mot 263 året innan.
+  await expect(omdome.getByTestId('delmattsforandring')).toContainText('plats −27 (mot 2025)')
+  await expect(omdome.getByTestId('placeringsikon')).toHaveText('▲')
+  await expect(omdome.getByTestId('placeringsikon')).toHaveCSS('color', await tokenfarg(page, '--diverg-hogre'))
+  // Varje delmått med placering båda åren har en ikon.
+  const ikoner = page.getByTestId('delmatt').getByTestId('placeringsikon')
+  expect(await ikoner.count()).toBeGreaterThan(1)
+
+  // Ett metodbyte mellan 2025 och 2026: "Ny metod" och ingen pil, på delmåtten och på kortet.
+  await page.request.post('/api/auth/test/redaktor')
+  await page.goto('/rankningar/foretagsklimat')
+  const metodbyten = page.getByTestId('metodbyten')
+  await metodbyten.getByLabel('År').fill('2026')
+  await metodbyten.getByLabel('Vad ändrades i metoden').fill('Ny enkät')
+  await metodbyten.getByRole('button', { name: 'Registrera metodbyte' }).click()
+  await expect(metodbyten).toContainText('2026: Ny enkät')
+  await expect(omdome.getByTestId('delmattsforandring')).toHaveText('Ny metod')
+  await expect(omdome.getByTestId('placeringsikon')).toHaveCount(0)
+
+  await page.goto('/rankningar')
+  const fk = page.getByTestId('rankningskort').filter({ hasText: 'Lokalt företagsklimat' })
+  await expect(fk.getByTestId('forandring')).toHaveText('2025: plats 283 · Ny metod')
+  await expect(fk.getByTestId('placeringsikon')).toHaveCount(0)
+
+  await page.goto('/rankningar/foretagsklimat')
+  await page.getByTestId('metodbyten').getByRole('button', { name: 'Ta bort' }).click()
+  await expect(page.getByTestId('metodbyten')).not.toContainText('2026: Ny enkät')
+  await expect(omdome.getByTestId('placeringsikon')).toHaveText('▲')
+})

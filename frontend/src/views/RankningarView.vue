@@ -4,6 +4,7 @@
 import { inject, onMounted, ref } from 'vue'
 import { EjInloggad, hamtaRankningar, type Rankningsinfo } from '../api'
 import { rankningsandring, tal2 } from '../rankning'
+import Placeringsikon from '../components/Placeringsikon.vue'
 
 const rankningar = ref<Rankningsinfo[]>([])
 const laddar = ref(true)
@@ -56,8 +57,13 @@ onMounted(async () => {
           poäng
         </span>
         <span v-if="r.senaste.foregaende" class="detalj" data-testid="forandring">
-          {{ r.senaste.foregaende.ar }}: plats {{ r.senaste.foregaende.placering }} ·
-          {{ rankningsandring(r.senaste.andring) }}
+          <template v-if="r.senaste.metodbyte">
+            {{ r.senaste.foregaende.ar }}: plats {{ r.senaste.foregaende.placering }} · Ny metod
+          </template>
+          <template v-else>
+            <Placeringsikon :andring="r.senaste.andring" />{{ r.senaste.foregaende.ar }}: plats
+            {{ r.senaste.foregaende.placering }} · {{ rankningsandring(r.senaste.andring) }}
+          </template>
         </span>
       </template>
       <span v-else class="detalj">Ingen placering för Härnösand än.</span>

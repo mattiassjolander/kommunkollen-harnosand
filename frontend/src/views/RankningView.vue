@@ -17,6 +17,7 @@ import { laddaNer } from '../analys'
 import { datum } from '../format'
 import { rankningsandring, skillnad2, tal2 } from '../rankning'
 import Linjediagram from '../components/Linjediagram.vue'
+import Placeringsikon from '../components/Placeringsikon.vue'
 
 const route = useRoute()
 const r = ref<Rankningssida | null>(null)
@@ -80,9 +81,21 @@ function varde(v: number | null, svar: string | null, enhet: string): string {
   const tal = v === null ? '' : `${tal2(v)}${enhet === 'poäng' ? ' p' : ''}`
   return svar ? `${svar}${tal ? ` (${tal})` : ''}` : tal
 }
+// Metoden byttes mellan delmåttets föregående år och dess senaste (#177), så värdena går inte att jämföra.
+function nyMetod(d: Rankningsdelmatt): boolean {
+  const f = d.foregaende
+  return !!f && (r.value?.metodbyten ?? []).some((m) => f.ar < m.ar && m.ar <= d.ar)
+}
+/** Skillnaden i delmåttets placering mot föregående år, för ikonen. Ingen vid metodbyte eller utan placering. */
+function placeringsandring(d: Rankningsdelmatt): number | null {
+  const f = d.foregaende
+  if (!f || nyMetod(d) || d.placering === null || f.placering === null) return null
+  return d.placering - f.placering
+}
 function forandring(d: Rankningsdelmatt): string {
   const f = d.foregaende
   if (!f) return '–'
+  if (nyMetod(d)) return 'Ny metod'
   const delar = []
   if (d.varde !== null && f.varde !== null) delar.push(skillnad2(d.varde - f.varde))
   if (d.placering !== null && f.placering !== null) delar.push(`plats ${skillnad2(d.placering - f.placering)}`)
@@ -244,7 +257,9 @@ async function taBort(a: number) {
                 {{ d.riksvarde === null ? 'Uppgift saknas' : tal2(d.riksvarde) }}
               </td>
               <td v-if="visaPlacering" class="hoger">{{ d.placering ?? '–' }}</td>
-              <td class="hoger">{{ forandring(d) }}</td>
+              <td class="hoger" data-testid="delmattsforandring">
+                <Placeringsikon :andring="placeringsandring(d)" />{{ forandring(d) }}
+              </td>
             </tr>
           </tbody>
         </table>

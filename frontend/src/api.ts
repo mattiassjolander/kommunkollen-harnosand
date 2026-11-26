@@ -2069,6 +2069,8 @@ export interface Rankningssammanfattning {
   foregaende: { ar: number; placering: number } | null
   /** Skillnaden i placeringens nummer mot året före (negativ = närmare plats 1). */
   andring: number | null
+  /** Metoden byttes mellan föregående år och det senaste, så placeringarna går inte att jämföra (#177). */
+  metodbyte: boolean
 }
 
 export interface Rankningsinfo {
