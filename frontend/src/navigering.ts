@@ -12,7 +12,7 @@ export interface Undervy {
   /** Visas bara för dessa roller. Saknas: för alla. */
   roller?: Roll[]
   /** Nyckel för antal som väntar (Redaktion). */
-  vantar?: 'rattelser' | 'kopplingar'
+  vantar?: 'rattelser' | 'kopplingar' | 'namnvarianter'
 }
 
 export interface Huvudvy {
@@ -75,6 +75,7 @@ export const HUVUDVYER: Huvudvy[] = [
     undervyer: [
       { till: '/redaktion/rattelser', namn: 'Rättelser', grupp: 'Granska', roller: REDAKTION, vantar: 'rattelser' },
       { till: '/redaktion/kopplingar', namn: 'Kopplingar', grupp: 'Granska', roller: ['redaktor'], vantar: 'kopplingar' },
+      { till: '/redaktion/namnvarianter', namn: 'Namnvarianter', grupp: 'Granska', roller: ['redaktor'], vantar: 'namnvarianter' },
       { till: '/redaktion/partitillhorighet', namn: 'Partitillhörighet', grupp: 'Granska', roller: REDAKTION },
       { till: '/redaktion/motstridigheter', namn: 'Motstridigheter', grupp: 'Granska', roller: REDAKTION },
       { till: '/redaktion/processer', namn: 'Processer', grupp: 'Granska', roller: REDAKTION },

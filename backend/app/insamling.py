@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 import httpx
 import psycopg
 
-from . import kalender, kallelsepunkter, motstridigheter, rankningar, sammansattning, sammantradesplan, skatteunderlag, sokindex, styrande_dokument
+from . import kalender, kallelsepunkter, motstridigheter, namnvarianter, rankningar, sammansattning, sammantradesplan, skatteunderlag, sokindex, styrande_dokument
 from .arenden import koppla
 from .protokoll import lagra_dokument
 from .robust import Robusthet, kallklient
@@ -159,6 +159,9 @@ def _lagra(conn: psycopg.Connection, kalla: Datakalla, hamtning: Hamtning, korni
         res.antal_nya += antal["nya"]
         res.antal_andrade += antal["andrade"]
         res.antal_oforandrade += antal["oforandrade"]
+    if dokument_andrade:
+        # Namnvarianter slås ihop, felaktiga namn tas bort och nya förslag tas fram (#165).
+        namnvarianter.underhall(conn)
     if hamtning.val or dokument_andrade:
         # Nya val- eller protokolluppgifter kan ge nya kopplingar till ledamotsregistret (#65).
         sammansattning.koppla(conn)

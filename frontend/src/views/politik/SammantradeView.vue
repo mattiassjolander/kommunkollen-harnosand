@@ -62,6 +62,7 @@ const narvaro = computed(() =>
 
 function anteckning(p: Person): string {
   const delar: string[] = []
+  if (p.tom_plats) delar.push(`Tom plats (${p.namn} var frånvarande)`)
   if (p.tjanstgor_for) delar.push(`Tjänstgör för ${p.tjanstgor_for.namn} (${parti(p.tjanstgor_for.parti)})`)
   if (p.paragrafer)
     delar.push(`${p.kategori === 'beslutande' ? 'Beslutande' : 'Närvarande'} vid ${paragraftext(p.paragrafer)}`)

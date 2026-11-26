@@ -82,3 +82,23 @@ test('en redaktör slår ihop två namn för samma person och delar upp dem igen
   await page.goto('/politik/ledamoter?q=Mohamed')
   await expect(page.getByTestId('ledamot')).toHaveCount(2)
 })
+
+test('redaktören avvisar ett förslag på namnvariant (#165)', async ({ page }) => {
+  expect((await page.request.post('/api/auth/test/redaktor')).ok()).toBeTruthy()
+  await page.goto('/redaktion')
+  const nav = page.getByRole('navigation', { name: 'Huvudvyer' })
+  await nav.getByRole('link', { name: /^Namnvarianter/ }).click()
+  await expect(page).toHaveURL(/\/redaktion\/namnvarianter$/)
+  await expect(page.getByRole('heading', { name: 'Namnvarianter', level: 1 })).toBeVisible()
+
+  // Samma förnamn och efternamn, samma parti och aldrig i samma närvarolista.
+  const kort = page.getByTestId('namnforslag-kort').filter({ hasText: 'Göran Virén Sjögren' })
+  await expect(kort).toContainText('Göran Sjögren')
+  await expect(kort).toContainText('olika mellannamn')
+  await kort.getByTestId('avvisa').click()
+  await expect(kort).toHaveCount(0)
+  await expect(page.getByTestId('beslutade')).toContainText('Göran Virén Sjögren')
+
+  await page.getByTestId('flik-avvisad').click()
+  await expect(page.getByTestId('namnforslag-kort').filter({ hasText: 'Göran Virén Sjögren' })).toContainText('Avvisad av')
+})
