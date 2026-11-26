@@ -50,11 +50,16 @@ const router = createRouter({
     { path: '/ekonomi', component: EkonomiView, meta: { titel: 'Nyckeltal' } },
     { path: '/ekonomi/skatteunderlag', component: SkatteunderlagView, meta: { titel: 'Skatteunderlagsprognos' } },
     { path: '/ekonomi/budget-och-utfall', component: BudgetOchUtfallView, meta: { titel: 'Budget och utfall' } },
-    { path: '/floden', component: FlodenView, meta: { titel: 'Ekonomiska flöden' } },
+    { path: '/ekonomi/floden', component: FlodenView, meta: { titel: 'Ekonomiska flöden' } },
     { path: '/undersokningar', component: UndersokningarView, meta: { titel: 'Undersökningar' } },
     { path: '/rankningar', component: RankningarView, meta: { titel: 'Rankningar' } },
     { path: '/rankningar/:id', component: RankningView, meta: { titel: 'Rankning' } },
+    // Grupperna Kommunen i jämförelse och Om Kommunkollen har ingen egen sida och leder till första undervyn.
+    { path: '/jamforelse', redirect: '/rankningar' },
+    { path: '/om', redirect: '/datakallor' },
     { path: '/politik', component: PolitikView, meta: { titel: 'Sammanträden' } },
+    { path: '/politik/kommande', component: KommandeView, meta: { titel: 'Kommande ärenden' } },
+    { path: '/politik/kalender', component: KalenderView, meta: { titel: 'Kalender' } },
     { path: '/politik/sammantraden/:id', component: SammantradeView, meta: { titel: 'Sammanträde' } },
     {
       path: '/politik/sammantraden/:id/paragraf/:paragraf',
@@ -68,11 +73,7 @@ const router = createRouter({
     { path: '/redaktion/partitillhorighet', component: PartitillhorighetView, meta: { titel: 'Partitillhörighet' } },
     { path: '/politik/statistik', component: StatistikView, meta: { titel: 'Statistik' } },
     { path: '/politik/avvikelser', component: AvvikelserView, meta: { titel: 'Avvikelser i protokollen' } },
-    {
-      path: '/politik/protokollavvikelser',
-      component: ProtokollavvikelserView,
-      meta: { titel: 'Protokollavvikelser att anmäla' },
-    },
+    { path: '/redaktion/att-anmala', component: ProtokollavvikelserView, meta: { titel: 'Att anmäla' } },
     { path: '/politik/budget', component: BudgetforslagView, meta: { titel: 'Budgetförslag' } },
     {
       path: '/politik/budget/tidigare/:slag(forslag|planforutsattningar)/:id(\\d+)',
@@ -99,13 +100,11 @@ const router = createRouter({
       meta: { titel: 'Processer' },
     },
     { path: '/redaktion/processer', component: ProcessforslagView, meta: { titel: 'Processer' } },
-    // Redaktionens vyer låg tidigare under /politik (#146).
     { path: '/redaktion', redirect: '/redaktion/rattelser' },
+    // Vyer som har bytt adress (#146, #160).
     ...Object.entries(FLYTTADE).map(
       ([fran, till]): RouteRecordRaw => ({ path: fran, redirect: (to) => ({ path: till, query: to.query, hash: to.hash }) }),
     ),
-    { path: '/kalender', component: KalenderView, meta: { titel: 'Kalender' } },
-    { path: '/kommande', component: KommandeView, meta: { titel: 'Kommande' } },
     { path: '/datakallor', component: DatakallorView, meta: { titel: 'Datakällor' } },
     { path: '/sok', component: SokView, meta: { titel: 'Sök' } },
   ],

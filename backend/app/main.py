@@ -398,7 +398,8 @@ def create_app(
             fran, till = intervall(conn, fran, till, organ)
             return avvikelser.lista(conn, fran, till, organ)
 
-    @app.get("/api/protokollavvikelser", dependencies=[Depends(krav_roll("lasare"))])
+    # Att anmäla är redaktionens verktyg och inte publikt (#160).
+    @app.get("/api/protokollavvikelser", dependencies=[Depends(krav_roll("redaktor", "utgivare"))])
     def lista_protokollavvikelser(
         fran: int | None = None, till: int | None = None, organ: str | None = None,
         typ: str | None = Query(None, pattern="^(rostsumma|parti_olika|ersattare|paragrafnummer|parti_saknas|stavning)$"),

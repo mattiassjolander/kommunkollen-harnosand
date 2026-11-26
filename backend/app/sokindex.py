@@ -362,11 +362,11 @@ def _kallelsepunkter(conn: psycopg.Connection, omf: Omfang) -> Iterator[Grupp]:
     enheter = []
     for r in rader:
         if r["sammantrade_id"] is None:
-            lank = "/kalender"
+            lank = "/politik/kalender"
         elif r["protokoll"]:
             lank = f"/politik/sammantraden/{r['sammantrade_id']}"
         else:
-            lank = f"/kalender?sammantrade={r['sammantrade_id']}"
+            lank = f"/politik/kalender?sammantrade={r['sammantrade_id']}"
         typnamn = {"kungorelse": "Kungörelse", "kallelse": "Kallelse", "handlingar": "Handlingar"}[r["typ"]]
         enheter.append(Enhet(
             typ="kallelsepunkt", nyckel=str(r["id"]), rubrik=r["rubrik"],

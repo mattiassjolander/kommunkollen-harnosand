@@ -37,7 +37,7 @@ test('Sankey renderar och ett klick på ett flöde visar belopp, andel och käll
 })
 
 test('ett annat år kan väljas och valet speglas i URL:en', async ({ page }) => {
-  await page.goto('/floden')
+  await page.goto('/ekonomi/floden')
   await page.getByTestId('ar').selectOption('2019')
   await expect(page).toHaveURL(/ar=2019/)
   await expect(page.getByTestId('flodesdetalj')).toContainText('31 december 2019') // året har laddats
@@ -51,7 +51,7 @@ test('ett annat år kan väljas och valet speglas i URL:en', async ({ page }) =>
 })
 
 test('ett verksamhetsområde kan fördjupas i kostnadsslag och man kan gå tillbaka', async ({ page }) => {
-  await page.goto('/floden?ar=2024')
+  await page.goto('/ekonomi/floden?ar=2024')
   await page.locator('[data-fordjupa="omrade_490"]').click()
   await expect(page).toHaveURL(/verksamhet=490/)
   await expect(page).toHaveURL(/ar=2024/)
@@ -76,7 +76,7 @@ test('ett verksamhetsområde kan fördjupas i kostnadsslag och man kan gå tillb
 })
 
 test('två år kan jämföras och förändringen visas i kronor och procent', async ({ page }) => {
-  await page.goto('/floden?ar=2024')
+  await page.goto('/ekonomi/floden?ar=2024')
   await page.getByTestId('jamfor').selectOption('2023')
   await expect(page).toHaveURL(/jamfor=2023/)
   await expect(page.getByTestId('nodforandring').first()).toBeVisible()
@@ -95,7 +95,7 @@ test('två år kan jämföras och förändringen visas i kronor och procent', as
 })
 
 test('detaljnivå och jämförelseår återställs från URL:en', async ({ page }) => {
-  await page.goto('/floden?ar=2024&jamfor=2023&verksamhet=590')
+  await page.goto('/ekonomi/floden?ar=2024&jamfor=2023&verksamhet=590')
   await expect(page.getByRole('heading', { name: 'Vård och omsorg: kostnadsslag' })).toBeVisible()
   await expect(page.getByTestId('ar')).toHaveValue('2024')
   await expect(page.getByTestId('jamfor')).toHaveValue('2023')

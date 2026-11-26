@@ -1,7 +1,8 @@
 """Protokollavvikelser att anmäla till kommunen (#47).
 
 Söm 1: varje kontroll mot ett verkligt protokoll med felet (inspelade protokoll, bekräftade mot PDF:en).
-Söm 2: redaktören sätter status via API:t och läsaren ser den, också efter omtolkning. Insamlingen körs mot
+Söm 2: redaktören sätter status via API:t och utgivaren ser den, också efter omtolkning. Listan är redaktionens
+verktyg och visas inte för läsare (#160). Insamlingen körs mot
 kommunfullmäktiges protokoll för 2026, som i test_rattelser.
 """
 
@@ -108,12 +109,14 @@ def test_paragraf_som_protokollet_sjalvt_utesluter_raknas_inte():
 
 
 def protokoll(api, s: int, **filter) -> dict | None:
+    if api.get("/api/auth/jag").status_code == 401:  # Listan är bara för redaktionen.
+        logga_in(api, "utgivare")
     svar = api.get("/api/protokollavvikelser", params={"fran": 2026, "till": 2026} | filter)
     assert svar.status_code == 200, svar.text
     return next((x for x in svar.json()["sammantraden"] if x["sammantrade"]["id"] == s), None)
 
 
-def test_redaktoren_markerar_en_avvikelse_som_anmald_och_lasaren_ser_statusen(api, database_url):
+def test_redaktoren_markerar_en_avvikelse_som_anmald_och_utgivaren_ser_statusen(api, database_url):
     [s] = [x["id"] for x in api.get("/api/sammantraden?organ=KF").json()
            if x["datum"] == "2026-10-26" and x["starttid"] == "11:10"]
     p = protokoll(api, s)
@@ -129,6 +132,7 @@ def test_redaktoren_markerar_en_avvikelse_som_anmald_och_lasaren_ser_statusen(ap
 
     # Bara en redaktör sätter status.
     status = {"status": "anmald", "datum": "2026-11-20", "anteckning": "Skickat till nämndsekreteraren."}
+    logga_in(api, None)
     assert api.post(f"/api/protokollavvikelser/{a['id']}/status", json=status).status_code == 401
     logga_in(api, "utgivare")
     assert api.post(f"/api/protokollavvikelser/{a['id']}/status", json=status).status_code == 403
@@ -138,8 +142,8 @@ def test_redaktoren_markerar_en_avvikelse_som_anmald_och_lasaren_ser_statusen(ap
     assert svar.status_code == 200, svar.text
     assert svar.json()["statusnamn"] == "Anmäld till kommunen"
 
-    # Läsaren, utan inloggning, ser statusen med datum och anteckning.
-    logga_in(api, None)
+    # Utgivaren ser statusen med datum och anteckning.
+    logga_in(api, "utgivare")
     [a] = protokoll(api, s)["avvikelser"]
     assert (a["status"], a["statusdatum"], a["anteckning"]) == ("anmald", "2026-11-20", "Skickat till nämndsekreteraren.")
     assert protokoll(api, s, status="anmald") is not None
@@ -154,6 +158,17 @@ def test_redaktoren_markerar_en_avvikelse_som_anmald_och_lasaren_ser_statusen(ap
     assert (a["status"], a["hittas"]) == ("anmald", True)
     with psycopg.connect(database_url) as conn:
         assert conn.execute("SELECT count(*) FROM protokollavvikelse_status").fetchone()[0] == 1
+
+
+def test_listan_visas_bara_for_redaktionen(api):
+    # Läsning är öppen utan inloggning, men inte Att anmäla.
+    assert api.get("/api/sammantraden?organ=KF").status_code == 200
+    assert api.get("/api/protokollavvikelser").status_code == 401
+    logga_in(api, "lasare")
+    assert api.get("/api/protokollavvikelser").status_code == 403
+    for roll in ("redaktor", "utgivare"):
+        logga_in(api, roll)
+        assert api.get("/api/protokollavvikelser").status_code == 200
 
 
 def test_inte_ett_fel_tas_inte_med_i_sammanstallningen(api):

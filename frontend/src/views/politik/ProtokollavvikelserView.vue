@@ -22,6 +22,8 @@ const router = useRouter()
 const utloggad = inject<() => void>('utloggad', () => {})
 const jag = inject<Ref<Jag | null>>('jag', ref(null))
 const arRedaktor = computed(() => jag.value?.roller.includes('redaktor') ?? false)
+// Att anmäla är redaktionens verktyg och inte publikt (#160).
+const behorig = computed(() => !!jag.value?.roller.some((r) => r === 'redaktor' || r === 'utgivare'))
 
 function fraga(namn: string) {
   return computed<string>({
@@ -43,7 +45,7 @@ const fel = ref<string | null>(null)
 const omvant = computed(() => !!fran.value && !!till.value && Number(fran.value) > Number(till.value))
 
 async function ladda() {
-  if (omvant.value) return
+  if (omvant.value || !behorig.value) return
   laddar.value = true
   fel.value = null
   try {
@@ -63,6 +65,7 @@ async function ladda() {
   }
 }
 onMounted(async () => {
+  if (!behorig.value) return void (laddar.value = false)
   try {
     organ.value = await hamtaOrgan()
   } catch (e) {
@@ -123,132 +126,135 @@ async function kopiera(id: number, text: string) {
     </p>
   </header>
 
-  <div class="filter" role="group" aria-label="Filter">
-    <label>
-      Organ
-      <select v-model="valtOrgan" data-testid="filter-organ">
-        <option value="">Alla organ</option>
-        <option v-for="o in organ" :key="o.id" :value="o.id">{{ o.namn }}</option>
-      </select>
-    </label>
-    <label>
-      Från år
-      <select v-model="franAr" data-testid="filter-fran">
-        <option v-for="x in ar" :key="x" :value="String(x)">{{ x }}</option>
-      </select>
-    </label>
-    <label>
-      Till år
-      <select v-model="tillAr" data-testid="filter-till">
-        <option v-for="x in ar" :key="x" :value="String(x)">{{ x }}</option>
-      </select>
-    </label>
-    <label>
-      Typ
-      <select v-model="typ" data-testid="filter-typ">
-        <option value="">Alla</option>
-        <option v-for="t in a?.typer ?? []" :key="t.id" :value="t.id">{{ t.namn }} ({{ tal(t.antal) }})</option>
-      </select>
-    </label>
-    <label>
-      Status
-      <select v-model="status" data-testid="filter-status">
-        <option value="">Alla</option>
-        <option v-for="s in a?.statusar ?? []" :key="s.id" :value="s.id">{{ s.namn }} ({{ tal(s.antal) }})</option>
-      </select>
-    </label>
-  </div>
+  <p v-if="!behorig" class="saknas" data-testid="ej-behorig">Att anmäla visas bara för redaktörer och utgivare.</p>
+  <template v-else>
+    <div class="filter" role="group" aria-label="Filter">
+      <label>
+        Organ
+        <select v-model="valtOrgan" data-testid="filter-organ">
+          <option value="">Alla organ</option>
+          <option v-for="o in organ" :key="o.id" :value="o.id">{{ o.namn }}</option>
+        </select>
+      </label>
+      <label>
+        Från år
+        <select v-model="franAr" data-testid="filter-fran">
+          <option v-for="x in ar" :key="x" :value="String(x)">{{ x }}</option>
+        </select>
+      </label>
+      <label>
+        Till år
+        <select v-model="tillAr" data-testid="filter-till">
+          <option v-for="x in ar" :key="x" :value="String(x)">{{ x }}</option>
+        </select>
+      </label>
+      <label>
+        Typ
+        <select v-model="typ" data-testid="filter-typ">
+          <option value="">Alla</option>
+          <option v-for="t in a?.typer ?? []" :key="t.id" :value="t.id">{{ t.namn }} ({{ tal(t.antal) }})</option>
+        </select>
+      </label>
+      <label>
+        Status
+        <select v-model="status" data-testid="filter-status">
+          <option value="">Alla</option>
+          <option v-for="s in a?.statusar ?? []" :key="s.id" :value="s.id">{{ s.namn }} ({{ tal(s.antal) }})</option>
+        </select>
+      </label>
+    </div>
 
-  <p v-if="omvant" class="fel" role="alert">Startåret kan inte vara efter slutåret.</p>
-  <p v-else-if="fel" class="fel" role="alert">{{ fel }}</p>
-  <p v-else-if="laddar && !a">Hämtar protokollavvikelser…</p>
-  <template v-else-if="a">
-    <section class="nyckeltal" aria-label="Antal per status">
-      <div v-for="s in a.statusar" :key="s.id" class="tal" :data-status="s.id">
-        <span class="varde">{{ tal(s.antal) }}</span>
-        <span class="etikett">{{ s.namn }}</span>
-      </div>
-    </section>
+    <p v-if="omvant" class="fel" role="alert">Startåret kan inte vara efter slutåret.</p>
+    <p v-else-if="fel" class="fel" role="alert">{{ fel }}</p>
+    <p v-else-if="laddar && !a">Hämtar protokollavvikelser…</p>
+    <template v-else-if="a">
+      <section class="nyckeltal" aria-label="Antal per status">
+        <div v-for="s in a.statusar" :key="s.id" class="tal" :data-status="s.id">
+          <span class="varde">{{ tal(s.antal) }}</span>
+          <span class="etikett">{{ s.namn }}</span>
+        </div>
+      </section>
 
-    <section class="kort" aria-labelledby="lista-rubrik">
-      <h2 id="lista-rubrik">{{ tal(antal) }} avvikelser i {{ tal(a.sammantraden.length) }} protokoll</h2>
-      <p v-if="!a.sammantraden.length" class="saknas" data-testid="inga">Inga protokollavvikelser för urvalet.</p>
-      <ul v-else class="protokoll">
-        <li
-          v-for="s in a.sammantraden"
-          :id="`protokoll-${s.sammantrade.id}`"
-          :key="s.sammantrade.id"
-          data-testid="protokollavvikelser"
-        >
-          <div class="huvud">
-            <RouterLink :to="`/politik/sammantraden/${s.sammantrade.id}`">
-              {{ s.sammantrade.organ.namn }} {{ sammantradesdatum(s.sammantrade.datum) }}
-            </RouterLink>
-            <a :href="s.url" class="original" rel="noopener" target="_blank">Originalprotokollet</a>
-          </div>
-          <ul class="avvikelser">
-            <li
-              v-for="x in s.avvikelser"
-              :key="x.id"
-              data-testid="protokollavvikelse"
-              :data-typ="x.typ"
-              :data-status="x.status"
-              :class="{ inaktuell: !x.hittas }"
-            >
-              <div class="rad">
-                <span class="typ">{{ x.typnamn }}</span>
-                <RouterLink v-if="x.paragraf !== null" :to="`/politik/sammantraden/${s.sammantrade.id}/paragraf/${x.paragraf}`">
-                  {{ x.rubrik ? `§ ${x.paragraf} ${x.rubrik}` : `§ ${x.paragraf}` }}
-                </RouterLink>
-                <a v-if="x.sida" :href="x.lank" rel="noopener" target="_blank" data-testid="sida">sidan {{ x.sida }}</a>
-                <span class="status" :data-status="x.status" data-testid="status">
-                  {{ x.statusdatum ? `${x.statusnamn} ${datum(x.statusdatum)}` : x.statusnamn }}
-                </span>
-              </div>
-              <p class="text">{{ x.text }}</p>
-              <p v-if="x.anteckning" class="anteckning" data-testid="anteckning">{{ x.anteckning }}</p>
-              <p v-if="x.reviderad" class="reviderad" data-testid="reviderad">
-                ↻ Reviderad av källan: kommunen publicerade protokollet på nytt {{ datum(x.reviderad.datum) }}, och där
-                finns avvikelsen inte längre.
-              </p>
-              <p v-else-if="!x.hittas" class="reviderad">Kontrollerna hittar inte längre avvikelsen i protokollet.</p>
+      <section class="kort" aria-labelledby="lista-rubrik">
+        <h2 id="lista-rubrik">{{ tal(antal) }} avvikelser i {{ tal(a.sammantraden.length) }} protokoll</h2>
+        <p v-if="!a.sammantraden.length" class="saknas" data-testid="inga">Inga protokollavvikelser för urvalet.</p>
+        <ul v-else class="protokoll">
+          <li
+            v-for="s in a.sammantraden"
+            :id="`protokoll-${s.sammantrade.id}`"
+            :key="s.sammantrade.id"
+            data-testid="protokollavvikelser"
+          >
+            <div class="huvud">
+              <RouterLink :to="`/politik/sammantraden/${s.sammantrade.id}`">
+                {{ s.sammantrade.organ.namn }} {{ sammantradesdatum(s.sammantrade.datum) }}
+              </RouterLink>
+              <a :href="s.url" class="original" rel="noopener" target="_blank">Originalprotokollet</a>
+            </div>
+            <ul class="avvikelser">
+              <li
+                v-for="x in s.avvikelser"
+                :key="x.id"
+                data-testid="protokollavvikelse"
+                :data-typ="x.typ"
+                :data-status="x.status"
+                :class="{ inaktuell: !x.hittas }"
+              >
+                <div class="rad">
+                  <span class="typ">{{ x.typnamn }}</span>
+                  <RouterLink v-if="x.paragraf !== null" :to="`/politik/sammantraden/${s.sammantrade.id}/paragraf/${x.paragraf}`">
+                    {{ x.rubrik ? `§ ${x.paragraf} ${x.rubrik}` : `§ ${x.paragraf}` }}
+                  </RouterLink>
+                  <a v-if="x.sida" :href="x.lank" rel="noopener" target="_blank" data-testid="sida">sidan {{ x.sida }}</a>
+                  <span class="status" :data-status="x.status" data-testid="status">
+                    {{ x.statusdatum ? `${x.statusnamn} ${datum(x.statusdatum)}` : x.statusnamn }}
+                  </span>
+                </div>
+                <p class="text">{{ x.text }}</p>
+                <p v-if="x.anteckning" class="anteckning" data-testid="anteckning">{{ x.anteckning }}</p>
+                <p v-if="x.reviderad" class="reviderad" data-testid="reviderad">
+                  ↻ Reviderad av källan: kommunen publicerade protokollet på nytt {{ datum(x.reviderad.datum) }}, och där
+                  finns avvikelsen inte längre.
+                </p>
+                <p v-else-if="!x.hittas" class="reviderad">Kontrollerna hittar inte längre avvikelsen i protokollet.</p>
 
-              <template v-if="arRedaktor">
-                <button v-if="!formular[x.id]" type="button" class="lank" data-testid="andra-status" @click="andra(x)">
-                  Ändra status
-                </button>
-                <form v-else class="statusformular" @submit.prevent="spara(x)">
-                  <label>
-                    Status
-                    <select v-model="formular[x.id].status" data-testid="ny-status">
-                      <option v-for="st in a.statusar" :key="st.id" :value="st.id">{{ st.namn }}</option>
-                    </select>
-                  </label>
-                  <label>
-                    Datum
-                    <input v-model="formular[x.id].datum" type="date" data-testid="statusdatum" />
-                  </label>
-                  <label class="bred">
-                    Anteckning
-                    <input v-model="formular[x.id].anteckning" type="text" data-testid="ny-anteckning" />
-                  </label>
-                  <button type="submit" :disabled="sparar === x.id" data-testid="spara-status">Spara</button>
-                  <button type="button" class="lank" @click="delete formular[x.id]">Avbryt</button>
-                  <p v-if="statusfel[x.id]" class="fel" role="alert">{{ statusfel[x.id] }}</p>
-                </form>
-              </template>
-            </li>
-          </ul>
-          <details v-if="arRedaktor && s.sammanstallning" class="sammanstallning">
-            <summary>Sammanställning till nämndsekreteraren</summary>
-            <pre data-testid="sammanstallning">{{ s.sammanstallning }}</pre>
-            <button type="button" data-testid="kopiera" @click="kopiera(s.sammantrade.id, s.sammanstallning)">
-              {{ kopierad === s.sammantrade.id ? 'Kopierad' : 'Kopiera' }}
-            </button>
-          </details>
-        </li>
-      </ul>
-    </section>
+                <template v-if="arRedaktor">
+                  <button v-if="!formular[x.id]" type="button" class="lank" data-testid="andra-status" @click="andra(x)">
+                    Ändra status
+                  </button>
+                  <form v-else class="statusformular" @submit.prevent="spara(x)">
+                    <label>
+                      Status
+                      <select v-model="formular[x.id].status" data-testid="ny-status">
+                        <option v-for="st in a.statusar" :key="st.id" :value="st.id">{{ st.namn }}</option>
+                      </select>
+                    </label>
+                    <label>
+                      Datum
+                      <input v-model="formular[x.id].datum" type="date" data-testid="statusdatum" />
+                    </label>
+                    <label class="bred">
+                      Anteckning
+                      <input v-model="formular[x.id].anteckning" type="text" data-testid="ny-anteckning" />
+                    </label>
+                    <button type="submit" :disabled="sparar === x.id" data-testid="spara-status">Spara</button>
+                    <button type="button" class="lank" @click="delete formular[x.id]">Avbryt</button>
+                    <p v-if="statusfel[x.id]" class="fel" role="alert">{{ statusfel[x.id] }}</p>
+                  </form>
+                </template>
+              </li>
+            </ul>
+            <details v-if="arRedaktor && s.sammanstallning" class="sammanstallning">
+              <summary>Sammanställning till nämndsekreteraren</summary>
+              <pre data-testid="sammanstallning">{{ s.sammanstallning }}</pre>
+              <button type="button" data-testid="kopiera" @click="kopiera(s.sammantrade.id, s.sammanstallning)">
+                {{ kopierad === s.sammantrade.id ? 'Kopierad' : 'Kopiera' }}
+              </button>
+            </details>
+          </li>
+        </ul>
+      </section>
+    </template>
   </template>
 </template>
 

@@ -16,9 +16,9 @@ test.beforeAll(async ({ request }) => {
 })
 
 test('kalendern listar kommande sammanträden med prenumeration och ics per sammanträde (#68)', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/politik')
   await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Kalender' }).click()
-  await expect(page).toHaveURL(/\/kalender$/)
+  await expect(page).toHaveURL(/\/politik\/kalender$/)
   await expect(page.getByRole('heading', { name: 'Kalender', level: 1 })).toBeVisible()
   // Ingen inloggning krävs för att läsa.
   await expect(page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' })).toBeVisible()
@@ -71,7 +71,7 @@ test('kalendern listar kommande sammanträden med prenumeration och ics per samm
 })
 
 test('månadsvyn visar sammanträdena per dag (#68)', async ({ page }) => {
-  await page.goto('/kalender?organ=KF')
+  await page.goto('/politik/kalender?organ=KF')
   await page.getByTestId('manadsvy-knapp').click()
   await expect(page).toHaveURL(/vy=manad/)
   await expect(page.getByTestId('manadsrubrik').first()).toHaveText('November 2026')

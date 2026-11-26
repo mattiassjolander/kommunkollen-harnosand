@@ -14,7 +14,9 @@ test.beforeAll(async ({ request }) => {
 
 test('översikten har en ruta per rankning med placering, förändring och avsändare', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('navigation').getByRole('link', { name: 'Rankningar' }).click()
+  // Gruppen Kommunen i jämförelse leder till sin första undervy, Rankningar (#160).
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Kommunen i jämförelse' }).click()
+  await expect(page).toHaveURL(/\/rankningar$/)
   await expect(page.getByRole('heading', { name: 'Rankningar', level: 1 })).toBeVisible()
   await expect(page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' })).toBeVisible()
 

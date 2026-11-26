@@ -11,8 +11,8 @@ test.beforeAll(async ({ request }) => {
 })
 
 test('sidan är öppen och visar svarsfrekvensen överst med källa och riket', async ({ page }) => {
-  await page.goto('/')
-  await page.getByRole('link', { name: 'Undersökningar' }).click()
+  await page.goto('/rankningar')
+  await page.getByRole('navigation', { name: 'Huvudvyer' }).getByRole('link', { name: 'Undersökningar' }).click()
   await expect(page.getByRole('heading', { name: 'Undersökningar', level: 1 })).toBeVisible()
   await expect(page.getByTestId('anvandare').getByRole('button', { name: 'Logga in' })).toBeVisible()
 
