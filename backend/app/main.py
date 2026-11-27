@@ -901,9 +901,6 @@ def create_app(
     def ledamot(ledamot_id: int) -> dict:
         with db.connect(database_url) as conn:
             resultat = ledamoter.las(conn, ledamot_id)
-            if resultat is not None:
-                # Märkningarna på behandlingarna där ledamoten röstade (#162).
-                markningar.satt_pa_paragrafer(conn, resultat["roster"])
         if resultat is None:
             raise HTTPException(404, f"Ledamoten {ledamot_id} finns inte")
         return resultat

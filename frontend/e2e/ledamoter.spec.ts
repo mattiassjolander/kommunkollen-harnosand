@@ -102,3 +102,22 @@ test('redaktören avvisar ett förslag på namnvariant (#165)', async ({ page })
   await page.getByTestId('flik-avvisad').click()
   await expect(page.getByTestId('namnforslag-kort').filter({ hasText: 'Göran Virén Sjögren' })).toContainText('Avvisad av')
 })
+
+test('sidan visas direkt efter en sammanslagning när personen har röstat', async ({ page }) => {
+  // Svaret på sammanslagningen ritas om direkt. Det saknade märkningarna på rösterna, och sidan blev tom.
+  expect((await page.request.post('/api/auth/test/redaktor')).ok()).toBeTruthy()
+  await page.goto('/politik/ledamoter?q=Lennart Molin')
+  await page.getByRole('link', { name: 'Lennart Molin', exact: true }).click()
+  await expect(page.getByTestId('ledamotens-rost').first()).toBeVisible()
+
+  const red = page.getByTestId('redaktor')
+  await red.getByTestId('sok-annan').fill('Mohamed Mohamed')
+  await red.getByTestId('forslag').filter({ hasText: 'Mohamed Mohamed Abdulwahab' }).getByTestId('sla-ihop').click()
+  await expect(red.getByTestId('meddelande')).toContainText('är nu sammanslagen med Lennart Molin')
+  await expect(page.getByRole('heading', { name: 'Lennart Molin', level: 1 })).toBeVisible()
+  await expect(page.getByTestId('ledamotens-rost').first()).toBeVisible()
+
+  // Tillbaka som det var för de andra testerna.
+  await red.getByTestId('namnvariant').filter({ hasText: 'Mohamed Mohamed' }).getByTestId('dela-upp').click()
+  await expect(page.getByTestId('meddelande')).toContainText('är nu en egen person igen')
+})

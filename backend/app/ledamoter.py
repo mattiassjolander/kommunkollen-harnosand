@@ -136,6 +136,17 @@ def _perioder(forekomster: list[dict]) -> list[dict]:
 
 
 def las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
+    """Ledamotens sida. Samma svar efter läsning, sammanslagning och uppdelning, så att sidan kan visa det direkt."""
+    resultat = _las(conn, ledamot_id)
+    if resultat is not None:
+        from . import markningar  # markningar läser behandlingarna
+
+        # Märkningarna på behandlingarna där ledamoten röstade (#162).
+        markningar.satt_pa_paragrafer(conn, resultat["roster"])
+    return resultat
+
+
+def _las(conn: psycopg.Connection, ledamot_id: int) -> dict | None:
     rad = conn.execute("SELECT id, namn, huvud_id FROM ledamot WHERE id = %s", (ledamot_id,)).fetchone()
     if rad is None:
         return None
