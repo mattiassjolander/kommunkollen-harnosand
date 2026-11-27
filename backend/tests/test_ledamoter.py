@@ -108,6 +108,9 @@ def test_redaktoren_slar_ihop_och_delar_upp(api):
     ]
     assert len(s["sammantraden"]) == 8
     assert s["organ"][0]["antal"] == 8
+    # Svaret är detsamma som när sidan läses, med märkningar på rösterna. Sidan ritas om direkt ur det.
+    assert s == api.get(f"/api/ledamoter/{knapp['id']}").json()
+    assert all("markningar" in r for r in s["roster"])
 
     # Registret visar en person, och det andra namnet leder dit.
     namn = [p["namn"] for p in api.get("/api/ledamoter").json()]
@@ -126,6 +129,7 @@ def test_redaktoren_slar_ihop_och_delar_upp(api):
     svar = api.post(f"/api/ledamoter/{britta['id']}/uppdelning")
     assert svar.status_code == 200, svar.text
     assert (svar.json()["id"], svar.json()["namn"], len(svar.json()["sammantraden"])) == (britta["id"], "Britta Thyr", 5)
+    assert svar.json() == api.get(f"/api/ledamoter/{britta['id']}").json()
     assert ledamot(api, "Knapp Britta Thyr")["andra_namn"] == []
     assert api.post(f"/api/ledamoter/{britta['id']}/uppdelning").status_code == 409
 
