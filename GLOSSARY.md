@@ -175,6 +175,10 @@ En behandling med minst två yrkanden som går isär, eller med votering eller r
 **Lång beredning**:
 Ett ärende där det har gått mer än 12 månader från första behandlingen till det slutliga beslutet.
 
+**Protokollsammanställning**:
+Antal paragrafer, ärenden, beslut och förslag vidare för ett sammanträde, med oenighet, beslutsgång och närvaro, räknat ur protokollets tolkning med publicerade rättelser. Ärenden är paragraferna utan formalia, informationsärenden och samlingspunkter. Ett beslut fattar organet självt, och ett förslag vidare är ett förslag till ett annat organ. En paragraf utan beslut är varken eller. Ett protokoll som inte kunde tolkas, och ett planerat sammanträde, har ingen protokollsammanställning.
+_Avoid_: Sammanfattning (ingen text sammanfattas)
+
 **Topplista**:
 De tio ärenden, ledamöter eller voteringar som har mest av ett mått under ett år eller en mandatperiod, t.ex. längsta beredning eller jämnaste voteringar. En topplista per parti visar alla partier i kommunfullmäktige, med antal och antal per mandat. Varje rad har de behandlingar som räknats. Det finns ingen topplista över närvaro per person.
 _Avoid_: Rankning (kommunens placering i externa jämförelser)

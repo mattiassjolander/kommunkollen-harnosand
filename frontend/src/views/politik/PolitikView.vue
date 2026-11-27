@@ -6,13 +6,16 @@ import {
   hamtaOrgan,
   hamtaSammantraden,
   sokBehandlingar,
+  type Markningsid,
   type Organ,
   type Sammantradesrad,
   type Sokresultat,
 } from '../../api'
 import { sammantradesdatum } from '../../format'
+import { organfarg } from '../../organ'
 import Tolkningsmarkering from '../../components/Tolkningsmarkering.vue'
 import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
+import Markningsfilter from '../../components/Markningsfilter.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,6 +35,8 @@ function fraga(namn: string) {
 }
 const valtOrgan = fraga('organ')
 const valtAr = fraga('ar')
+// Märkningsfiltret (#195): bara sammanträden där någon paragraf har märkningen.
+const valdMarkning = fraga('markning')
 const sokning = fraga('q')
 const soktext = ref(sokning.value)
 const sokresultat = ref<Sokresultat | null>(null)
@@ -75,12 +80,22 @@ function skickaSokning() {
 // Åren som finns bland sammanträdena, för årsfiltret.
 const ar = computed(() => [...new Set(sammantraden.value.map((s) => s.datum?.slice(0, 4)).filter(Boolean))] as string[])
 
+const medMarkning = (s: Sammantradesrad, m: string) => !m || !!s.sammanstallning?.markningar[m as Markningsid]
+const iAret = (s: Sammantradesrad) => !valtAr.value || (s.datum?.slice(0, 4) ?? 'Datum okänt') === valtAr.value
+// Antal sammanträden per märkning, i valt organ och år.
+const markningsantal = computed(() => {
+  const antal: Partial<Record<Markningsid, number>> = {}
+  for (const s of sammantraden.value.filter(iAret))
+    for (const m of Object.keys(s.sammanstallning?.markningar ?? {}) as Markningsid[]) antal[m] = (antal[m] ?? 0) + 1
+  return antal
+})
+
 // Sammanträdena grupperade per år, senaste först (API:t sorterar redan).
 const perAr = computed(() => {
   const grupper = new Map<string, Sammantradesrad[]>()
   for (const s of sammantraden.value) {
     const ar = s.datum?.slice(0, 4) ?? 'Datum okänt'
-    if (valtAr.value && ar !== valtAr.value) continue
+    if (!iAret(s) || !medMarkning(s, valdMarkning.value)) continue
     grupper.set(ar, [...(grupper.get(ar) ?? []), s])
   }
   return [...grupper.entries()]
@@ -89,6 +104,17 @@ const perAr = computed(() => {
 const tid = (s: Sammantradesrad) => (s.starttid ? `${s.starttid}${s.sluttid ? `–${s.sluttid}` : ''}` : '–')
 const paragrafer = (s: Sammantradesrad) =>
   !s.paragrafer ? '–' : s.paragrafer[0] === s.paragrafer[1] ? `§ ${s.paragrafer[0]}` : `§§ ${s.paragrafer[0]}–${s.paragrafer[1]}`
+
+// Den kompakta raden: "4 ärenden · 2 beslut · 1 förslag vidare". Förslag vidare bara när det finns.
+const CHIPNAMN = { votering: 'Votering', reservation: 'Reservation', oenighet: 'Oenighet' }
+function talen(s: Sammantradesrad) {
+  const x = s.sammanstallning!
+  return [
+    { tal: x.arenden, text: x.arenden === 1 ? 'ärende' : 'ärenden' },
+    { tal: x.beslut, text: 'beslut' },
+    ...(x.forslag_vidare ? [{ tal: x.forslag_vidare, text: 'förslag vidare' }] : []),
+  ]
+}
 </script>
 
 <template>
@@ -116,6 +142,7 @@ const paragrafer = (s: Sammantradesrad) =>
         <option v-for="a in ar" :key="a" :value="a">{{ a }}</option>
       </select>
     </label>
+    <Markningsfilter v-model="valdMarkning" :antal="markningsantal" class="markning" />
     <form role="search" class="sok" @submit.prevent="skickaSokning">
       <label>
         Sök ärende
@@ -184,7 +211,7 @@ const paragrafer = (s: Sammantradesrad) =>
           <th scope="col">Organ</th>
           <th scope="col">Tid</th>
           <th scope="col">Paragrafer</th>
-          <th scope="col" class="hoger">Behandlingar</th>
+          <th scope="col">Sammanställning</th>
           <th scope="col">Underlag</th>
         </tr>
       </thead>
@@ -193,10 +220,34 @@ const paragrafer = (s: Sammantradesrad) =>
           <th scope="row">
             <RouterLink :to="`/politik/sammantraden/${s.id}`">{{ sammantradesdatum(s.datum) }}</RouterLink>
           </th>
-          <td>{{ s.organ.namn }}</td>
+          <td>
+            <span class="organ" :style="{ borderLeftColor: organfarg(s.organ.id) }" data-testid="organnamn">{{ s.organ.namn }}</span>
+          </td>
           <td class="tal">{{ tid(s) }}</td>
           <td class="tal">{{ paragrafer(s) }}</td>
-          <td class="tal hoger">{{ s.antal_behandlingar }}</td>
+          <td data-testid="sammanstallning">
+            <template v-if="s.sammanstallning">
+              <span class="summa">
+                <template v-for="(t, i) in talen(s)" :key="t.text"
+                  ><span v-if="i" aria-hidden="true" class="punkt">·</span
+                  ><span><span class="n">{{ t.tal }}</span> {{ t.text }}</span></template
+                >
+              </span>
+              <span class="chips">
+                <span
+                  v-for="c in s.sammanstallning.chips"
+                  :key="c.id"
+                  class="chip"
+                  :class="c.id"
+                  :data-markning="c.id"
+                  data-testid="chip"
+                  >{{ CHIPNAMN[c.id] }}<template v-if="c.antal > 1"> · {{ c.antal }}</template></span
+                >
+                <span v-if="s.sammanstallning.enigt" class="enigt" data-testid="enigt">Enigt</span>
+              </span>
+            </template>
+            <span v-else class="streck" data-testid="ingen-sammanstallning" title="Protokollet kunde inte tolkas automatiskt">–</span>
+          </td>
           <td>
             <span class="underlag">
               <Tolkningsmarkering :ej-tolkad="s.tolkning === 'ej_tolkad'" :ocr="s.ocr" :granskad="s.granskad" kort />
@@ -298,6 +349,58 @@ const paragrafer = (s: Sammantradesrad) =>
 }
 .fel {
   color: var(--status-critical);
+}
+.filter .markning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.organ {
+  display: inline-block;
+  padding-left: 8px;
+  border-left: 4px solid var(--ink-muted);
+  white-space: nowrap;
+}
+.summa {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: var(--ink-secondary);
+}
+.summa .n {
+  font-weight: 600;
+  color: var(--ink);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.chip {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  border-radius: var(--radius-mark);
+}
+.chip.votering {
+  background: var(--markning-votering);
+  color: var(--markning-votering-text);
+}
+.chip.reservation {
+  background: var(--markning-reservation);
+  color: var(--markning-reservation-text);
+}
+.chip.oenighet {
+  background: var(--markning-oenighet);
+  color: var(--markning-oenighet-text);
+}
+.enigt,
+.streck {
+  font-size: 12px;
+  color: var(--ink-muted);
 }
 td .underlag {
   display: inline-flex;

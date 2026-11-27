@@ -9,6 +9,7 @@ import {
   type Markningsid,
   type Person,
   type Sammantrade,
+  type Sammanstallningsfilter,
 } from '../../api'
 import { tidsintervall, paragraftext, parti, sammantradesdatum } from '../../format'
 import Harledningsmarkering from '../../components/Harledningsmarkering.vue'
@@ -24,6 +25,7 @@ import Felaktighetsmarkering from '../../components/Felaktighetsmarkering.vue'
 import Avvikelsetext from '../../components/Avvikelsetext.vue'
 import Markningar from '../../components/Markningar.vue'
 import Markningsfilter from '../../components/Markningsfilter.vue'
+import Protokollsammanstallning from '../../components/Protokollsammanstallning.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -84,15 +86,47 @@ function anteckning(p: Person): string {
 // Filtret på märkning (#162) speglas i URL:en.
 const markning = computed<Markningsid | ''>({
   get: () => (typeof route.query.markning === 'string' ? (route.query.markning as Markningsid) : ''),
-  set: (v) => router.replace({ query: { ...route.query, markning: v || undefined }, hash: route.hash }),
+  set: (v) => router.replace({ query: { ...route.query, markning: v || undefined, visa: undefined }, hash: route.hash }),
 })
 const markningsantal = computed(() => {
   const antal: Partial<Record<Markningsid, number>> = {}
   for (const b of s.value?.behandlingar ?? []) for (const m of b.markningar) antal[m.id] = (antal[m.id] ?? 0) + 1
   return antal
 })
+// Ett tal i sammanställningen (#195) visar bara sina paragrafer, och valet speglas i URL:en (visa=).
+const VISA: Record<Sammanstallningsfilter, string> = {
+  arenden: 'ärenden',
+  beslut: 'beslut',
+  forslag_vidare: 'förslag vidare',
+  information: 'informationsärenden',
+  oenighet: 'med oenighet',
+  votering: 'med votering',
+  reservation: 'med reservation',
+  aterremitterad: 'återremitterade',
+  bordlagd: 'bordlagda',
+  jav: 'med anmält jäv',
+  motioner: 'med nya motioner',
+  medborgarforslag: 'med nya medborgarförslag',
+  interpellationer: 'med nya interpellationer',
+}
+const visa = computed<Sammanstallningsfilter | ''>({
+  get: () => {
+    const v = route.query.visa
+    return typeof v === 'string' && v in VISA ? (v as Sammanstallningsfilter) : ''
+  },
+  // Ett tal ersätter märkningsfiltret, så att listan inte filtreras på två sätt utan att det syns.
+  set: (v) => router.replace({ query: { ...route.query, visa: v || undefined, markning: undefined }, hash: route.hash }),
+})
+const visadeParagrafer = computed(() =>
+  visa.value && s.value?.sammanstallning ? new Set(s.value.sammanstallning.filter[visa.value] ?? []) : null,
+)
 const visade = computed(
-  () => s.value?.behandlingar.filter((b) => !markning.value || b.markningar.some((m) => m.id === markning.value)) ?? [],
+  () =>
+    s.value?.behandlingar.filter(
+      (b) =>
+        (!markning.value || b.markningar.some((m) => m.id === markning.value)) &&
+        (!visadeParagrafer.value || visadeParagrafer.value.has(b.paragraf)),
+    ) ?? [],
 )
 const tid = computed(() => (s.value ? tidsintervall(s.value.starttid, s.value.sluttid) : null))
 // Paragrafer som en sittning beslutade på delegation (#85).
@@ -131,6 +165,15 @@ const delegation = computed(
 
     <Protokollgranskning v-if="kanGranska" :sammantrade-id="s.id" @andrat="granskningenAndrad" />
 
+    <Protokollsammanstallning
+      v-model="visa"
+      :sammantrade-id="s.id"
+      :sammanstallning="s.sammanstallning"
+      :ej-tolkad="s.tolkning === 'ej_tolkad'"
+      :ocr="s.ocr"
+      :granskad="s.granskad"
+    />
+
     <section v-if="s.avvikelser.length" class="kort avvikelser" data-testid="avvikelser" aria-labelledby="avv-rubrik">
       <h2 id="avv-rubrik">Avvikelser vid tolkningen</h2>
       <p class="ingress">Det här stämde inte med det förväntade när protokollet lästes. Kontrollera mot protokollet.</p>
@@ -168,8 +211,9 @@ const delegation = computed(
       <p v-if="!s.behandlingar.length" class="ingress">Inga behandlingar kunde läsas ur protokollet.</p>
       <div v-else class="filterrad">
         <Markningsfilter v-model="markning" :antal="markningsantal" />
-        <p v-if="markning" class="antal-visade" data-testid="antal-visade">
-          {{ visade.length }} av {{ s.behandlingar.length }} behandlingar
+        <p v-if="markning || visa" class="antal-visade" data-testid="antal-visade">
+          {{ visade.length }} av {{ s.behandlingar.length }} behandlingar<template v-if="visa">: {{ VISA[visa] }}</template>
+          <button v-if="visa" type="button" class="visa-alla" data-testid="visa-alla" @click="visa = ''">Visa alla</button>
         </p>
       </div>
       <ol class="behandlingar" data-testid="behandlingar">
@@ -306,6 +350,17 @@ const delegation = computed(
 }
 .chips {
   margin-left: 8px;
+}
+.visa-alla {
+  margin-left: 8px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
 }
 .behandlingar {
   list-style: none;

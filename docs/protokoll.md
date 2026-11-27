@@ -276,6 +276,19 @@ En redaktör eller utgivare kan markera ett helt protokoll som granskat (#176), 
 
 Varje granskning är en rad i `protokollgranskning`, och raderna är loggen med person och datum för granskningen, återtagandet och motiveringen. API: `GET`/`POST /api/sammantraden/{id}/granskning` och `POST /api/sammantraden/{id}/granskning/aterkallelse`, bara för redaktör och utgivare. `granskad` i API:t för sammanträdena är datumet, eller null.
 
+## Protokollsammanställning
+
+Sammanträdessidan har ett kort högst upp med vad som hände på sammanträdet (#195), och listan över sammanträden har en kompakt rad: *4 ärenden · 2 beslut · 1 förslag vidare*, med chips för Votering, Reservation och Oenighet, eller *Enigt*. Allt räknas i `protokollsammanstallning.py` ur tolkningen med publicerade rättelser, och reglerna står där. Listan räknas med ett fast antal frågor, oavsett hur många sammanträden den har.
+
+- **Ärenden** är paragraferna utan formalia, informationsärenden och samlingspunkter. **Beslut** och **förslag vidare** räknas för sig med `arenden.forslag_till` (#182). En paragraf utan beslut räknas inte.
+- **Oenighet**: paragrafer med märkningen Oenighet, antal voteringar och antal reservationer med partierna i alfabetisk ordning.
+- **Beslutsgång**: återremitterade, bordlagda, anmälda jäv och nya motioner, medborgarförslag och interpellationer. **Sammanträdet**: längd (när både start- och sluttid finns), beslutande, tjänstgörande ersättare och informationsärenden.
+- **Skickas vidare** listar förslagen vidare per organ, med länk till Kommande ärenden. **Kallelsen mot protokollet** räknar punkterna i kallelsen som inte behandlades (#121).
+- Varje tal på kortet visar bara sina paragrafer i listan nedanför, och valet står i URL:en (`visa=`). Listan över sammanträden filtreras på märkning (`markning=`).
+- Kortet har samma markering som protokollet (#176). Ett protokoll som inte kunde tolkas har ingen sammanställning: sidan säger det och listan visar ett streck.
+
+API: `sammanstallning` i `GET /api/sammantraden/{id}` (med `filter`, paragraferna bakom varje tal) och i kort form i `GET /api/sammantraden`.
+
 ## Statistik
 
 Fliken Statistik visar hur många behandlingar protokollen innehåller per år, organ och behandlingstyp, för ett valt organ och årsintervall (till exempel 2024–2025 eller 2025–2025). Organ och år speglas i adressen. Diagrammet staplar typerna per år, tabellen visar år och organ, och tabellen går att ladda ned som CSV.

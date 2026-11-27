@@ -153,3 +153,10 @@ export function rattelsevarde(falt: string, v: unknown): string {
   if (falt === 'typ') return BEHANDLINGSTYPER.find((t) => t.id === v)?.namn ?? String(v)
   return Array.isArray(v) ? v.join(', ') : String(v)
 }
+
+/** Ett sammanträdes längd: 213 → "3 h 33 min", 40 → "40 min", 120 → "2 h". */
+export function langdtext(minuter: number): string {
+  const h = Math.floor(minuter / 60)
+  const m = minuter % 60
+  return h ? (m ? `${h} h ${m} min` : `${h} h`) : `${m} min`
+}

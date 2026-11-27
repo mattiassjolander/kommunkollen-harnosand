@@ -20,7 +20,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from . import (arenden, avvikelser, ledamoter, markningar, partier, protokollavvikelser, protokollgranskning,
-               kalender, sammantradesplan)
+               protokollsammanstallning, kalender, sammantradesplan)
 from .kallelsepunkter import Kallelsenummer, efter_rattelser
 from .partitillhorighet import Gallande
 from .rattelser import Publicerade
@@ -279,7 +279,9 @@ def lista_sammantraden(conn: psycopg.Connection, organ: str | None = None, ar: i
         "ORDER BY s.datum DESC NULLS LAST, s.starttid DESC NULLS LAST, s.id DESC",
         {"organ": organ, "ar": ar},
     ).fetchall()
-    return [_sammantrade(r) for r in rader]
+    # Den kompakta sammanställningen (#195), räknad för alla sammanträden på en gång.
+    sammanstallningar = protokollsammanstallning.for_sammantraden(conn, rader, kompakta=True)
+    return [_sammantrade(r) | {"sammanstallning": sammanstallningar[r["id"]]} for r in rader]
 
 
 SOKTRAFFAR = 200
@@ -399,6 +401,7 @@ def las_sammantrade(conn: psycopg.Connection, sammantrade_id: int) -> dict | Non
             for i, x in enumerate(_las_sittningar(conn, sammantrade_id))
         ],
         "behandlingar": rattade,
+        "sammanstallning": protokollsammanstallning.for_sammantraden(conn, [rad])[sammantrade_id],
     }
 
 
