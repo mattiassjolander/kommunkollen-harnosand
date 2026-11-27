@@ -1,0 +1,3 @@
+# ZAP-regler för DAST-skanningen (.github/workflows/dast.yml).
+# Format: regel-id<TAB>IGNORE|INFO|WARN|FAIL<TAB>motivering. Bara regler som avviker från standard står här.
+# Lägg till en rad med motivering när en varning är bedömd som falskt larm.

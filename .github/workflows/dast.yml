@@ -1,0 +1,90 @@
+name: DAST (ZAP)
+
+# Dynamisk säkerhetsskanning med ZAP mot en testinstans av hela appen (nginx + FastAPI + Postgres),
+# byggd från koden och startad här i jobbet. Skanningen skickar attackanrop (injektioner, XSS m.m.),
+# så den körs aldrig mot servern. Testinstansen är tom, men alla sidor och API-anrop finns.
+#
+# Fynd stoppar inget bygge: rapporterna laddas upp som artefakter och sammanfattningen skrivs i
+# körningens summering. Varningar som bedöms som falska larm undantas i .zap/regler.tsv.
+
+on:
+  schedule:
+    - cron: "0 2 * * 1" # måndagar 03.00 svensk vintertid
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/dast.yml
+      - .zap/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZAP_IMAGE: zaproxy/zap-stable:2.17.0
+  MAL: http://localhost:8080
+
+jobs:
+  zap:
+    name: ZAP mot testinstans
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      POSTGRES_PASSWORD: dast
+      SESSION_SECRET: dast-endast-for-test
+      HTTP_PORT: "8080"
+      DB_IMAGE: pgvector/pgvector:0.8.7-pg17
+      ANONYM_LASNING: "true"
+      # Testinloggningen gör att ZAP kan nå även redaktionens sidor. Bara i den här testinstansen.
+      TESTENV: "true"
+      INSAMLING_DAGAR: ""
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Bygg och starta appen
+        run: |
+          docker compose build
+          docker compose up -d db backend frontend
+          curl -fsS --retry 60 --retry-all-errors --retry-delay 2 "$MAL/api/halsa"
+
+      - name: Hämta API-beskrivningen
+        # OpenAPI-specen nås bara inifrån backend; nginx skickar bara /api/ vidare.
+        run: |
+          mkdir -p zap
+          docker compose exec -T backend /app/.venv/bin/python -c \
+            "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/openapi.json').read().decode())" \
+            > zap/openapi.json
+          chmod -R a+rwx zap
+          test -s zap/openapi.json
+
+      - name: ZAP API-skanning
+        run: |
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" -v "$PWD/.zap:/zap/regler:ro" "$ZAP_IMAGE" \
+            zap-api-scan.py -t openapi.json -f openapi -O "$MAL" -c /zap/regler/regler.tsv \
+            -r api.html -w api.md -J api.json -I -T 30
+
+      - name: ZAP full skanning av webbplatsen
+        run: |
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" -v "$PWD/.zap:/zap/regler:ro" "$ZAP_IMAGE" \
+            zap-full-scan.py -t "$MAL" -j -c /zap/regler/regler.tsv \
+            -r webb.html -w webb.md -J webb.json -I -m 5 -T 45
+
+      - name: Sammanfattning
+        if: always()
+        run: |
+          for f in zap/api.md zap/webb.md; do
+            [ -f "$f" ] && { cat "$f"; echo; } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-rapporter
+          path: zap/
+
+      - name: Backendens logg vid fel
+        if: failure()
+        run: docker compose logs backend --tail 200
