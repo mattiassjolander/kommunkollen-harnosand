@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Fastställda partitillhörigheter (#100, ADR-0006): utkast → granskad → publicerad, som rättelser. En utgivare
 // granskar och publicerar, men aldrig sin egen period. En granskad eller publicerad period ändras genom en ny
-// version, och en utgivare kan återkalla en publicerad. Ersatta och återkallade perioder visas som historik.
+// version, och en utgivare kan återkalla en publicerad. En utgivare kan också kassera ett utkast eller en granskad
+// period som inte ska publiceras, till exempel en dubblett (#202). Ersatta, återkallade och kasserade perioder
+// visas som historik.
 import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import {
   aterkallaPartitillhorighet,
@@ -9,6 +11,7 @@ import {
   granskaPartitillhorighet,
   granskaPeriodbatch,
   hamtaPartitillhorigheter,
+  kasseraPartitillhorighet,
   publiceraPartitillhorighet,
   publiceraPeriodbatch,
   taBortPartitillhorighet,
@@ -34,8 +37,8 @@ const alla = ref<Partitillhorighet[]>([])
 const laddar = ref(true)
 const fel = ref<string | null>(null)
 const arbetar = ref<number | null>(null)
-// En ny version eller en återkallelse, för en period i taget.
-const andras = ref<{ id: number; lage: 'version' | 'aterkalla' } | null>(null)
+// En ny version, en återkallelse eller en kassering, för en period i taget.
+const andras = ref<{ id: number; lage: 'version' | 'aterkalla' | 'kassera' } | null>(null)
 const aterkallelse = ref('')
 
 const STATUS: { status: Periodstatus; titel: string; text: string }[] = [
@@ -43,7 +46,11 @@ const STATUS: { status: Periodstatus; titel: string; text: string }[] = [
   { status: 'granskad', titel: 'Granskade', text: 'Väntar på att en utgivare publicerar dem.' },
   { status: 'publicerad', titel: 'Publicerade', text: 'Gäller vid sammanträden under perioden, med markering.' },
   { status: 'ersatt', titel: 'Ersatta versioner', text: 'Har ersatts av en nyare version. Bevaras som historik.' },
-  { status: 'aterkallad', titel: 'Återkallade', text: 'Gäller inte längre. Protokollens uppgifter gäller igen.' },
+  {
+    status: 'aterkallad',
+    titel: 'Återkallade och kasserade',
+    text: 'Gäller inte längre eller publicerades aldrig. Protokollens uppgifter gäller.',
+  },
 ]
 
 // Personerna och krockarna (#100, del 3) räknas om när perioderna ändras.
@@ -176,7 +183,7 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
               <dd>{{ ersatter(t)!.parti }}, {{ ersatter(t)!.fran }} – {{ ersatter(t)!.till ?? 'tills vidare' }}</dd>
             </template>
             <template v-if="t.aterkallad">
-              <dt>Återkallad</dt>
+              <dt>{{ t.publicerad ? 'Återkallad' : 'Kasserad' }}</dt>
               <dd data-testid="aterkallelse">{{ t.aterkallelse }} ({{ t.aterkallad_av }} {{ datum(t.aterkallad) }})</dd>
             </template>
           </dl>
@@ -212,6 +219,15 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
               Din egen registrering. En annan utgivare godkänner den.
             </p>
             <button
+              v-if="arUtgivare && ['utkast', 'granskad'].includes(t.status) && andras?.id !== t.id"
+              type="button"
+              class="knapp"
+              data-testid="kassera"
+              @click="(andras = { id: t.id, lage: 'kassera' }), (aterkallelse = '')"
+            >
+              Kassera
+            </button>
+            <button
               v-if="egen(t) && t.status === 'utkast'"
               type="button"
               class="knapp"
@@ -236,7 +252,7 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
               type="button"
               class="knapp"
               data-testid="aterkalla"
-              @click="andras = { id: t.id, lage: 'aterkalla' }"
+              @click="(andras = { id: t.id, lage: 'aterkalla' }), (aterkallelse = '')"
             >
               Återkalla
             </button>
@@ -249,6 +265,26 @@ const ersatter = (t: Partitillhorighet) => alla.value.find((x) => x.id === t.ers
             @avbryt="andras = null"
             @utloggad="utloggad"
           />
+          <form
+            v-else-if="andras?.id === t.id && andras.lage === 'kassera'"
+            class="aterkalla"
+            data-testid="kassera-formular"
+            @submit.prevent="steg(t, (id) => kasseraPartitillhorighet(id, aterkallelse))"
+          >
+            <label>
+              Varför perioden kasseras
+              <textarea v-model="aterkallelse" rows="2" required data-testid="kassera-motivering" />
+            </label>
+            <p class="anteckning">
+              Perioden publiceras inte. Den finns kvar under Återkallade och kasserade, med motiveringen.
+            </p>
+            <div class="knappar">
+              <button type="submit" class="knapp primar" :disabled="arbetar === t.id" data-testid="spara-kassering">
+                Kassera perioden
+              </button>
+              <button type="button" class="knapp" @click="andras = null">Avbryt</button>
+            </div>
+          </form>
           <form
             v-else-if="andras?.id === t.id"
             class="aterkalla"

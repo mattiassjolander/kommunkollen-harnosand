@@ -4,7 +4,8 @@ Enligt ADR-0004 tas en ledamots parti ur protokollet vid varje sammanträde. Pro
 eller har lästs fel, och partibyten är sällsynta. Redaktionen kan därför fastställa en persons parti under en
 period: parti (eller partilös, '-'), från och med ett datum och till och med ett datum eller tills vidare,
 med motivering. Perioden går från utkast via granskad till publicerad, och en utgivare som inte skrev den
-godkänner den (ADR-0002). Den ändras genom en ny version och kan återkallas, som en rättelse (#74).
+godkänner den (ADR-0002). Den ändras genom en ny version och kan återkallas, som en rättelse (#74). Ett utkast eller en granskad period
+som inte ska publiceras, till exempel en dubblett, kasseras av en utgivare med motivering (#202).
 
 En publicerad period gäller alla förekomster av personen, under alla ihopslagna namn, vid sammanträden inom
 perioden: närvaro och "tjänstgör för", röster och ersatta i voteringslistan, yrkanden, reservationer och
@@ -17,7 +18,7 @@ motionärer. Den läggs på när uppgiften läses. Tolkningen ändras inte. Ordn
 
 En förekomst där perioden ändrade partiet (protokollet angav inget eller ett annat parti) får markeringen
 "Parti fastställt av redaktionen" med vad protokollet sa. Ett sammanträde utan datum omfattas inte.
-Perioder för samma person får inte överlappa.
+Perioder för samma person får inte överlappa, inte heller en ny period och ett väntande förslag (#202).
 """
 
 from __future__ import annotations
@@ -40,13 +41,13 @@ class EjTillatet(PermissionError):
 
 
 class Konflikt(Exception):
-    """Perioden har inte den status som steget kräver, eller överlappar en publicerad period."""
+    """Perioden har inte den status som steget kräver, eller överlappar en annan period."""
 
 _PARTI = re.compile(r"[A-ZÅÄÖ]{1,4}|-")
 STATUSAR = ("utkast", "granskad", "publicerad", "ersatt", "aterkallad")
 
 __all__ = ["EjTillatet", "Konflikt", "Ogiltig", "Gallande", "skapa", "andra", "ta_bort", "granska", "publicera",
-           "ny_version", "aterkalla", "las", "lista", "skapa_batch", "granska_batch", "publicera_batch"]
+           "ny_version", "aterkalla", "kassera", "las", "lista", "skapa_batch", "granska_batch", "publicera_batch"]
 
 
 def _datum(v, namn: str, tomt: bool = False) -> date | None:
@@ -82,21 +83,31 @@ def _person(conn: psycopg.Connection, ledamot_id) -> int:
     return rad["person"]
 
 
+_VANTANDE = {"utkast": "ett utkast", "granskad": "ett granskat förslag"}
+
+
 def _overlappar(conn: psycopg.Connection, person: int, fran: date, till: date | None,
-                utom: Iterable[int] = ()) -> None:
-    """Avvisar en period som överlappar en publicerad period för samma person."""
+                utom: Iterable[int] = (), vantande: bool = True) -> None:
+    """Avvisar en period som överlappar en publicerad period för samma person, och med vantande också ett utkast
+    eller en granskad period (#202), så att samma period inte registreras två gånger medan den första väntar.
+    Perioderna i utom räknas inte: perioden själv och den period som en ny version ersätter."""
     rad = conn.execute(
         """
-        SELECT t.parti, t.fran, t.till FROM partitillhorighet t JOIN ledamot l ON l.id = t.ledamot_id
-        WHERE t.status = 'publicerad' AND coalesce(l.huvud_id, l.id) = %(p)s AND NOT (t.id = ANY(%(utom)s))
+        SELECT t.parti, t.fran, t.till, t.status FROM partitillhorighet t JOIN ledamot l ON l.id = t.ledamot_id
+        WHERE t.status = ANY(%(s)s) AND coalesce(l.huvud_id, l.id) = %(p)s AND NOT (t.id = ANY(%(utom)s))
           AND t.fran <= coalesce(%(till)s::date, 'infinity'::date) AND coalesce(t.till, 'infinity'::date) >= %(fran)s
+        ORDER BY t.status = 'publicerad' DESC, t.status = 'granskad' DESC, t.id
         LIMIT 1
         """,
-        {"p": person, "fran": fran, "till": till, "utom": [i for i in utom if i is not None]},
+        {"p": person, "fran": fran, "till": till, "utom": [i for i in utom if i is not None],
+         "s": ["publicerad", "granskad", "utkast"] if vantande else ["publicerad"]},
     ).fetchone()
     if rad:
         slut = rad["till"].isoformat() if rad["till"] else "tills vidare"
-        raise Konflikt(f"Perioden överlappar en publicerad period ({rad['parti']}, {rad['fran'].isoformat()}–{slut})")
+        beskrivning = f"{rad['parti']}, {rad['fran'].isoformat()}–{slut}"
+        if rad["status"] == "publicerad":
+            raise Konflikt(f"Perioden överlappar en publicerad period ({beskrivning})")
+        raise Konflikt(f"Det finns redan {_VANTANDE[rad['status']]}: {beskrivning}")
 
 
 def skapa(conn: psycopg.Connection, data: dict, redaktor: str) -> dict:
@@ -130,7 +141,7 @@ def andra(conn: psycopg.Connection, period_id: int, data: dict, redaktor: str) -
     if t["status"] != "utkast":
         raise Konflikt("Bara ett utkast kan ändras. Skapa en ny version i stället")
     v = _varden({"motivering": t["motivering"]} | data, t)
-    _overlappar(conn, t["person"], v["fran"], v["till"], [t["ersatter_id"]])
+    _overlappar(conn, t["person"], v["fran"], v["till"], [period_id, t["ersatter_id"]])
     conn.execute("UPDATE partitillhorighet SET parti = %(parti)s, fran = %(fran)s, till = %(till)s, "
                  "motivering = %(motivering)s WHERE id = %(id)s", v | {"id": period_id})
     return las(conn, period_id)
@@ -163,8 +174,8 @@ def granska(conn: psycopg.Connection, period_id: int, utgivare: str) -> dict:
 
 def publicera(conn: psycopg.Connection, period_id: int, utgivare: str) -> dict:
     t = _godkann(conn, period_id, utgivare, "granskad")
-    # Andra perioder kan ha publicerats sedan utkastet skrevs.
-    _overlappar(conn, t["person"], t["fran"], t["till"], [t["ersatter_id"]])
+    # Andra perioder kan ha publicerats sedan utkastet skrevs. Väntande perioder hindrar inte publiceringen.
+    _overlappar(conn, t["person"], t["fran"], t["till"], [period_id, t["ersatter_id"]], vantande=False)
     if t["ersatter_id"] is not None:
         conn.execute("UPDATE partitillhorighet SET status = 'ersatt' WHERE id = %s AND status IN "
                      "('utkast', 'granskad', 'publicerad')", (t["ersatter_id"],))
@@ -198,7 +209,7 @@ def ny_version(conn: psycopg.Connection, period_id: int, data: dict, redaktor: s
 def skapa_batch(conn: psycopg.Connection, data: dict, redaktor: str) -> list[dict]:
     """Förslag som redaktören bekräftar tillsammans (#100, del 2): {motivering, perioder: [{ledamot_id, parti, fran,
     till, motivering?}]}. Alla blir utkast i samma batch, med den gemensamma motiveringen om raden inte har en egen.
-    Allt eller inget: en ogiltig rad, eller perioder som överlappar varandra eller en publicerad period, avvisar
+    Allt eller inget: en ogiltig rad, eller perioder som överlappar varandra eller en annan period, avvisar
     hela batchen och anger raden."""
     rader = data.get("perioder")
     if not isinstance(rader, list) or not rader:
@@ -262,9 +273,23 @@ def aterkalla(conn: psycopg.Connection, period_id: int, data: dict, utgivare: st
     t = _hamta(conn, period_id)
     if t["status"] != "publicerad":
         raise Konflikt(f"Bara en publicerad period kan återkallas, den här är {t['status']}")
+    return _satt_aterkallad(conn, period_id, data, utgivare, "Ange varför perioden återkallas")
+
+
+def kassera(conn: psycopg.Connection, period_id: int, data: dict, utgivare: str) -> dict:
+    """En utgivare kasserar ett utkast eller en granskad period som inte ska publiceras, till exempel en dubblett
+    (#202). Perioden blir återkallad med motivering, vem och när, och finns kvar som historik. Att kassera är inget
+    godkännande, så utgivaren får kassera sin egen registrering."""
+    t = _hamta(conn, period_id)
+    if t["status"] not in ("utkast", "granskad"):
+        raise Konflikt(f"Bara ett utkast eller en granskad period kan kasseras, den här är {t['status']}")
+    return _satt_aterkallad(conn, period_id, data, utgivare, "Ange varför perioden kasseras")
+
+
+def _satt_aterkallad(conn: psycopg.Connection, period_id: int, data: dict, utgivare: str, saknas: str) -> dict:
     motivering = (data.get("motivering") or "").strip()
     if not motivering:
-        raise Ogiltig("Ange varför perioden återkallas")
+        raise Ogiltig(saknas)
     conn.execute("UPDATE partitillhorighet SET status = 'aterkallad', aterkallad_av = %s, aterkallad = %s, "
                  "aterkallelse = %s WHERE id = %s", (utgivare, datetime.now(timezone.utc), motivering, period_id))
     return las(conn, period_id)

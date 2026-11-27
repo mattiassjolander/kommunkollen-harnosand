@@ -721,6 +721,11 @@ def create_app(
     def aterkalla_partitillhorighet(period_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
         return _period(partitillhorighet.aterkalla, period_id, data, anv.epost)
 
+    @app.post("/api/partitillhorighet/{period_id}/kassering")
+    def kassera_partitillhorighet(period_id: int, data: dict, anv: Anvandare = Depends(krav_roll("utgivare"))) -> dict:
+        """Kasserar ett utkast eller en granskad period (#202): {motivering}."""
+        return _period(partitillhorighet.kassera, period_id, data, anv.epost)
+
     # Partiernas budgetförslag (#48): läses in som utkast, rättas av redaktör och publiceras av utgivare.
 
     def _budget(steg, *args):

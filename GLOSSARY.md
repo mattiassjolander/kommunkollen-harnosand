@@ -422,12 +422,16 @@ _Avoid_: Korrigering, redigering
 Att en utgivare tar bort en publicerad uppgift från visning, med en motivering, därför att den innehåller fel. Läsaren ser en notis om att uppgiften är tillbakadragen för rättning. Den återkallade uppgiften visas igen först när en rättad version har publicerats i det vanliga flödet. Det gäller planförutsättningar, budgetförslag, rättelser och fastställd partitillhörighet. Statusen är *återkallad*.
 _Avoid_: Avpublicera, dra tillbaka (som begrepp)
 
+**Kassera**:
+Att en utgivare tar bort ett utkast eller en granskad uppgift ur flödet, med en motivering, till exempel därför att den är en dubblett. Uppgiften publiceras aldrig, men finns kvar i redaktionens historik med motivering, vem och när. Det är inget godkännande, så utgivaren får kassera sin egen registrering. Det gäller fastställd partitillhörighet. Statusen är *återkallad*, som för en återkallad uppgift.
+_Avoid_: Radera, ta bort (om en granskad uppgift)
+
 **Ändrad efter publicering**:
 Markeringen på en publicerad version som ersatt en tidigare publicerad version, med datum och motivering. Läsaren kan öppna den förra versionen. En publicerad uppgift ändras alltid genom en ny version, ett utkast med samma uppgifter som går igenom granskning och publicering. En ny inläsning av en ändrad fil ger också en ny version.
 _Avoid_: Uppdaterad, reviderad (reviderad uppgift gäller källans egna ändringar)
 
 **Fastställd partitillhörighet**:
-En persons parti, eller partilös, som redaktionen har fastställt för en period, från och med ett datum och till och med ett datum eller tills vidare, med en motivering. Den går igenom samma flöde som en rättelse. En publicerad period gäller vid sammanträden under perioden före protokollets uppgift, men efter en rättelse av en enskild förekomst. Två publicerade perioder för samma person överlappar inte.
+En persons parti, eller partilös, som redaktionen har fastställt för en period, från och med ett datum och till och med ett datum eller tills vidare, med en motivering. Den går igenom samma flöde som en rättelse. En publicerad period gäller vid sammanträden under perioden före protokollets uppgift, men efter en rättelse av en enskild förekomst. Två perioder för samma person överlappar inte, och en ny period får inte heller överlappa ett utkast eller en granskad period. En ny version av en period räknas inte som överlapp. En väntande period som inte ska publiceras kasseras.
 _Avoid_: Partiperiod (om protokollens perioder), partibyte
 
 **Krock**:
