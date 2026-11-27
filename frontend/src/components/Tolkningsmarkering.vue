@@ -3,18 +3,28 @@
 // uppgiften ur protokollet, men ingen redaktör har granskat den. Ett protokoll som bara innehåller
 // bilder läses med OCR (#52), och då kan även texten innehålla läsfel. Har redaktionen granskat
 // protokollet (#176) visas datumet för granskningen, men inte vem som granskade. I listor räcker `kort`.
-defineProps<{ ejTolkad?: boolean; ocr?: boolean; granskad?: string | null; kort?: boolean }>()
+withDefaults(
+  defineProps<{
+    ejTolkad?: boolean
+    ocr?: boolean
+    granskad?: string | null
+    kort?: boolean
+    /** Prefix för test-id, när markeringen står en gång till på samma sida (sammanställningen, #195). */
+    prefix?: string
+  }>(),
+  { prefix: '' },
+)
 </script>
 
 <template>
-  <span v-if="ejTolkad" class="markering ej" data-testid="ej-tolkad" role="note">
+  <span v-if="ejTolkad" class="markering ej" :data-testid="`${prefix}ej-tolkad`" role="note">
     <span class="ikon" aria-hidden="true">!</span>
     Kunde inte tolkas automatiskt. Läs protokollet.
   </span>
   <span
     v-else-if="granskad"
     class="markering granskad"
-    data-testid="granskat-protokoll"
+    :data-testid="`${prefix}granskat-protokoll`"
     role="note"
     :title="`Redaktionen har jämfört tolkningen med protokollet ${granskad} och inte hittat några fel.${ocr ? ' Protokollet är publicerat som bilder och texten är läst med OCR (textigenkänning).' : ''}`"
   >
@@ -25,7 +35,7 @@ defineProps<{ ejTolkad?: boolean; ocr?: boolean; granskad?: string | null; kort?
   <span
     v-else-if="ocr"
     class="markering"
-    data-testid="last-med-ocr"
+    :data-testid="`${prefix}last-med-ocr`"
     role="note"
     title="Protokollet är publicerat som bilder utan text. Texten är läst med OCR (textigenkänning) och kan innehålla läsfel. Kontrollera mot protokollet."
   >
@@ -35,7 +45,7 @@ defineProps<{ ejTolkad?: boolean; ocr?: boolean; granskad?: string | null; kort?
   <span
     v-else
     class="markering"
-    data-testid="automatiskt-tolkad"
+    :data-testid="`${prefix}automatiskt-tolkad`"
     role="note"
     title="Uppgiften är automatiskt läst ur protokollet och inte granskad av redaktionen. Kontrollera mot protokollet."
   >

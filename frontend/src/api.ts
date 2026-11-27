@@ -440,6 +440,64 @@ export interface Sammantradesrad {
   /** Datumet då redaktionen granskade protokollet (#176), eller null. Vem som granskade visas inte. */
   granskad: string | null
   protokoll: Protokollkalla
+  /** Protokollsammanställningen i kort form (#195). null när protokollet inte kunde tolkas. */
+  sammanstallning?: Sammanstallningsrad | null
+}
+
+/** Raden i sammanträdeslistan (#195): talen, chipsen för Votering, Reservation och Oenighet, och märkningarna. */
+export interface Sammanstallningsrad {
+  paragrafer: number
+  arenden: number
+  beslut: number
+  forslag_vidare: number
+  /** Antal voteringar, reservationer och paragrafer med oenighet, bara de som förekommer. */
+  chips: { id: 'votering' | 'reservation' | 'oenighet'; antal: number }[]
+  enigt: boolean
+  /** Antal paragrafer per märkning, för märkningsfiltret. */
+  markningar: Partial<Record<Markningsid, number>>
+}
+
+/** Nycklarna i en sammanställnings `filter`: paragraferna bakom varje tal. */
+export type Sammanstallningsfilter =
+  | 'arenden'
+  | 'beslut'
+  | 'forslag_vidare'
+  | 'information'
+  | 'oenighet'
+  | 'votering'
+  | 'reservation'
+  | 'aterremitterad'
+  | 'bordlagd'
+  | 'jav'
+  | 'motioner'
+  | 'medborgarforslag'
+  | 'interpellationer'
+
+/** Protokollsammanställningen på sammanträdessidan (#195), räknad med publicerade rättelser. */
+export interface Sammanstallning {
+  paragrafer: number
+  arenden: number
+  beslut: number
+  forslag_vidare: number
+  oenighet: { paragrafer: number; voteringar: number; reservationer: number; partier: string[]; enigt: boolean }
+  beslutsgang: {
+    aterremitterade: number
+    bordlagda: number
+    jav: number
+    motioner: number
+    medborgarforslag: number
+    interpellationer: number
+  }
+  sammantradet: {
+    /** Bara när både start- och sluttid finns. */
+    langd_minuter: number | null
+    beslutande: number
+    tjanstgorande_ersattare: number
+    informationsarenden: number
+  }
+  skickas_vidare: { paragraf: number; rubrik: string | null; till: string }[]
+  kallelsen: { ej_behandlade: { rubrik: string | null; text: string; lank: Avvikelse['lank'] }[] }
+  filter: Partial<Record<Sammanstallningsfilter, number[]>>
 }
 
 export interface Person {
@@ -769,11 +827,12 @@ export interface Sittning extends Sittningsref {
   beslutande: Person[]
 }
 
-export interface Sammantrade extends Sammantradesrad {
+export interface Sammantrade extends Omit<Sammantradesrad, 'sammanstallning'> {
   narvaro: Person[]
   behandlingar: Behandlingsrad[]
   /** Tom när protokollet har en enda sittning. */
   sittningar: Sittning[]
+  sammanstallning: Sammanstallning | null
 }
 
 export interface Behandling extends Behandlingsrad {
