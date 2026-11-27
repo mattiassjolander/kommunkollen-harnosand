@@ -50,6 +50,19 @@ jobs:
           docker compose up -d db backend frontend
           curl -fsS --retry 60 --retry-all-errors --retry-delay 2 "$MAL/api/halsa"
 
+      - name: Kontrollera säkerhetsheaders
+        # Sätts i frontend/nginx.conf. Kontrolleras både på en sida och på ett API-svar.
+        run: |
+          for sokvag in / /api/halsa; do
+            svar=$(curl -fsS -D - -o /dev/null "$MAL$sokvag")
+            for h in content-security-policy x-frame-options x-content-type-options referrer-policy \
+                     permissions-policy cross-origin-opener-policy cross-origin-resource-policy; do
+              echo "$svar" | grep -qi "^$h:" || { echo "::error::$h saknas på $sokvag"; exit 1; }
+            done
+            if echo "$svar" | grep -qi '^server: nginx/'; then echo "::error::nginx visar sin version på $sokvag"; exit 1; fi
+          done
+          echo "Alla säkerhetsheaders finns."
+
       - name: Hämta API-beskrivningen
         # OpenAPI-specen nås bara inifrån backend; nginx skickar bara /api/ vidare.
         run: |
