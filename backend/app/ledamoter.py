@@ -114,10 +114,12 @@ def _per_sammantrade(forekomster: list[dict]) -> list[dict]:
             continue
         if tjanstgoring:
             tidigare["tjanstgoringar"].append(tjanstgoring)
-        if tidigare["paragrafer"] is not None:
-            tidigare["paragrafer"] = None if f["paragrafer"] is None else sorted({*tidigare["paragrafer"], *f["paragrafer"]})
+        if f["kategori"] != "beslutande" and tidigare["kategori"] == "beslutande":
+            continue  # "Tom stol Namn §§ 50, 61" (#203): vid de paragraferna var personen inte beslutande.
         if tidigare["kategori"] != "beslutande" and f["kategori"] == "beslutande":
-            tidigare["kategori"] = "beslutande"
+            tidigare["kategori"], tidigare["paragrafer"] = "beslutande", f["paragrafer"]
+        elif tidigare["paragrafer"] is not None:
+            tidigare["paragrafer"] = None if f["paragrafer"] is None else sorted({*tidigare["paragrafer"], *f["paragrafer"]})
     return list(ut.values())
 
 
