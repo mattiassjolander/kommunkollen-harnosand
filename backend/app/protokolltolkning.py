@@ -40,7 +40,8 @@ class Narvaro:
     # var beslutande: paragraferna vid de sittningar personen var närvarande, i ett protokoll med flera.
     paragrafer: list[int] | None = None
     jav: list[int] = field(default_factory=list)
-    # "Tom plats för Namn" (#165): stolen var tom, och personen räknas som frånvarande.
+    # "Tom plats för Namn" (#165): stolen var tom, och personen räknas som frånvarande. Med paragrafer
+    # ("Tom stol Namn §§ 50, 61", #203) var stolen tom bara vid dem.
     tom_plats: bool = False
 
 
@@ -719,9 +720,11 @@ def _tjanstgoringar(text: str) -> list[tuple[str, str | None]]:
 # Namnen i närvarolistan (#165)
 #
 # Oavsett form ska bara själva namnet bli namnet. Det som står efter det (parti, roll, paragrafer och
-# tjänstgöring) tolkas och tas bort ur namnet. "Tom plats för Namn" är ingen person utan en tom stol.
+# tjänstgöring) tolkas och tas bort ur namnet. "Tom plats för Namn" och "Tom stol Namn" är ingen person
+# utan en tom stol.
 
-_TOM_PLATS = re.compile(r"^tom\s+plats\b(?:\s+(?:för|efter))?\s*(?P<namn>.*)$", re.IGNORECASE)
+# "Tom stol Namn (C) §§ 50, 61" (#203): stolen var tom vid de paragraferna, t.ex. vid jäv.
+_TOM_PLATS = re.compile(r"^tom\s+(?:plats\b(?:\s+(?:för|efter))?|stol\b)\s*(?P<namn>.*)$", re.IGNORECASE)
 # Där namnet slutar: parti, komma, paragrafer eller en tjänstgöring.
 _NAMNSLUT = re.compile(r"\s*[(,§]|\s+(?=(?:tjänstgör\w*|ersätter|för|jäv)\b)", re.IGNORECASE)
 _ANTECKNINGSORD = re.compile(r"(?:tjänstgör|ersätter|för\s|jäv|§|kl\b|närvarande)", re.IGNORECASE)
@@ -741,12 +744,14 @@ def _rensad(n: Narvaro) -> list[Narvaro]:
     if text.lower().startswith("vakant"):
         return []  # "Vakant", "Vakant plats efter Namn": ingen satt på platsen
     if m := _TOM_PLATS.match(text):
-        # "Tom plats för Ester Sundin Hemström": hon var frånvarande.
-        namn, parti = _namn_parti(m["namn"])
+        # "Tom plats för Ester Sundin Hemström": hon var frånvarande. "Tom stol Christina Lindberg (C)
+        # §§ 50, 61": stolen var tom vid de paragraferna, och raden före anger var hon var beslutande.
+        namn, _, ref = m["namn"].partition("§")
+        namn, parti = _namn_parti(namn)
         if not namn:
             return []
-        return [replace(n, namn=namn, parti=parti, kategori="franvarande", tjanstgor_for=None,
-                        tjanstgor_for_parti=None, paragrafer=None, tom_plats=True)]
+        return [replace(n, namn=namn, parti=parti or n.parti, kategori="franvarande", tjanstgor_for=None,
+                        tjanstgor_for_parti=None, paragrafer=paragraflista(ref) or n.paragrafer, tom_plats=True)]
     m = _NAMNSLUT.search(text)
     if m is None or m.start() == 0:
         return [replace(n, namn=text)]

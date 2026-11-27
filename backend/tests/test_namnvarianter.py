@@ -13,7 +13,9 @@ from test_ledamoter import ledamot
 from test_protokoll import kf, kor
 
 from app import db, namnvarianter
-from app.protokolltolkning import Narvaro, Tolkning, _narvaro_forsta_sidan, _rensa_narvaro, rensat_namn
+from app.protokolltolkning import (
+    Narvaro, Tolkning, _narvaro_forsta_sidan, _rensa_narvaro, beslutande_vid, rensat_namn,
+)
 
 # Närvarolistan på första sidan, som i kommunstyrelsens protokoll: namnfältet i kolumn 44, rollen i kolumn 96.
 SIDA = "\n".join(f"{etikett:<44}{namn:<52}{roll}".rstrip() for etikett, namn, roll in [
@@ -63,6 +65,33 @@ def test_en_tom_plats_ar_ingen_person():
     assert (monica.parti, monica.kategori, monica.tjanstgor_for) == ("S", "beslutande", None)
 
 
+# Kommunstyrelsen 2025-04-02 (#203): Christina Lindberg var jävig i § 50 och § 61, och hennes stol var tom.
+TOM_STOL = "\n".join(f"{etikett:<44}{namn:<52}{roll}".rstrip() for etikett, namn, roll in [
+    ("Beslutande", "Jonas Bergström (S), ordförande", "Ordförande"),
+    ("", "Christina Lindberg (C) §§ 43-49, 51-60, 62-68", "Ledamot"),
+    ("", "Tom stol Christina Lindberg (C) §§ 50, 61", ""),
+    ("", "Britta Thyr (MP)", "Ledamot"),
+    ("Justerare", "Britta Thyr", ""),
+])
+
+
+def test_tom_stol_vid_vissa_paragrafer_ar_ingen_person():
+    t = narvaro(TOM_STOL)
+    assert {n.namn for n in t.narvaro} == {"Jonas Bergström", "Christina Lindberg", "Britta Thyr"}
+    [beslutande, tom] = [n for n in t.narvaro if n.namn == "Christina Lindberg"]
+    assert (beslutande.kategori, beslutande.tom_plats, beslutande.paragrafer) == (
+        "beslutande", False, [*range(43, 50), *range(51, 61), *range(62, 69)])
+    assert (tom.parti, tom.kategori, tom.tom_plats, tom.paragrafer) == ("C", "franvarande", True, [50, 61])
+    assert t.avvikelser == []
+
+
+@pytest.mark.parametrize("paragraf, beslutande", [(49, True), (50, False), (51, True), (61, False), (62, True)])
+def test_den_med_tom_stol_ar_inte_beslutande_vid_de_paragraferna(paragraf, beslutande):
+    namn = {n.namn for n in beslutande_vid(narvaro(TOM_STOL).narvaro, paragraf)}
+    assert ("Christina Lindberg" in namn) == beslutande
+    assert {"Jonas Bergström", "Britta Thyr"} <= namn
+
+
 def test_tjanstgoring_i_alla_skrivsatt():
     poster = {n.namn: n for n in narvaro(SIDA).narvaro}
     ro = poster["Ro Blomkvist"]
@@ -97,6 +126,7 @@ def test_en_rad_per_person_med_tjanstgoring_utan_parti():
     ("Olle Löfgren, ersätter Ingemar Ljunggren", "Olle Löfgren"),
     ("Ro Blomkvist tjänstgörande ersättare för Axel Bodo", "Ro Blomkvist"),
     ("Tom plats för Ester Sundin Hemström", "Ester Sundin Hemström"),
+    ("Tom stol Christina Lindberg (C) §§ 50, 61", "Christina Lindberg"),
     ("Monica Fällström (S) för vakant plats efter Johan Nilsson", "Monica Fällström"),
     ("Christina Ögrim, ersätter Ingemar", "Christina Ögrim"),
     ("Vakant plats efter Johan Nilsson", None),
@@ -300,3 +330,17 @@ def test_sammantradet_visar_tom_plats(api, database_url):
     [tora] = [p for p in narvaro if p["namn"] == "Tora Tomplatsson"]
     assert (tora["kategori"], tora["tom_plats"]) == ("franvarande", True)
     assert not any("tom_plats" in p for p in narvaro if p["namn"] != "Tora Tomplatsson")
+
+
+def test_ledamotens_sida_visar_inte_tom_stol_som_beslutande(api, database_url):
+    # "Tom stol Namn §§ 50, 61" (#203): på ledamotens sida är hon beslutande vid de andra paragraferna.
+    with db.connect(database_url) as conn:
+        s = conn.execute("SELECT sammantrade_id FROM narvaro WHERE namn = 'Carl-Fredrik Edgren' LIMIT 1").fetchone()
+        conn.execute("INSERT INTO ledamot (namn) VALUES ('Tora Tomstolsson')")
+        conn.execute("""INSERT INTO narvaro (sammantrade_id, ordning, namn, parti, roll, kategori, paragrafer, tom_plats)
+                        VALUES (%(s)s, 1000, 'Tora Tomstolsson', 'C', 'Ledamot', 'beslutande', '{49,51}', false),
+                               (%(s)s, 1001, 'Tora Tomstolsson', 'C', NULL, 'franvarande', '{50}', true)""",
+                     {"s": s["sammantrade_id"]})
+        conn.commit()
+    [forekomst] = api.get(f"/api/ledamoter/{ledamot(api, 'Tora Tomstolsson')['id']}").json()["sammantraden"]
+    assert (forekomst["kategori"], forekomst["paragrafer"]) == ("beslutande", [49, 51])
