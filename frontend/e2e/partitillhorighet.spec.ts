@@ -179,3 +179,50 @@ test('en krock bekräftas som fel i protokollet', async ({ page, request }) => {
     expect((await request.post(url, { data: { motivering } })).ok()).toBeTruthy()
   }
 })
+
+// Söm 2 (#202): en granskad period som är en dubblett kasseras av en utgivare med motivering. Den syns i
+// historiken men inte bland de väntande, och en ny period för samma tid går att registrera igen.
+test('en utgivare kasserar en granskad period', async ({ page, request }) => {
+  const sammantrade = (await (await request.get(`${api}/api/sammantraden?organ=KF`)).json()).find(
+    (s: { datum: string }) => s.datum === '2026-03-23',
+  )
+  const narvaro = (await (await request.get(`${api}/api/sammantraden/${sammantrade.id}`)).json()).narvaro
+  const person = narvaro.find((p: { ledamot_id: number | null; kategori: string }) => p.ledamot_id && p.kategori === 'beslutande')
+  const data = { ledamot_id: person.ledamot_id, parti: 'SD', fran: '2019-01-01', till: '2019-12-31', motivering: 'Prov.' }
+  await request.post(`${api}/api/auth/test/redaktor`)
+  const period = await (await request.post(`${api}/api/partitillhorighet`, { data })).json()
+  await request.post(`${api}/api/auth/test/utgivare`)
+  expect((await request.post(`${api}/api/partitillhorighet/${period.id}/granskning`)).ok()).toBeTruthy()
+  // Samma period kan inte registreras igen medan den första väntar.
+  await request.post(`${api}/api/auth/test/redaktor`)
+  const dubblett = await request.post(`${api}/api/partitillhorighet`, { data })
+  expect(dubblett.status()).toBe(409)
+  expect((await dubblett.json()).detail).toBe('Det finns redan ett granskat förslag: SD, 2019-01-01–2019-12-31')
+
+  await page.request.post('/api/auth/test/utgivare')
+  await page.goto('/redaktion/partitillhorighet')
+  const granskad = page.locator(`[data-testid="perioder-granskad"] [data-testid="period"][data-id="${period.id}"]`)
+  await expect(granskad.getByTestId('publicera')).toBeVisible()
+  await granskad.getByTestId('kassera').click()
+  // Motiveringen krävs.
+  await granskad.getByTestId('spara-kassering').click()
+  await expect(granskad.getByTestId('kassera-formular')).toBeVisible()
+  await granskad.getByTestId('kassera-motivering').fill('Registrerad två gånger.')
+  await granskad.getByTestId('spara-kassering').click()
+
+  await expect(page.getByTestId('perioder-granskad').locator(`[data-id="${period.id}"]`)).toHaveCount(0)
+  const kasserad = page.locator(`[data-testid="perioder-aterkallad"] [data-testid="period"][data-id="${period.id}"]`)
+  await expect(kasserad).toContainText('Kasserad')
+  await expect(kasserad.getByTestId('aterkallelse')).toContainText('Registrerad två gånger.')
+  await expect(kasserad.getByTestId('aterkallelse')).toContainText('test-utgivare@kommunkollen.test')
+
+  // Den kasserade perioden hindrar inte en ny. Den nya kasseras via API:t så att följande tester inte påverkas.
+  await request.post(`${api}/api/auth/test/redaktor`)
+  const ny = await request.post(`${api}/api/partitillhorighet`, { data })
+  expect(ny.status()).toBe(201)
+  await request.post(`${api}/api/auth/test/utgivare`)
+  const kassering = await request.post(`${api}/api/partitillhorighet/${(await ny.json()).id}/kassering`, {
+    data: { motivering: 'Test.' },
+  })
+  expect(kassering.ok()).toBeTruthy()
+})

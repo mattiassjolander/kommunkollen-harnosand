@@ -1834,6 +1834,9 @@ export const nyVersionAvPartitillhorighet = (id: number, data: Partial<Omit<NyPa
 /** En utgivare återkallar en publicerad period direkt. Protokollen gäller igen. */
 export const aterkallaPartitillhorighet = (id: number, motivering: string) =>
   skrivPeriod(`/api/partitillhorighet/${id}/aterkallelse`, 'POST', { motivering })
+// Ett utkast eller en granskad period som inte ska publiceras, till exempel en dubblett (#202).
+export const kasseraPartitillhorighet = (id: number, motivering: string) =>
+  skrivPeriod(`/api/partitillhorighet/${id}/kassering`, 'POST', { motivering })
 
 /** En föreslagen period ur närvarolistorna, med belägg (#100, del 2). */
 export interface Periodforslag {

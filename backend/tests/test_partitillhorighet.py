@@ -96,15 +96,25 @@ def test_perioden_ger_ingen_markering_nar_protokollet_anger_samma_parti(api):
 def test_overlappande_perioder_avvisas(api):
     glenn = ledamot(api, GLENN)
     p = period(api, ledamot_id=glenn["id"], parti="SD", fran="2026-01-01", till="2026-06-30")
-    # Två utkast får överlappa, men inte när det ena är publicerat.
-    andra = period(api, ledamot_id=glenn["id"], parti="-", fran="2026-06-01", till=None)
-    publicera(api, p["id"])
-    logga_in(api, "utgivare")
-    assert api.post(f"/api/partitillhorighet/{andra['id']}/granskning").status_code == 200
-    assert api.post(f"/api/partitillhorighet/{andra['id']}/publicering").status_code == 409
+    overlappande = {"ledamot_id": glenn["id"], "parti": "-", "fran": "2026-06-01", "motivering": "x"}
+    # En period som överlappar en väntande period för samma person avvisas och nämner den (#202).
     logga_in(api, "redaktor")
-    assert api.post("/api/partitillhorighet", json={"ledamot_id": glenn["id"], "parti": "-", "fran": "2026-03-01",
-                                                    "motivering": "x"}).status_code == 409
+    svar = api.post("/api/partitillhorighet", json=overlappande)
+    assert svar.status_code == 409
+    assert svar.json()["detail"] == "Det finns redan ett utkast: SD, 2026-01-01–2026-06-30"
+    logga_in(api, "utgivare")
+    assert api.post(f"/api/partitillhorighet/{p['id']}/granskning").status_code == 200
+    logga_in(api, "redaktor")
+    svar = api.post("/api/partitillhorighet", json=overlappande)
+    assert (svar.status_code, svar.json()["detail"]) == (409, "Det finns redan ett granskat förslag: SD, 2026-01-01–2026-06-30")
+    # Också i en batch.
+    svar = api.post("/api/partitillhorighet/batcher", json={"motivering": "x", "perioder": [overlappande]})
+    assert (svar.status_code, svar.json()["detail"]) == (409, "Rad 1: Det finns redan ett granskat förslag: SD, 2026-01-01–2026-06-30")
+    logga_in(api, "utgivare")
+    assert api.post(f"/api/partitillhorighet/{p['id']}/publicering").status_code == 200
+    logga_in(api, "redaktor")
+    svar = api.post("/api/partitillhorighet", json=overlappande | {"fran": "2026-03-01"})
+    assert (svar.status_code, svar.json()["detail"]) == (409, "Perioden överlappar en publicerad period (SD, 2026-01-01–2026-06-30)")
     # Ett partibyte blir två perioder som inte överlappar.
     assert api.post("/api/partitillhorighet", json={"ledamot_id": glenn["id"], "parti": "-", "fran": "2026-07-01",
                                                     "motivering": "Partilös från juli"}).status_code == 201
@@ -141,3 +151,79 @@ def test_ny_version_och_aterkallelse(api):
     n = narvaro(api, "2026-06-15")
     assert n.get("partitillhorighet") is None
     assert n["parti"] is None or n.get("parti_harlett")
+
+
+def test_en_utgivare_kasserar_ett_utkast_eller_en_granskad_period(api):
+    """#202: en dubblett som väntar på granskning går att få bort, och historiken finns kvar."""
+    glenn = ledamot(api, GLENN)
+    utkast = period(api, ledamot_id=glenn["id"], parti="SD", fran="2022-01-01", till="2022-12-31")
+    granskad = period(api, ledamot_id=glenn["id"], parti="SD", fran="2023-01-01", till="2023-12-31")
+    publicerad_ = period(api, ledamot_id=glenn["id"], parti="SD", fran="2024-01-01", till="2024-12-31")
+    publicera(api, publicerad_["id"])
+    logga_in(api, "utgivare")
+    assert api.post(f"/api/partitillhorighet/{granskad['id']}/granskning").status_code == 200
+
+    # Redaktören kan inte kassera, och en motivering krävs.
+    logga_in(api, "redaktor")
+    assert api.post(f"/api/partitillhorighet/{utkast['id']}/kassering", json={"motivering": "Dubblett."}).status_code == 403
+    logga_in(api, "utgivare")
+    svar = api.post(f"/api/partitillhorighet/{granskad['id']}/kassering", json={"motivering": " "})
+    assert (svar.status_code, svar.json()["detail"]) == (422, "Ange varför perioden kasseras")
+    # En publicerad period återkallas i stället.
+    assert api.post(f"/api/partitillhorighet/{publicerad_['id']}/kassering",
+                    json={"motivering": "Dubblett."}).status_code == 409
+
+    for t in (utkast, granskad):
+        svar = api.post(f"/api/partitillhorighet/{t['id']}/kassering", json={"motivering": "Registrerad två gånger."})
+        assert svar.status_code == 200, svar.text
+        k = svar.json()
+        assert (k["status"], k["aterkallelse"], k["aterkallad_av"]) == ("aterkallad", "Registrerad två gånger.",
+                                                                        "test-utgivare@kommunkollen.test")
+        assert k["aterkallad"] is not None and k["publicerad"] is None
+    # En kasserad period kan inte kasseras igen eller publiceras.
+    assert api.post(f"/api/partitillhorighet/{granskad['id']}/kassering", json={"motivering": "x"}).status_code == 409
+    assert api.post(f"/api/partitillhorighet/{granskad['id']}/publicering").status_code == 409
+    # Perioderna finns kvar som historik, men inte bland de väntande.
+    status = {t["id"]: t["status"] for t in api.get("/api/partitillhorighet").json()}
+    assert (status[utkast["id"]], status[granskad["id"]]) == ("aterkallad", "aterkallad")
+    assert not api.get("/api/partitillhorighet?status=granskad").json()
+    # En kasserad period hindrar inte en ny period för samma tid.
+    assert period(api, ledamot_id=glenn["id"], parti="SD", fran="2023-01-01", till="2023-12-31")["status"] == "utkast"
+
+
+def test_utgivaren_kasserar_sin_egen_registrering(api):
+    """Att kassera är inget godkännande, så ADR-0002 hindrar det inte. Redaktören kan fortfarande ta bort sitt utkast."""
+    glenn = ledamot(api, GLENN)
+    logga_in(api, "redaktor+utgivare")
+    egen = api.post("/api/partitillhorighet", json={"ledamot_id": glenn["id"], "parti": "SD", "fran": "2020-01-01",
+                                                    "till": "2020-12-31", "motivering": "Prov"}).json()
+    svar = api.post(f"/api/partitillhorighet/{egen['id']}/kassering", json={"motivering": "Fel person."})
+    assert svar.json()["status"] == "aterkallad"
+    logga_in(api, "redaktor")
+    utkast = api.post("/api/partitillhorighet", json={"ledamot_id": glenn["id"], "parti": "SD", "fran": "2020-01-01",
+                                                      "till": "2020-12-31", "motivering": "Prov"}).json()
+    assert api.delete(f"/api/partitillhorighet/{utkast['id']}").status_code == 204
+
+
+def test_en_ny_version_raknas_inte_som_overlapp(api):
+    """#202: en ny version överlappar perioden den ersätter, och ett utkast överlappar sig självt när det ändras."""
+    glenn = ledamot(api, GLENN)
+    p = period(api, ledamot_id=glenn["id"], parti="SD", fran="2026-01-01", till=None)
+    logga_in(api, "redaktor")
+    assert api.patch(f"/api/partitillhorighet/{p['id']}", json={"fran": "2025-06-01"}).status_code == 200
+    logga_in(api, "utgivare")
+    assert api.post(f"/api/partitillhorighet/{p['id']}/granskning").status_code == 200
+
+    # En ny version av en granskad period, medan den väntar.
+    logga_in(api, "redaktor")
+    ny = api.post(f"/api/partitillhorighet/{p['id']}/versioner", json={"parti": "-", "motivering": "Partilös."})
+    assert ny.status_code == 201, ny.text
+    assert api.patch(f"/api/partitillhorighet/{ny.json()['id']}", json={"fran": "2025-01-01"}).status_code == 200
+    # Men en annan ny period för samma tid avvisas.
+    svar = api.post("/api/partitillhorighet", json={"ledamot_id": glenn["id"], "parti": "-", "fran": "2026-01-01",
+                                                    "motivering": "x"})
+    assert svar.status_code == 409 and svar.json()["detail"].startswith("Det finns redan ett granskat förslag: SD, 2025-06-01")
+    publicera(api, ny.json()["id"])
+    logga_in(api, "utgivare")
+    status = {t["id"]: t["status"] for t in api.get("/api/partitillhorighet").json()}
+    assert (status[p["id"]], status[ny.json()["id"]]) == ("ersatt", "publicerad")
